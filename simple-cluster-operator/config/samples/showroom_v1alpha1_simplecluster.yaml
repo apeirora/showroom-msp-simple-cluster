@@ -1,0 +1,6 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: simple-cluster-sample
+spec:
+  workers: 2
