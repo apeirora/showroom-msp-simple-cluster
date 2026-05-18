@@ -17,41 +17,82 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// SimpleClusterSpec defines the desired state of SimpleCluster
+// SimpleClusterSpec defines the desired state of SimpleCluster.
 type SimpleClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// Workers is the number of worker nodes; surfaced as .SC.workers in the template.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	Workers int32 `json:"workers"`
 
-	// foo is an example field of SimpleCluster. Edit simplecluster_types.go to remove/update
+	// ProviderConfigRef pins a specific SimpleClusterProviderConfig.
+	// When omitted, the highest-priority SCPC is selected automatically and
+	// then locked into status.providerConfigRef so churn does not migrate Rs.
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef,omitempty"`
+
+	// Inputs are per-cluster overrides. Every key MUST be declared in
+	// SCPC.spec.inputs; unknown keys are rejected. Keys left unset fall back
+	// to the SCPC declaration's default.
+	// +optional
+	Inputs map[string]string `json:"inputs,omitempty"`
+
+	// KubeconfigValidity overrides SCPC.kubeconfigSource.validity for this SC.
+	// +optional
+	KubeconfigValidity *metav1.Duration `json:"kubeconfigValidity,omitempty"`
+
+	// KubeconfigRenewalBefore overrides SCPC.kubeconfigSource.renewalBefore for this SC.
+	// +optional
+	KubeconfigRenewalBefore *metav1.Duration `json:"kubeconfigRenewalBefore,omitempty"`
 }
 
 // SimpleClusterStatus defines the observed state of SimpleCluster.
 type SimpleClusterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// ProviderConfigRef is locked at first reconcile so priority churn does
+	// not migrate Rs across SCPCs.
+	// +optional
+	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef,omitempty"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// TargetGVK is the resolved GroupVersionKind of R.
+	// +optional
+	TargetGVK string `json:"targetGVK,omitempty"`
+	// TargetName is the name of R on the target cluster.
+	// +optional
+	TargetName string `json:"targetName,omitempty"`
+	// TargetNamespace is the namespace of R on the target cluster.
+	// +optional
+	TargetNamespace string `json:"targetNamespace,omitempty"`
+	// TargetCluster identifies where R lives: SCPC name (for remote) or "local".
+	// +optional
+	TargetCluster string `json:"targetCluster,omitempty"`
 
-	// conditions represent the current state of the SimpleCluster resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// Phase is the coarse state machine.
+	// +optional
+	Phase Phase `json:"phase,omitempty"`
+
+	// LastOperation mirrors a human-readable progress string from R.
+	// +optional
+	LastOperation string `json:"lastOperation,omitempty"`
+	// LastError mirrors a human-readable error string from R.
+	// +optional
+	LastError string `json:"lastError,omitempty"`
+
+	// KubeconfigSecretRef points at the Secret in SC.namespace holding NC's kubeconfig.
+	// +optional
+	KubeconfigSecretRef *corev1.LocalObjectReference `json:"kubeconfigSecretRef,omitempty"`
+	// KubeconfigIssuedAt is the issuance time of the embedded credential.
+	// +optional
+	KubeconfigIssuedAt *metav1.Time `json:"kubeconfigIssuedAt,omitempty"`
+	// KubeconfigExpiresAt is the expiry time of the embedded credential.
+	// +optional
+	KubeconfigExpiresAt *metav1.Time `json:"kubeconfigExpiresAt,omitempty"`
+
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -60,27 +101,30 @@ type SimpleClusterStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=sc
+// +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.status.providerConfigRef.name`
+// +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.status.targetName`
+// +kubebuilder:printcolumn:name="Last Operation",type=string,JSONPath=`.status.lastOperation`
+// +kubebuilder:printcolumn:name="Kubeconfig Expires",type=string,JSONPath=`.status.kubeconfigExpiresAt`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// SimpleCluster is the Schema for the simpleclusters API
+// SimpleCluster is the user-facing namespaced cluster request.
 type SimpleCluster struct {
 	metav1.TypeMeta `json:",inline"`
-
-	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
 
-	// spec defines the desired state of SimpleCluster
 	// +required
 	Spec SimpleClusterSpec `json:"spec"`
-
-	// status defines the observed state of SimpleCluster
 	// +optional
 	Status SimpleClusterStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// SimpleClusterList contains a list of SimpleCluster
+// SimpleClusterList contains a list of SimpleCluster.
 type SimpleClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
