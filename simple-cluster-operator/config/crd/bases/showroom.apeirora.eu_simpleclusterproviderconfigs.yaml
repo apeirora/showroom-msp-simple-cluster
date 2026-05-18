@@ -11,14 +11,29 @@ spec:
     kind: SimpleClusterProviderConfig
     listKind: SimpleClusterProviderConfigList
     plural: simpleclusterproviderconfigs
+    shortNames:
+    - scpc
     singular: simpleclusterproviderconfig
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.resolvedGVK
+      name: Target
+      type: string
+    - jsonPath: .status.reachable
+      name: Reachable
+      type: boolean
+    - jsonPath: .spec.priority
+      name: Priority
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SimpleClusterProviderConfig is the Schema for the simpleclusterproviderconfigs
-          API
+        description: SimpleClusterProviderConfig is the cluster-scoped admin-facing
+          template/profile.
         properties:
           apiVersion:
             description: |-
@@ -38,27 +53,220 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of SimpleClusterProviderConfig
+            description: SimpleClusterProviderConfigSpec defines the desired state
+              of SimpleClusterProviderConfig.
             properties:
-              foo:
-                description: foo is an example field of SimpleClusterProviderConfig.
-                  Edit simpleclusterproviderconfig_types.go to remove/update
-                type: string
+              inputs:
+                description: |-
+                  Inputs is the closed set of keys a SimpleCluster may override via spec.inputs.
+                  Every entry MUST carry a default - the template always sees a fully-populated value.
+                items:
+                  description: |-
+                    InputDeclaration is a single SC input slot: name, type, default, and metadata
+                    to make the SCPC self-documenting (kubectl explain / UI rendering).
+                  properties:
+                    allowEmpty:
+                      description: |-
+                        AllowEmpty permits "" as a meaningful value for Type=string.
+                        Ignored for other types (empty never parses as int/bool/duration).
+                      type: boolean
+                    default:
+                      description: |-
+                        Default value substituted when SC.spec.inputs[Name] is unset.
+                        Stored as string for kubectl ergonomics regardless of Type;
+                        parsing happens at reconcile.
+                      type: string
+                    description:
+                      description: Description shown in CRD docs / UI tooling.
+                      type: string
+                    name:
+                      description: Name as referenced from the template (e.g. region
+                        -> {{ .Inputs.region }}).
+                      minLength: 1
+                      pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+                      type: string
+                    type:
+                      default: string
+                      description: |-
+                        Type of the input. Both the Default and any SC override are parsed
+                        against this type; mismatches are rejected at reconcile.
+                      enum:
+                      - string
+                      - int
+                      - bool
+                      - duration
+                      type: string
+                  required:
+                  - default
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              kubeconfigSource:
+                description: KubeconfigSource describes HOW to obtain the kubeconfig
+                  of NC once R is Ready.
+                properties:
+                  inline:
+                    description: Inline - JSONPath expression that locates the kubeconfig
+                      bytes inside R itself.
+                    properties:
+                      kubeconfigPath:
+                        description: KubeconfigPath is the JSONPath into R that resolves
+                          to kubeconfig bytes.
+                        type: string
+                    required:
+                    - kubeconfigPath
+                    type: object
+                  renewalBefore:
+                    description: RenewalBefore is how long before expiry the kubeconfig
+                      is renewed (SubResource only).
+                    type: string
+                  secretRef:
+                    description: |-
+                      SecretRef - kubeconfig lives in a Secret in the target cluster's namespace
+                      (typical for Cluster API / Gardener seed Secrets). Name/Namespace are Go
+                      templates evaluated against the same context as Template so they can refer to R.
+                    properties:
+                      dataKey:
+                        description: DataKey is the key in the Secret holding the
+                          kubeconfig; defaults to "kubeconfig".
+                        type: string
+                      name:
+                        description: Name of the Secret; Go template.
+                        type: string
+                      namespace:
+                        description: Namespace of the Secret; Go template; defaults
+                          to R.namespace.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  subResource:
+                    description: SubResource - call a SubResource on R (e.g. Gardener's
+                      /adminkubeconfig).
+                    properties:
+                      apiVersion:
+                        description: APIVersion of the request object (e.g. authentication.gardener.cloud/v1alpha1).
+                        type: string
+                      expirationPath:
+                        description: ExpirationPath inside the response that holds
+                          the expiry timestamp.
+                        type: string
+                      kind:
+                        description: Kind of the request object (e.g. AdminKubeconfigRequest).
+                        type: string
+                      kubeconfigPath:
+                        description: KubeconfigPath inside the response that holds
+                          the kubeconfig bytes (e.g. status.kubeconfig).
+                        type: string
+                      subResource:
+                        description: SubResource name (e.g. adminkubeconfig).
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - kubeconfigPath
+                    - subResource
+                    type: object
+                  validity:
+                    description: Validity is the desired lifetime of issued kubeconfigs
+                      (SubResource only).
+                    type: string
+                type: object
+              priority:
+                description: |-
+                  Priority chooses among multiple SCPCs when a SimpleCluster does not pin one.
+                  Higher wins. Defaults to 0.
+                format: int32
+                type: integer
+              statusMap:
+                description: |-
+                  StatusMap projects R's status into Phase. Optional; defaults to the
+                  Ready-condition walker when omitted.
+                properties:
+                  lastErrorPath:
+                    description: LastErrorPath optionally provides a human-readable
+                      error string.
+                    type: string
+                  lastOperationPath:
+                    description: LastOperationPath optionally provides a human-readable
+                      progress string.
+                    type: string
+                  phaseFailedValues:
+                    description: PhaseFailedValues are values at PhasePath that indicate
+                      Failed.
+                    items:
+                      type: string
+                    type: array
+                  phasePath:
+                    description: PhasePath is a JSONPath into R that resolves to a
+                      state value (e.g. status.lastOperation.state).
+                    type: string
+                  phaseReadyValue:
+                    description: PhaseReadyValue is the value at PhasePath that indicates
+                      Ready (e.g. Succeeded).
+                    type: string
+                required:
+                - phasePath
+                - phaseReadyValue
+                type: object
+              target:
+                description: Target describes WHERE and WHAT to create.
+                properties:
+                  apiVersion:
+                    description: APIVersion of the target resource R (e.g. core.gardener.cloud/v1beta1).
+                    type: string
+                  kind:
+                    description: Kind of the target resource R (e.g. Shoot).
+                    type: string
+                  kubeconfigSecretRef:
+                    description: |-
+                      KubeconfigSecretRef points at a Secret in the management cluster
+                      whose "kubeconfig" key holds credentials for the target cluster.
+                      When nil, R is created on the management cluster.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  namePrefix:
+                    description: 'NamePrefix prepended to the generated R name (default:
+                      SC.name).'
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace on the target cluster where R is created.
+                      Required for namespaced kinds, ignored for cluster-scoped.
+                    type: string
+                required:
+                - apiVersion
+                - kind
+                type: object
+              template:
+                description: |-
+                  Template is the YAML/JSON body of resource R rendered through the
+                  Helm-style text/template + sprig/v3 engine. It MUST embed apiVersion/kind
+                  consistent with Target.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+            required:
+            - kubeconfigSource
+            - target
+            - template
             type: object
           status:
-            description: status defines the observed state of SimpleClusterProviderConfig
+            description: SimpleClusterProviderConfigStatus defines the observed state
+              of SimpleClusterProviderConfig.
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the SimpleClusterProviderConfig resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -117,6 +325,14 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              reachable:
+                description: |-
+                  Reachable mirrors a smoke test against Target.KubeconfigSecretRef.
+                  True when omitted (local cluster).
+                type: boolean
+              resolvedGVK:
+                description: ResolvedGVK records the GVK resolved through the RESTMapper.
+                type: string
             type: object
         required:
         - spec
