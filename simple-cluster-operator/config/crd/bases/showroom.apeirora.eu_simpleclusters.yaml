@@ -11,13 +11,37 @@ spec:
     kind: SimpleCluster
     listKind: SimpleClusterList
     plural: simpleclusters
+    shortNames:
+    - sc
     singular: simplecluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.providerConfigRef.name
+      name: Provider
+      type: string
+    - jsonPath: .spec.workers
+      name: Workers
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.targetName
+      name: Target
+      type: string
+    - jsonPath: .status.lastOperation
+      name: Last Operation
+      type: string
+    - jsonPath: .status.kubeconfigExpiresAt
+      name: Kubeconfig Expires
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SimpleCluster is the Schema for the simpleclusters API
+        description: SimpleCluster is the user-facing namespaced cluster request.
         properties:
           apiVersion:
             description: |-
@@ -37,27 +61,55 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of SimpleCluster
+            description: SimpleClusterSpec defines the desired state of SimpleCluster.
             properties:
-              foo:
-                description: foo is an example field of SimpleCluster. Edit simplecluster_types.go
-                  to remove/update
+              inputs:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Inputs are per-cluster overrides. Every key MUST be declared in
+                  SCPC.spec.inputs; unknown keys are rejected. Keys left unset fall back
+                  to the SCPC declaration's default.
+                type: object
+              kubeconfigRenewalBefore:
+                description: KubeconfigRenewalBefore overrides SCPC.kubeconfigSource.renewalBefore
+                  for this SC.
                 type: string
+              kubeconfigValidity:
+                description: KubeconfigValidity overrides SCPC.kubeconfigSource.validity
+                  for this SC.
+                type: string
+              providerConfigRef:
+                description: |-
+                  ProviderConfigRef pins a specific SimpleClusterProviderConfig.
+                  When omitted, the highest-priority SCPC is selected automatically and
+                  then locked into status.providerConfigRef so churn does not migrate Rs.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              workers:
+                description: Workers is the number of worker nodes; surfaced as .SC.workers
+                  in the template.
+                format: int32
+                maximum: 100
+                minimum: 1
+                type: integer
+            required:
+            - workers
             type: object
           status:
-            description: status defines the observed state of SimpleCluster
+            description: SimpleClusterStatus defines the observed state of SimpleCluster.
             properties:
               conditions:
-                description: |-
-                  conditions represent the current state of the SimpleCluster resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -116,6 +168,80 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              kubeconfigExpiresAt:
+                description: KubeconfigExpiresAt is the expiry time of the embedded
+                  credential.
+                format: date-time
+                type: string
+              kubeconfigIssuedAt:
+                description: KubeconfigIssuedAt is the issuance time of the embedded
+                  credential.
+                format: date-time
+                type: string
+              kubeconfigSecretRef:
+                description: KubeconfigSecretRef points at the Secret in SC.namespace
+                  holding NC's kubeconfig.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              lastError:
+                description: LastError mirrors a human-readable error string from
+                  R.
+                type: string
+              lastOperation:
+                description: LastOperation mirrors a human-readable progress string
+                  from R.
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the coarse state machine.
+                enum:
+                - Pending
+                - Provisioning
+                - Ready
+                - Failed
+                - Deleting
+                type: string
+              providerConfigRef:
+                description: |-
+                  ProviderConfigRef is locked at first reconcile so priority churn does
+                  not migrate Rs across SCPCs.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              targetCluster:
+                description: 'TargetCluster identifies where R lives: SCPC name (for
+                  remote) or "local".'
+                type: string
+              targetGVK:
+                description: TargetGVK is the resolved GroupVersionKind of R.
+                type: string
+              targetName:
+                description: TargetName is the name of R on the target cluster.
+                type: string
+              targetNamespace:
+                description: TargetNamespace is the namespace of R on the target cluster.
+                type: string
             type: object
         required:
         - spec
