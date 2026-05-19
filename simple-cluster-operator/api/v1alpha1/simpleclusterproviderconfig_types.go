@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // +kubebuilder:validation:Enum=string;int;bool;duration
@@ -164,11 +163,11 @@ type SimpleClusterProviderConfigSpec struct {
 	// Target describes WHERE and WHAT to create.
 	Target TargetSpec `json:"target"`
 
-	// Template is the YAML/JSON body of resource R rendered through the
-	// Helm-style text/template + sprig/v3 engine. It MUST embed apiVersion/kind
-	// consistent with Target.
-	// +kubebuilder:pruning:PreserveUnknownFields
-	Template *runtime.RawExtension `json:"template"`
+	// Template is the YAML body of resource R rendered through the Helm-style
+	// text/template + sprig/v3 engine. The post-render result MUST embed
+	// apiVersion/kind consistent with Target.
+	// +kubebuilder:validation:MinLength=1
+	Template string `json:"template"`
 
 	// KubeconfigSource describes HOW to obtain the kubeconfig of NC once R is Ready.
 	KubeconfigSource KubeconfigSource `json:"kubeconfigSource"`
@@ -184,11 +183,6 @@ type SimpleClusterProviderConfigSpec struct {
 	// Ready-condition walker when omitted.
 	// +optional
 	StatusMap *StatusMap `json:"statusMap,omitempty"`
-
-	// Priority chooses among multiple SCPCs when a SimpleCluster does not pin one.
-	// Higher wins. Defaults to 0.
-	// +optional
-	Priority int32 `json:"priority,omitempty"`
 }
 
 // SimpleClusterProviderConfigStatus defines the observed state of SimpleClusterProviderConfig.
@@ -198,9 +192,11 @@ type SimpleClusterProviderConfigStatus struct {
 	// +optional
 	Reachable *bool `json:"reachable,omitempty"`
 
-	// ResolvedGVK records the GVK resolved through the RESTMapper.
+	// Target is a friendly summary of where R will be created: "<namespace>/<kind>"
+	// for namespaced targets, just "<kind>" for cluster-scoped ones. Populated
+	// after the GVK is successfully resolved on the target cluster.
 	// +optional
-	ResolvedGVK string `json:"resolvedGVK,omitempty"`
+	Target string `json:"target,omitempty"`
 
 	// +listType=map
 	// +listMapKey=type
@@ -211,9 +207,8 @@ type SimpleClusterProviderConfigStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName=scpc
-// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.status.resolvedGVK`
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.status.target`
 // +kubebuilder:printcolumn:name="Reachable",type=boolean,JSONPath=`.status.reachable`
-// +kubebuilder:printcolumn:name="Priority",type=integer,JSONPath=`.spec.priority`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // SimpleClusterProviderConfig is the cluster-scoped admin-facing template/profile.

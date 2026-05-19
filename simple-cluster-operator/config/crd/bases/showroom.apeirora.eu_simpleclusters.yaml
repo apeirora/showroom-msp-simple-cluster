@@ -12,7 +12,7 @@ spec:
     listKind: SimpleClusterList
     plural: simpleclusters
     shortNames:
-    - sc
+    - simc
     singular: simplecluster
   scope: Namespaced
   versions:
@@ -81,9 +81,8 @@ spec:
                 type: string
               providerConfigRef:
                 description: |-
-                  ProviderConfigRef pins a specific SimpleClusterProviderConfig.
-                  When omitted, the highest-priority SCPC is selected automatically and
-                  then locked into status.providerConfigRef so churn does not migrate Rs.
+                  ProviderConfigRef pins the SimpleClusterProviderConfig used to build R.
+                  Required; the operator does not auto-select a provider.
                 properties:
                   name:
                     default: ""
@@ -104,6 +103,7 @@ spec:
                 minimum: 1
                 type: integer
             required:
+            - providerConfigRef
             - workers
             type: object
           status:
