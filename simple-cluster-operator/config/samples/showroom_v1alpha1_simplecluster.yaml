@@ -4,3 +4,5 @@ metadata:
   name: simple-cluster-sample
 spec:
   workers: 2
+  providerConfigRef:
+    name: dati-openstack
