@@ -17,15 +17,12 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.resolvedGVK
+    - jsonPath: .status.target
       name: Target
       type: string
     - jsonPath: .status.reachable
       name: Reachable
       type: boolean
-    - jsonPath: .spec.priority
-      name: Priority
-      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -175,12 +172,6 @@ spec:
                       (SubResource only).
                     type: string
                 type: object
-              priority:
-                description: |-
-                  Priority chooses among multiple SCPCs when a SimpleCluster does not pin one.
-                  Higher wins. Defaults to 0.
-                format: int32
-                type: integer
               statusMap:
                 description: |-
                   StatusMap projects R's status into Phase. Optional; defaults to the
@@ -252,11 +243,11 @@ spec:
                 type: object
               template:
                 description: |-
-                  Template is the YAML/JSON body of resource R rendered through the
-                  Helm-style text/template + sprig/v3 engine. It MUST embed apiVersion/kind
-                  consistent with Target.
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
+                  Template is the YAML body of resource R rendered through the Helm-style
+                  text/template + sprig/v3 engine. The post-render result MUST embed
+                  apiVersion/kind consistent with Target.
+                minLength: 1
+                type: string
             required:
             - kubeconfigSource
             - target
@@ -330,8 +321,11 @@ spec:
                   Reachable mirrors a smoke test against Target.KubeconfigSecretRef.
                   True when omitted (local cluster).
                 type: boolean
-              resolvedGVK:
-                description: ResolvedGVK records the GVK resolved through the RESTMapper.
+              target:
+                description: |-
+                  Target is a friendly summary of where R will be created: "<namespace>/<kind>"
+                  for namespaced targets, just "<kind>" for cluster-scoped ones. Populated
+                  after the GVK is successfully resolved on the target cluster.
                 type: string
             type: object
         required:

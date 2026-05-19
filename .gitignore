@@ -1,0 +1,6 @@
+# Raw dumps from remote clusters — may contain bearer tokens / Secrets.
+imports/
+
+# IDE / sandbox state
+.idea/
+.chroot/

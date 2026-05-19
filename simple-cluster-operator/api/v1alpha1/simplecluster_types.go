@@ -28,11 +28,9 @@ type SimpleClusterSpec struct {
 	// +kubebuilder:validation:Maximum=100
 	Workers int32 `json:"workers"`
 
-	// ProviderConfigRef pins a specific SimpleClusterProviderConfig.
-	// When omitted, the highest-priority SCPC is selected automatically and
-	// then locked into status.providerConfigRef so churn does not migrate Rs.
-	// +optional
-	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef,omitempty"`
+	// ProviderConfigRef pins the SimpleClusterProviderConfig used to build R.
+	// Required; the operator does not auto-select a provider.
+	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef"`
 
 	// Inputs are per-cluster overrides. Every key MUST be declared in
 	// SCPC.spec.inputs; unknown keys are rejected. Keys left unset fall back
@@ -101,7 +99,7 @@ type SimpleClusterStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=sc
+// +kubebuilder:resource:shortName=simc
 // +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.status.providerConfigRef.name`
 // +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
