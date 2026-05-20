@@ -18,6 +18,8 @@ spec:
     kubeconfigSecretRef:
       name: gardener-sap-kubeconfig
       namespace: simple-shoot
+    deletionAnnotations:
+      confirmation.gardener.cloud/deletion: "true"
   inputs:
     - { name: cloudProfile, type: string,   default: ironcore,                    description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: wdf4,                        description: "Cloud region" }
@@ -50,9 +52,9 @@ spec:
               - {{ .Inputs.zone }}
       networking:
         type: calico
-        nodesCIDR: 10.250.0.0/16
-        podsCIDR: 100.64.0.0/12
-        servicesCIDR: 100.104.0.0/13
+        nodes: 10.250.0.0/16
+        pods: 100.64.0.0/12
+        services: 100.104.0.0/13
   kubeconfigSource:
     subResource:
       apiVersion: authentication.gardener.cloud/v1alpha1

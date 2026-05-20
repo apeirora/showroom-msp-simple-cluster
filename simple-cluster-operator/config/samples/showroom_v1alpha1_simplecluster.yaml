@@ -1,7 +1,9 @@
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleCluster
 metadata:
-  name: simple-cluster-sample
+  # Keep the SC name short: Gardener enforces a 21-char cap on
+  # <project>-<shoot> across project+namePrefix+SC.name.
+  name: t1
 spec:
   workers: 2
   providerConfigRef:

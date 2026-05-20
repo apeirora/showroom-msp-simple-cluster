@@ -13,7 +13,9 @@ spec:
     namePrefix: ap
     kubeconfigSecretRef:
       name: gardener-dati-kubeconfig
-      namespace: simple-shoot
+      namespace: default
+    deletionAnnotations:
+      confirmation.gardener.cloud/deletion: "true"
   inputs:
     - { name: cloudProfile, type: string,   default: openstack,                   description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: RegionOne,                   description: "Cloud region" }
@@ -56,9 +58,9 @@ spec:
               - {{ .Inputs.zone }}
       networking:
         type: calico
-        nodesCIDR: 10.250.0.0/16
-        podsCIDR: 100.128.0.0/11
-        servicesCIDR: 100.72.0.0/13
+        nodes: 10.250.0.0/16
+        pods: 100.128.0.0/11
+        services: 100.72.0.0/13
       maintenance:
         autoUpdate:
           kubernetesVersion: false
