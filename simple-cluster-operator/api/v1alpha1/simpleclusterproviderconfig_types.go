@@ -82,6 +82,12 @@ type TargetSpec struct {
 	// When nil, R is created on the management cluster.
 	// +optional
 	KubeconfigSecretRef *corev1.SecretReference `json:"kubeconfigSecretRef,omitempty"`
+
+	// DeletionAnnotations are applied to R before the operator attempts to
+	// delete it. Required by some controllers as a "double opt-in"
+	// (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
+	// +optional
+	DeletionAnnotations map[string]string `json:"deletionAnnotations,omitempty"`
 }
 
 // KubeconfigSource describes how to obtain the kubeconfig of NC once R is Ready.
