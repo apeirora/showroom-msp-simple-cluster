@@ -209,6 +209,14 @@ spec:
                   apiVersion:
                     description: APIVersion of the target resource R (e.g. core.gardener.cloud/v1beta1).
                     type: string
+                  deletionAnnotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      DeletionAnnotations are applied to R before the operator attempts to
+                      delete it. Required by some controllers as a "double opt-in"
+                      (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
+                    type: object
                   kind:
                     description: Kind of the target resource R (e.g. Shoot).
                     type: string
