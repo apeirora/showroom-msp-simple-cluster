@@ -95,7 +95,7 @@ func (r *SimpleClusterProviderConfigReconciler) probe(
 		return "", false, readyCond(metav1.ConditionFalse, "InvalidTarget", err.Error()), nil
 	}
 
-	mapper, retryErr, condErr := r.targetMapper(ctx, scpc)
+	mapper, condErr, retryErr := r.targetMapper(ctx, scpc)
 	if condErr != nil {
 		return "", false, *condErr, retryErr
 	}
@@ -125,10 +125,12 @@ func targetSummary(t showroomv1alpha1.TargetSpec, mapping *apimeta.RESTMapping) 
 }
 
 // targetMapper returns a RESTMapper for the SCPC's target cluster. Local
-// (no kubeconfigSecretRef) reuses the manager's own RESTMapper.
+// (no kubeconfigSecretRef) reuses the manager's own RESTMapper. The optional
+// *metav1.Condition signals a terminal status outcome to the caller; the
+// error is for transient retry.
 func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 	ctx context.Context, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
-) (apimeta.RESTMapper, error, *metav1.Condition) {
+) (apimeta.RESTMapper, *metav1.Condition, error) {
 	if scpc.Spec.Target.KubeconfigSecretRef == nil {
 		return r.RESTMapper(), nil, nil
 	}
@@ -139,29 +141,29 @@ func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 	case apierrors.IsNotFound(err):
 		c := readyCond(metav1.ConditionFalse, "SecretMissing",
 			fmt.Sprintf("kubeconfig Secret %s/%s not found", ref.Namespace, ref.Name))
-		return nil, nil, &c
+		return nil, &c, nil
 	case err != nil:
 		c := readyCond(metav1.ConditionFalse, "SecretReadError", err.Error())
-		return nil, err, &c
+		return nil, &c, err
 	}
 
 	data, ok := secret.Data[kubeconfigSecretKey]
 	if !ok || len(data) == 0 {
 		c := readyCond(metav1.ConditionFalse, "SecretKeyMissing",
 			fmt.Sprintf("Secret %s/%s has no %q key", ref.Namespace, ref.Name, kubeconfigSecretKey))
-		return nil, nil, &c
+		return nil, &c, nil
 	}
 
 	cfg, err := clientcmd.RESTConfigFromKubeConfig(data)
 	if err != nil {
 		c := readyCond(metav1.ConditionFalse, "BadKubeconfig", err.Error())
-		return nil, nil, &c
+		return nil, &c, nil
 	}
 
 	mapper, err := newDiscoveryMapper(cfg)
 	if err != nil {
 		c := readyCond(metav1.ConditionFalse, "Unreachable", err.Error())
-		return nil, nil, &c
+		return nil, &c, nil
 	}
 	return mapper, nil, nil
 }
