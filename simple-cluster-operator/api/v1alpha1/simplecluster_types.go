@@ -100,7 +100,7 @@ type SimpleClusterStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=simc
-// +kubebuilder:printcolumn:name="Provider",type=string,JSONPath=`.status.providerConfigRef.name`
+// +kubebuilder:printcolumn:name="SCPC",type=string,JSONPath=`.spec.providerConfigRef.name`
 // +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.status.targetName`

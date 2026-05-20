@@ -17,8 +17,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.providerConfigRef.name
-      name: Provider
+    - jsonPath: .spec.providerConfigRef.name
+      name: SCPC
       type: string
     - jsonPath: .spec.workers
       name: Workers
