@@ -59,7 +59,7 @@ func New(
 	}
 	data := secret.Data[KubeconfigKey]
 	if len(data) == 0 {
-		return nil, fmt.Errorf("Secret %s/%s missing %q key", ref.Namespace, ref.Name, KubeconfigKey)
+		return nil, fmt.Errorf("secret %s/%s missing %q key", ref.Namespace, ref.Name, KubeconfigKey)
 	}
 	cfg, err := clientcmd.RESTConfigFromKubeConfig(data)
 	if err != nil {
