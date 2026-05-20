@@ -37,8 +37,7 @@ var _ = Describe("SimpleClusterProviderConfig Controller", func() {
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Name: resourceName, // SCPC is cluster-scoped
 		}
 		simpleclusterproviderconfig := &showroomv1alpha1.SimpleClusterProviderConfig{}
 
@@ -48,10 +47,19 @@ var _ = Describe("SimpleClusterProviderConfig Controller", func() {
 			if err != nil && errors.IsNotFound(err) {
 				resource := &showroomv1alpha1.SimpleClusterProviderConfig{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+						Name: resourceName,
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
+						Target: showroomv1alpha1.TargetSpec{
+							APIVersion: "v1",
+							Kind:       "ConfigMap",
+							Namespace:  "default",
+						},
+						Template: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: x\n",
+						KubeconfigSource: showroomv1alpha1.KubeconfigSource{
+							Inline: &showroomv1alpha1.KubeconfigInlineSource{KubeconfigPath: "data.kubeconfig"},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
