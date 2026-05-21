@@ -1,0 +1,208 @@
+# Provisions a k3s cluster on top of KubeVirt VMs in this same management
+# cluster: one control-plane VirtualMachine plus a worker
+# VirtualMachineInstanceReplicaSet sized by `.SC.workers`.
+#
+# Prerequisites on the management cluster:
+#   - KubeVirt installed (CRDs: VirtualMachine, VirtualMachineInstanceReplicaSet)
+#   - simple-cluster-operator installed
+#   - quick-start-kind.sh in the repo root gets you both
+#
+# Reconcile order (per the SCPC DAG):
+#   service -> cp -> workers
+#
+# Kubeconfig: the simple-cluster-operator cannot read files out of a VM
+# with any of its built-in strategies. After the CP VM boots and k3s
+# is up, extract the kubeconfig and stash it in a Secret. The operator
+# will then mirror that Secret into SC.namespace as `<sc>-kubeconfig`:
+#
+#   virtctl ssh ubuntu@<sc>-cp -- 'sudo cat /etc/rancher/k3s/k3s.yaml' \
+#     | sed "s|127.0.0.1|<sc>-k3s-api.<ns>.svc|" \
+#     > /tmp/kubeconfig
+#   kubectl -n <ns> create secret generic <sc>-k3s-kubeconfig \
+#     --from-file=kubeconfig=/tmp/kubeconfig
+#
+# (Replace <sc> with SimpleCluster.metadata.name and <ns> with its namespace.)
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: k3s-kubevirt
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  target:
+    # Resources live on the same management cluster — no kubeconfigSecretRef.
+    namespace: default
+
+  inputs:
+    - { name: k3sToken,     type: string, default: "CHANGE_ME_join_token",                 description: "Pre-shared token used by the CP to admit workers. OVERRIDE per SimpleCluster." }
+    - { name: k3sVersion,   type: string, default: "v1.31.4+k3s1",                         description: "INSTALL_K3S_VERSION passed to the k3s installer" }
+    - { name: imageURL,     type: string, default: "quay.io/containerdisks/ubuntu:24.04",  description: "containerDisk OS image (ephemeral — VMs lose state on restart)" }
+    - { name: cpCpu,        type: int,    default: "2",                                    description: "Control-plane vCPU count" }
+    - { name: cpMemory,     type: string, default: "2Gi",                                  description: "Control-plane guest memory" }
+    - { name: workerCpu,    type: int,    default: "2",                                    description: "Per-worker vCPU count" }
+    - { name: workerMemory, type: string, default: "2Gi",                                  description: "Per-worker guest memory" }
+
+  resources:
+    # -----------------------------------------------------------------
+    # ClusterIP Service that exposes the k3s API. Selects the CP VMI's
+    # virt-launcher pod by labels propagated through
+    # vm.spec.template.metadata.labels.
+    # -----------------------------------------------------------------
+    - name: service
+      apiVersion: v1
+      kind: Service
+      # ClusterIP becomes routable immediately on create; Service has no
+      # status.conditions, so force a kind-based ready check.
+      readiness:
+        phasePath: kind
+        phaseReadyValue: Service
+      template: |
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: {{ .SC.name }}-k3s-api
+        spec:
+          type: ClusterIP
+          ports:
+            - name: api
+              port: 6443
+              targetPort: 6443
+          selector:
+            simplecluster.apeirora.eu/sc-name: {{ .SC.name }}
+            app.kubernetes.io/component: k3s-cp
+
+    # -----------------------------------------------------------------
+    # Control plane: a single KubeVirt VirtualMachine running k3s server.
+    # We use the standard Ready condition that KubeVirt sets on the VM
+    # once the VMI is Running (the default readiness walker handles it).
+    # -----------------------------------------------------------------
+    - name: cp
+      apiVersion: kubevirt.io/v1
+      kind: VirtualMachine
+      dependsOn: [service]
+      template: |
+        apiVersion: kubevirt.io/v1
+        kind: VirtualMachine
+        spec:
+          runStrategy: Always
+          template:
+            metadata:
+              labels:
+                simplecluster.apeirora.eu/sc-name: {{ .SC.name }}
+                app.kubernetes.io/component: k3s-cp
+            spec:
+              domain:
+                cpu:
+                  cores: {{ .Inputs.cpCpu }}
+                memory:
+                  guest: {{ .Inputs.cpMemory }}
+                devices:
+                  disks:
+                    - name: root
+                      disk: { bus: virtio }
+                    - name: cloudinit
+                      disk: { bus: virtio }
+                  interfaces:
+                    - name: default
+                      masquerade: {}
+              networks:
+                - name: default
+                  pod: {}
+              volumes:
+                - name: root
+                  containerDisk:
+                    image: {{ .Inputs.imageURL }}
+                - name: cloudinit
+                  cloudInitNoCloud:
+                    userData: |
+                      #cloud-config
+                      package_update: false
+                      runcmd:
+                        - |
+                          set -eu
+                          curl -sfL https://get.k3s.io | \
+                            INSTALL_K3S_VERSION={{ .Inputs.k3sVersion }} \
+                            INSTALL_K3S_EXEC="server \
+                              --cluster-init \
+                              --token={{ .Inputs.k3sToken }} \
+                              --tls-san {{ .Resources.service.metadata.name }} \
+                              --tls-san {{ .Resources.service.metadata.name }}.{{ .SC.namespace }}.svc" \
+                            sh -
+
+    # -----------------------------------------------------------------
+    # Workers: VirtualMachineInstanceReplicaSet sized by .SC.workers,
+    # each running k3s agent against the CP via the ClusterIP Service.
+    # -----------------------------------------------------------------
+    - name: workers
+      apiVersion: kubevirt.io/v1
+      kind: VirtualMachineInstanceReplicaSet
+      dependsOn: [cp]
+      # VMIRS has no Ready condition; mark Ready on create.
+      # Inspect actual worker join progress with `kubectl get vmis -l app.kubernetes.io/component=k3s-worker`.
+      readiness:
+        phasePath: kind
+        phaseReadyValue: VirtualMachineInstanceReplicaSet
+      template: |
+        apiVersion: kubevirt.io/v1
+        kind: VirtualMachineInstanceReplicaSet
+        spec:
+          replicas: {{ .SC.workers }}
+          selector:
+            matchLabels:
+              simplecluster.apeirora.eu/sc-name: {{ .SC.name }}
+              app.kubernetes.io/component: k3s-worker
+          template:
+            metadata:
+              labels:
+                simplecluster.apeirora.eu/sc-name: {{ .SC.name }}
+                app.kubernetes.io/component: k3s-worker
+            spec:
+              domain:
+                cpu:
+                  cores: {{ .Inputs.workerCpu }}
+                memory:
+                  guest: {{ .Inputs.workerMemory }}
+                devices:
+                  disks:
+                    - name: root
+                      disk: { bus: virtio }
+                    - name: cloudinit
+                      disk: { bus: virtio }
+                  interfaces:
+                    - name: default
+                      masquerade: {}
+              networks:
+                - name: default
+                  pod: {}
+              volumes:
+                - name: root
+                  containerDisk:
+                    image: {{ .Inputs.imageURL }}
+                - name: cloudinit
+                  cloudInitNoCloud:
+                    userData: |
+                      #cloud-config
+                      package_update: false
+                      runcmd:
+                        - |
+                          set -eu
+                          # Wait for the CP API to answer before joining.
+                          until curl -sk https://{{ .Resources.service.metadata.name }}.{{ .SC.namespace }}.svc:6443/ping >/dev/null; do
+                            sleep 5
+                          done
+                          curl -sfL https://get.k3s.io | \
+                            INSTALL_K3S_VERSION={{ .Inputs.k3sVersion }} \
+                            K3S_URL=https://{{ .Resources.service.metadata.name }}.{{ .SC.namespace }}.svc:6443 \
+                            K3S_TOKEN={{ .Inputs.k3sToken }} \
+                            sh -s agent
+
+  # The CP doesn't expose its kubeconfig over the cluster API, so we point
+  # the operator at a Secret named `<SC.name>-k3s-kubeconfig` that *you*
+  # create after bootstrap (see the comment block at the top of this file).
+  # The operator then mirrors it into SC.namespace as `<SC.name>-kubeconfig`.
+  kubeconfigSource:
+    resourceName: cp
+    secretRef:
+      name: "{{ .SC.name }}-k3s-kubeconfig"
+      namespace: "{{ .SC.namespace }}"
