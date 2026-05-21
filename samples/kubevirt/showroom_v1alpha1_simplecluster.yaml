@@ -1,0 +1,11 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: k3s-demo
+spec:
+  workers: 2
+  providerConfigRef:
+    name: k3s-kubevirt
+  inputs:
+    # Override the SCPC default. Anything random+long enough.
+    k3sToken: "demo-please-change-me"
