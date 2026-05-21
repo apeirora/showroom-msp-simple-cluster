@@ -11,14 +11,14 @@ You may obtain a copy of the License at
 // Package kubeconfig fetches NC's kubeconfig from a target resource R and
 // mirrors it into a Secret in SC.namespace. See DESIGN.md §6.
 //
-// Three strategies are described in DESIGN.md; v0.2 implements two:
+// Three strategies, all implemented:
 //
-//   - inline:    walk a JSONPath into R and read kubeconfig bytes.
-//   - secretRef: render the Secret name/namespace as Go templates and
+//   - inline:      walk a JSONPath into R and read kubeconfig bytes.
+//   - secretRef:   render the Secret name/namespace as Go templates and
 //     GET the Secret from the target cluster.
-//   - subResource: NOT YET IMPLEMENTED in v0.2 — returns
-//     ErrSubResourceNotImplemented. The Gardener samples
-//     use this strategy.
+//   - subResource: POST a Kind body to R's subresource URL (e.g.
+//     Gardener's adminkubeconfig) and read kubeconfig +
+//     expiry from the response. See subresource.go.
 package kubeconfig
 
 import (
@@ -39,14 +39,11 @@ import (
 	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
 
-// ErrSubResourceNotImplemented is returned by Fetch when the SubResource
-// strategy is selected. v0.2 only implements Inline and SecretRef.
-var ErrSubResourceNotImplemented = fmt.Errorf("kubeconfigSource.subResource: not implemented in v0.2 (use inline or secretRef)")
-
 // Fetch resolves SCPC.KubeconfigSource against the named resource's live R
 // on the target cluster. Returns the kubeconfig bytes plus an optional
-// expiry hint published by the source (Inline/SubResource may know;
-// SecretRef does not — expiry then comes from inspecting the bytes).
+// expiry hint published by the source (SubResource reports its own
+// expiration; Inline/SecretRef do not, so expiry comes from inspecting
+// the bytes via TokenTimes).
 func Fetch(
 	ctx context.Context,
 	tc *target.Client,
@@ -62,7 +59,7 @@ func Fetch(
 	case ks.SecretRef != nil:
 		return fetchSecretRef(ctx, tc, ks.SecretRef, scpc, sc, resource, live)
 	case ks.SubResource != nil:
-		return nil, nil, ErrSubResourceNotImplemented
+		return fetchSubResource(ctx, tc, ks.SubResource, scpc, sc, resource, live)
 	}
 	return nil, nil, fmt.Errorf("kubeconfigSource has no strategy set")
 }
