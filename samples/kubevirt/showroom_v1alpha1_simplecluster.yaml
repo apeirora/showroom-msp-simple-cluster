@@ -9,3 +9,7 @@ spec:
   inputs:
     # Override the SCPC default. Anything random+long enough.
     k3sToken: "demo-please-change-me"
+    # Set to your ssh public key (`cat ~/.ssh/id_*.pub`) to enable
+    # `virtctl ssh ubuntu@vm/k3s-demo-cp` against the control-plane VM.
+    # Leave empty to skip ssh access entirely.
+    # sshPublicKey: "ssh-ed25519 AAAA..."
