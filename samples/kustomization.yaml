@@ -1,0 +1,7 @@
+## Aggregator: applies every provider's samples.
+## Prefer the per-provider directories if you only need one:
+##   kubectl apply -k samples/gardener/
+##   kubectl apply -k samples/kubevirt/
+resources:
+  - gardener
+  - kubevirt
