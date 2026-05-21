@@ -7,15 +7,10 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
 spec:
   target:
-    apiVersion: core.gardener.cloud/v1beta1
-    kind: Shoot
     namespace: garden-sap
-    namePrefix: ap
     kubeconfigSecretRef:
       name: gardener-dati-kubeconfig
       namespace: default
-    deletionAnnotations:
-      confirmation.gardener.cloud/deletion: "true"
   inputs:
     - { name: cloudProfile, type: string,   default: openstack,                   description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: RegionOne,                   description: "Cloud region" }
@@ -23,54 +18,70 @@ spec:
     - { name: machineType,  type: string,   default: 4vCPU-8192RAM-100STORAGE,    description: "Worker machine type from the CloudProfile" }
     - { name: machineImage, type: string,   default: gardenlinux,                 description: "Worker OS image name" }
     - { name: zone,         type: string,   default: nova,                        description: "OpenStack availability zone for the worker pool" }
-  template: |
-    apiVersion: core.gardener.cloud/v1beta1
-    kind: Shoot
-    spec:
-      cloudProfile:
-        name: {{ .Inputs.cloudProfile }}
-        kind: CloudProfile
-      credentialsBindingName: my-openstack-secret
-      region: {{ .Inputs.region }}
-      kubernetes:
-        version: "{{ .Inputs.k8sVersion }}"
-      provider:
-        type: openstack
-        infrastructureConfig:
-          apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
-          kind: InfrastructureConfig
-          floatingPoolName: external
-          networks:
-            workers: 10.250.0.0/19
-        controlPlaneConfig:
-          apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
-          kind: ControlPlaneConfig
-          loadBalancerProvider: amphora
-        workers:
-          - name: worker-main
-            minimum: 1
-            maximum: {{ .SC.workers }}
-            machine:
-              type: {{ .Inputs.machineType }}
-              image:
-                name: {{ .Inputs.machineImage }}
-            zones:
-              - {{ .Inputs.zone }}
-      networking:
-        type: calico
-        nodes: 10.250.0.0/16
-        pods: 100.128.0.0/11
-        services: 100.72.0.0/13
-      maintenance:
-        autoUpdate:
-          kubernetesVersion: false
-          machineImageVersion: false
-        timeWindow:
-          begin: 220000+0000
-          end: 230000+0000
-      hibernation:
-        enabled: false
+  resources:
+    - name: shoot
+      apiVersion: core.gardener.cloud/v1beta1
+      kind: Shoot
+      namePrefix: ap
+      deletionAnnotations:
+        confirmation.gardener.cloud/deletion: "true"
+      readiness:
+        phasePath: status.lastOperation.state
+        phaseReadyValue: Succeeded
+        phaseFailedValues:
+          - Failed
+          - Error
+        lastOperationPath: status.lastOperation.description
+        lastErrorPath: status.lastErrors[0].description
+      template: |
+        apiVersion: core.gardener.cloud/v1beta1
+        kind: Shoot
+        spec:
+          cloudProfile:
+            name: {{ .Inputs.cloudProfile }}
+            kind: CloudProfile
+          credentialsBindingName: my-openstack-secret
+          region: {{ .Inputs.region }}
+          kubernetes:
+            version: "{{ .Inputs.k8sVersion }}"
+          provider:
+            type: openstack
+            infrastructureConfig:
+              apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+              kind: InfrastructureConfig
+              floatingPoolName: external
+              networks:
+                workers: 10.250.0.0/19
+            controlPlaneConfig:
+              apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+              kind: ControlPlaneConfig
+              loadBalancerProvider: amphora
+            workers:
+              - name: worker-main
+                minimum: 1
+                maximum: {{ .SC.workers }}
+                machine:
+                  type: {{ .Inputs.machineType }}
+                  image:
+                    name: {{ .Inputs.machineImage }}
+                zones:
+                  - {{ .Inputs.zone }}
+          networking:
+            type: calico
+            nodes: 10.250.0.0/16
+            pods: 100.128.0.0/11
+            services: 100.72.0.0/13
+          maintenance:
+            autoUpdate:
+              kubernetesVersion: false
+              machineImageVersion: false
+            timeWindow:
+              begin: 220000+0000
+              end: 230000+0000
+          hibernation:
+            enabled: false
   kubeconfigSource:
+    resourceName: shoot
     subResource:
       apiVersion: authentication.gardener.cloud/v1alpha1
       kind: AdminKubeconfigRequest
@@ -79,11 +90,3 @@ spec:
       expirationPath: status.expirationTimestamp
     validity: 720h
     renewalBefore: 72h
-  statusMap:
-    phasePath: status.lastOperation.state
-    phaseReadyValue: Succeeded
-    phaseFailedValues:
-      - Failed
-      - Error
-    lastOperationPath: status.lastOperation.description
-    lastErrorPath: status.lastErrors[0].description
