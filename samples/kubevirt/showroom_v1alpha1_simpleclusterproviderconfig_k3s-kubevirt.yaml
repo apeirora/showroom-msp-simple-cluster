@@ -42,6 +42,7 @@ spec:
     - { name: cpMemory,     type: string, default: "2Gi",                                  description: "Control-plane guest memory" }
     - { name: workerCpu,    type: int,    default: "2",                                    description: "Per-worker vCPU count" }
     - { name: workerMemory, type: string, default: "2Gi",                                  description: "Per-worker guest memory" }
+    - { name: sshPublicKey, type: string, default: "",                  allowEmpty: true,  description: "SSH public key injected into the ubuntu user on the CP VM. Required to extract the k3s kubeconfig with virtctl ssh." }
 
   resources:
     # -----------------------------------------------------------------
@@ -118,6 +119,10 @@ spec:
                     userData: |
                       #cloud-config
                       package_update: false
+                      {{- if .Inputs.sshPublicKey }}
+                      ssh_authorized_keys:
+                        - {{ .Inputs.sshPublicKey }}
+                      {{- end }}
                       runcmd:
                         - |
                           set -eu
