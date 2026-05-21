@@ -155,6 +155,7 @@ type SimpleClusterStatus struct {
 // +kubebuilder:printcolumn:name="SCPC",type=string,JSONPath=`.spec.providerConfigRef.name`
 // +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Kubeconfig",type=string,JSONPath=`.status.kubeconfigSecretRef.name`
 // +kubebuilder:printcolumn:name="Kubeconfig Expires",type=string,JSONPath=`.status.kubeconfigExpiresAt`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
