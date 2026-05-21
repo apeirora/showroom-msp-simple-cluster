@@ -29,10 +29,13 @@ import (
 
 const KubeconfigKey = "kubeconfig"
 
-// Client bundles a dynamic client with the matching RESTMapper.
+// Client bundles a dynamic client with the matching RESTMapper and the
+// underlying *rest.Config (needed for raw subresource POSTs that
+// dynamic.Interface does not expose).
 type Client struct {
-	Dynamic dynamic.Interface
-	Mapper  apimeta.RESTMapper
+	Dynamic    dynamic.Interface
+	Mapper     apimeta.RESTMapper
+	RESTConfig *rest.Config
 }
 
 // New builds a target Client. If ref is nil, returns a client for the
@@ -50,7 +53,7 @@ func New(
 		if err != nil {
 			return nil, fmt.Errorf("dynamic client (local): %w", err)
 		}
-		return &Client{Dynamic: d, Mapper: mgmtMapper}, nil
+		return &Client{Dynamic: d, Mapper: mgmtMapper, RESTConfig: mgmtCfg}, nil
 	}
 
 	var secret corev1.Secret
@@ -78,7 +81,11 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("discover API groups: %w", err)
 	}
-	return &Client{Dynamic: d, Mapper: restmapper.NewDiscoveryRESTMapper(groups)}, nil
+	return &Client{
+		Dynamic:    d,
+		Mapper:     restmapper.NewDiscoveryRESTMapper(groups),
+		RESTConfig: cfg,
+	}, nil
 }
 
 // ResourceFor returns the dynamic ResourceInterface scoped (namespaced or
