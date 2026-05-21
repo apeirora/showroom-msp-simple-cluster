@@ -29,6 +29,9 @@ func st(name string, phase showroomv1alpha1.Phase, lastError ...string) *showroo
 	rs := &showroomv1alpha1.ResourceStatus{Name: name, Phase: phase}
 	if len(lastError) > 0 {
 		rs.LastError = lastError[0]
+		// Mirror the controller: reasonFor populates Message from
+		// LastError on Failed, and aggregateMessage prefers Message.
+		rs.Message = lastError[0]
 	}
 	return rs
 }

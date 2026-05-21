@@ -118,19 +118,21 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		rs := resourceByName[name]
 
 		predecessors := make(map[string]*unstructured.Unstructured, len(rs.DependsOn))
-		allReady := true
+		var waitingOn []string
 		for _, dep := range rs.DependsOn {
 			depStatus := statuses[dep]
 			if depStatus == nil || depStatus.Phase != showroomv1alpha1.PhaseReady {
-				allReady = false
-				break
+				waitingOn = append(waitingOn, dep)
+				continue
 			}
 			predecessors[dep] = live[dep]
 		}
-		if !allReady {
+		if len(waitingOn) > 0 {
 			statuses[name] = &showroomv1alpha1.ResourceStatus{
-				Name:  name,
-				Phase: showroomv1alpha1.PhasePending,
+				Name:    name,
+				Phase:   showroomv1alpha1.PhasePending,
+				Reason:  showroomv1alpha1.ReasonWaitingForDependencies,
+				Message: "waiting on: " + strings.Join(waitingOn, ", "),
 			}
 			continue
 		}
@@ -167,12 +169,15 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// v0.x: do not patch existing R. Drift requires user to delete R.
 
 		phase, lastOp, lastErr := extractPhase(rs.Readiness, existing)
+		reason, msg := reasonFor(phase, lastOp, lastErr)
 		statuses[name] = &showroomv1alpha1.ResourceStatus{
 			Name:            name,
 			GVK:             gvk.String(),
 			TargetName:      existing.GetName(),
 			TargetNamespace: existing.GetNamespace(),
 			Phase:           phase,
+			Reason:          reason,
+			Message:         msg,
 			LastOperation:   lastOp,
 			LastError:       lastErr,
 		}
@@ -298,6 +303,21 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 
 	if !controllerutil.ContainsFinalizer(sc, showroomv1alpha1.FinalizerName) {
 		return ctrl.Result{}, nil
+	}
+
+	// Mark every tracked resource as Deleting so observers can see the
+	// cascade in flight. Best-effort: if the patch fails the deletion
+	// proceeds anyway.
+	if sc.Status.Phase != showroomv1alpha1.PhaseDeleting {
+		patch := client.MergeFrom(sc.DeepCopy())
+		sc.Status.Phase = showroomv1alpha1.PhaseDeleting
+		for i := range sc.Status.Resources {
+			sc.Status.Resources[i].Reason = showroomv1alpha1.ReasonDeleting
+			sc.Status.Resources[i].Message = "deletion in progress"
+		}
+		if err := r.Status().Patch(ctx, sc, patch); err != nil {
+			log.Error(err, "patch SC status to Deleting failed; proceeding")
+		}
 	}
 
 	scpcRef := sc.Status.ProviderConfigRef
@@ -555,24 +575,50 @@ func aggregatePhase(order []string, statuses map[string]*showroomv1alpha1.Resour
 }
 
 func aggregateMessage(order []string, statuses map[string]*showroomv1alpha1.ResourceStatus) string {
-	var parts []string
+	parts := make([]string, 0, len(order))
 	for _, name := range order {
 		s := statuses[name]
 		if s == nil {
 			continue
 		}
-		switch s.Phase {
-		case showroomv1alpha1.PhaseFailed:
-			parts = append(parts, fmt.Sprintf("%s: %s", name, s.LastError))
-		case showroomv1alpha1.PhaseReady:
-		default:
-			parts = append(parts, fmt.Sprintf("%s: %s", name, s.Phase))
+		if s.Phase == showroomv1alpha1.PhaseReady {
+			continue
 		}
+		detail := s.Message
+		if detail == "" {
+			detail = string(s.Phase)
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", name, detail))
 	}
 	if len(parts) == 0 {
 		return "all resources Ready"
 	}
 	return strings.Join(parts, "; ")
+}
+
+// reasonFor maps an extractPhase output onto a ResourceReason + human
+// message for the SC's per-resource status. PhasePending here means R
+// exists but has not yet surfaced a Ready signal — call it Creating
+// (WaitingForDependencies is set at the DAG-walk step, never here).
+func reasonFor(phase showroomv1alpha1.Phase, lastOp, lastErr string) (showroomv1alpha1.ResourceReason, string) {
+	switch phase {
+	case showroomv1alpha1.PhaseReady:
+		return showroomv1alpha1.ReasonReady, lastOp
+	case showroomv1alpha1.PhaseFailed:
+		if lastErr != "" {
+			return showroomv1alpha1.ReasonFailed, lastErr
+		}
+		return showroomv1alpha1.ReasonFailed, lastOp
+	case showroomv1alpha1.PhaseProvisioning:
+		return showroomv1alpha1.ReasonProvisioning, lastOp
+	case showroomv1alpha1.PhasePending:
+		msg := lastOp
+		if msg == "" {
+			msg = "resource created; awaiting controller to report Ready"
+		}
+		return showroomv1alpha1.ReasonCreating, msg
+	}
+	return "", ""
 }
 
 func orderedStatuses(order []string, statuses map[string]*showroomv1alpha1.ResourceStatus) []showroomv1alpha1.ResourceStatus {
