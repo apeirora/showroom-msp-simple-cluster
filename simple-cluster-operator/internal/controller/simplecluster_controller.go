@@ -13,7 +13,6 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -208,10 +207,14 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Kubeconfig propagation: once the named source resource is Ready,
 	// fetch its kubeconfig and mirror it into a Secret in SC.Namespace.
+	// For SubResource the renewal-before window gates re-issuance so we
+	// don't request a fresh credential every reconcile.
 	kcName := scpc.Spec.KubeconfigSource.ResourceName
 	if kcLive, ok := live[kcName]; ok {
 		if kcStatus := statuses[kcName]; kcStatus != nil && kcStatus.Phase == showroomv1alpha1.PhaseReady {
-			r.syncKubeconfig(ctx, &sc, &scpc, resourceByName[kcName], kcLive, tc)
+			if kubeconfig.NeedsRefresh(&sc, &scpc) {
+				r.syncKubeconfig(ctx, &sc, &scpc, resourceByName[kcName], kcLive, tc)
+			}
 		}
 	}
 
@@ -242,14 +245,10 @@ func (r *SimpleClusterReconciler) syncKubeconfig(
 
 	data, sourceExpiry, kerr := kubeconfig.Fetch(ctx, tc, scpc, sc, resource, live)
 	if kerr != nil {
-		reason := "KubeconfigFetchError"
-		if errors.Is(kerr, kubeconfig.ErrSubResourceNotImplemented) {
-			reason = "SubResourceNotImplemented"
-		}
 		apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
 			Type:    showroomv1alpha1.ConditionKubeconfigValid,
 			Status:  metav1.ConditionFalse,
-			Reason:  reason,
+			Reason:  "KubeconfigFetchError",
 			Message: kerr.Error(),
 		})
 		log.Info("kubeconfig fetch failed", "error", kerr.Error())
