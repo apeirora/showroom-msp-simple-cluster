@@ -137,7 +137,10 @@ spec:
     - name: workers
       apiVersion: kubevirt.io/v1
       kind: VirtualMachineInstanceReplicaSet
-      dependsOn: [cp]
+      # service is here because the template reads
+      # .Resources.service.metadata.name; cp already dependsOn service so
+      # this just gates predecessor-availability in the render context.
+      dependsOn: [cp, service]
       # VMIRS has no Ready condition; mark Ready on create.
       # Inspect actual worker join progress with `kubectl get vmis -l app.kubernetes.io/component=k3s-worker`.
       readiness:
