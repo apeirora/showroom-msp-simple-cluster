@@ -177,6 +177,7 @@ data:
 			Expect(updated.Status.Resources).To(HaveLen(1))
 			Expect(updated.Status.Resources[0].Name).To(Equal("config"))
 			Expect(updated.Status.Resources[0].Phase).To(Equal(showroomv1alpha1.PhaseReady))
+			Expect(updated.Status.Resources[0].Reason).To(Equal(showroomv1alpha1.ReasonReady))
 			Expect(updated.Status.Resources[0].TargetName).To(Equal("demo-config"))
 
 			By("setting ConditionReady=True and clearing any Error condition")
@@ -199,6 +200,51 @@ data:
 			kcCond := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionKubeconfigValid)
 			Expect(kcCond).NotTo(BeNil())
 			Expect(kcCond.Status).To(Equal(metav1.ConditionTrue))
+		})
+
+		It("marks dependents WaitingForDependencies until predecessors are Ready", func() {
+			// Make the existing `config` resource NOT ready (drop the
+			// readiness override — ConfigMaps have no Ready condition, so
+			// the default walker returns Pending). Add a `dependent` that
+			// dependsOn `config`. We expect dependent to stay
+			// WaitingForDependencies with config in its message.
+			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc)).To(Succeed())
+			scpc.Spec.Resources[0].Readiness = nil // config is now never Ready
+			scpc.Spec.Resources = append(scpc.Spec.Resources, showroomv1alpha1.ResourceSpec{
+				Name:       "dependent",
+				APIVersion: "v1",
+				Kind:       "ConfigMap",
+				DependsOn:  []string{"config"},
+				Template:   "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n",
+			})
+			Expect(k8sClient.Update(ctx, scpc)).To(Succeed())
+
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
+			}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			updated := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, scKey, updated)).To(Succeed())
+			Expect(updated.Status.Resources).To(HaveLen(2))
+
+			byName := map[string]showroomv1alpha1.ResourceStatus{}
+			for _, rs := range updated.Status.Resources {
+				byName[rs.Name] = rs
+			}
+			// config exists but reports no Ready condition → Creating.
+			Expect(byName["config"].Phase).To(Equal(showroomv1alpha1.PhasePending))
+			Expect(byName["config"].Reason).To(Equal(showroomv1alpha1.ReasonCreating))
+			// dependent never got rendered: blocked on config.
+			Expect(byName["dependent"].Phase).To(Equal(showroomv1alpha1.PhasePending))
+			Expect(byName["dependent"].Reason).To(Equal(showroomv1alpha1.ReasonWaitingForDependencies))
+			Expect(byName["dependent"].Message).To(ContainSubstring("waiting on: config"))
 		})
 
 		It("propagates SCPC DAG validation failures into ConditionError", func() {
