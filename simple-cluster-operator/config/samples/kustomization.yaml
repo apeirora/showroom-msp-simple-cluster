@@ -1,6 +1,5 @@
 ## Append samples of your project ##
 resources:
-- showroom_v1alpha1_simpleclusterproviderconfig.yaml
 - showroom_v1alpha1_simpleclusterproviderconfig_dati-openstack.yaml
 - showroom_v1alpha1_simpleclusterproviderconfig_sap-openstack.yaml
 - showroom_v1alpha1_simpleclusterproviderconfig_sap-ironcore.yaml

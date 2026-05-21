@@ -17,9 +17,6 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.target
-      name: Target
-      type: string
     - jsonPath: .status.reachable
       name: Reachable
       type: boolean
@@ -55,23 +52,20 @@ spec:
             properties:
               inputs:
                 description: |-
-                  Inputs is the closed set of keys a SimpleCluster may override via spec.inputs.
-                  Every entry MUST carry a default - the template always sees a fully-populated value.
+                  Inputs is the closed set of keys a SimpleCluster may override via
+                  spec.inputs. Every entry MUST carry a default.
                 items:
                   description: |-
                     InputDeclaration is a single SC input slot: name, type, default, and metadata
                     to make the SCPC self-documenting (kubectl explain / UI rendering).
                   properties:
                     allowEmpty:
-                      description: |-
-                        AllowEmpty permits "" as a meaningful value for Type=string.
-                        Ignored for other types (empty never parses as int/bool/duration).
+                      description: AllowEmpty permits "" as a meaningful value for
+                        Type=string.
                       type: boolean
                     default:
-                      description: |-
-                        Default value substituted when SC.spec.inputs[Name] is unset.
-                        Stored as string for kubectl ergonomics regardless of Type;
-                        parsing happens at reconcile.
+                      description: Default value substituted when SC.spec.inputs[Name]
+                        is unset.
                       type: string
                     description:
                       description: Description shown in CRD docs / UI tooling.
@@ -102,12 +96,14 @@ spec:
                 - name
                 x-kubernetes-list-type: map
               kubeconfigSource:
-                description: KubeconfigSource describes HOW to obtain the kubeconfig
-                  of NC once R is Ready.
+                description: |-
+                  KubeconfigSource describes how to obtain the kubeconfig of NC once
+                  the resource named by KubeconfigSource.ResourceName reports Ready.
                 properties:
                   inline:
-                    description: Inline - JSONPath expression that locates the kubeconfig
-                      bytes inside R itself.
+                    description: |-
+                      Inline - JSONPath expression that locates the kubeconfig bytes inside
+                      R itself.
                     properties:
                       kubeconfigPath:
                         description: KubeconfigPath is the JSONPath into R that resolves
@@ -120,11 +116,19 @@ spec:
                     description: RenewalBefore is how long before expiry the kubeconfig
                       is renewed (SubResource only).
                     type: string
+                  resourceName:
+                    description: |-
+                      ResourceName names the ResourceSpec whose kubeconfig is synced to SC.
+                      Must match one of SCPC.spec.resources[].name.
+                    minLength: 1
+                    type: string
                   secretRef:
                     description: |-
-                      SecretRef - kubeconfig lives in a Secret in the target cluster's namespace
-                      (typical for Cluster API / Gardener seed Secrets). Name/Namespace are Go
-                      templates evaluated against the same context as Template so they can refer to R.
+                      SecretRef - kubeconfig lives in a Secret in the target cluster's
+                      namespace (typical for Cluster API / Gardener seed Secrets). Name/
+                      Namespace are Go templates evaluated against the same context as the
+                      named resource's Template, with the live R bound at
+                      .Resources.<resourceName>.
                     properties:
                       dataKey:
                         description: DataKey is the key in the Secret holding the
@@ -145,21 +149,14 @@ spec:
                       /adminkubeconfig).
                     properties:
                       apiVersion:
-                        description: APIVersion of the request object (e.g. authentication.gardener.cloud/v1alpha1).
                         type: string
                       expirationPath:
-                        description: ExpirationPath inside the response that holds
-                          the expiry timestamp.
                         type: string
                       kind:
-                        description: Kind of the request object (e.g. AdminKubeconfigRequest).
                         type: string
                       kubeconfigPath:
-                        description: KubeconfigPath inside the response that holds
-                          the kubeconfig bytes (e.g. status.kubeconfig).
                         type: string
                       subResource:
-                        description: SubResource name (e.g. adminkubeconfig).
                         type: string
                     required:
                     - apiVersion
@@ -171,60 +168,120 @@ spec:
                     description: Validity is the desired lifetime of issued kubeconfigs
                       (SubResource only).
                     type: string
-                type: object
-              statusMap:
-                description: |-
-                  StatusMap projects R's status into Phase. Optional; defaults to the
-                  Ready-condition walker when omitted.
-                properties:
-                  lastErrorPath:
-                    description: LastErrorPath optionally provides a human-readable
-                      error string.
-                    type: string
-                  lastOperationPath:
-                    description: LastOperationPath optionally provides a human-readable
-                      progress string.
-                    type: string
-                  phaseFailedValues:
-                    description: PhaseFailedValues are values at PhasePath that indicate
-                      Failed.
-                    items:
-                      type: string
-                    type: array
-                  phasePath:
-                    description: PhasePath is a JSONPath into R that resolves to a
-                      state value (e.g. status.lastOperation.state).
-                    type: string
-                  phaseReadyValue:
-                    description: PhaseReadyValue is the value at PhasePath that indicates
-                      Ready (e.g. Succeeded).
-                    type: string
                 required:
-                - phasePath
-                - phaseReadyValue
+                - resourceName
                 type: object
-              target:
-                description: Target describes WHERE and WHAT to create.
-                properties:
-                  apiVersion:
-                    description: APIVersion of the target resource R (e.g. core.gardener.cloud/v1beta1).
-                    type: string
-                  deletionAnnotations:
-                    additionalProperties:
+              resources:
+                description: |-
+                  Resources is the ordered DAG of resources to render and create.
+                  Edges are declared via ResourceSpec.DependsOn.
+                items:
+                  description: |-
+                    ResourceSpec describes one node in the SCPC's DAG: a YAML template plus
+                    dependency and readiness metadata.
+                  properties:
+                    apiVersion:
+                      description: APIVersion of the target resource R (e.g. core.gardener.cloud/v1beta1).
                       type: string
-                    description: |-
-                      DeletionAnnotations are applied to R before the operator attempts to
-                      delete it. Required by some controllers as a "double opt-in"
-                      (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
-                    type: object
-                  kind:
-                    description: Kind of the target resource R (e.g. Shoot).
-                    type: string
+                    deletionAnnotations:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        DeletionAnnotations are applied to R before the operator deletes it.
+                        Required by some controllers as a "double opt-in"
+                        (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
+                      type: object
+                    dependsOn:
+                      description: |-
+                        DependsOn is the list of sibling ResourceSpec names that must reach
+                        Ready before this resource is rendered. Cycles, unknown names, and
+                        self-references are rejected at reconcile-time.
+                      items:
+                        type: string
+                      type: array
+                    kind:
+                      description: Kind of the target resource R (e.g. Shoot).
+                      type: string
+                    name:
+                      description: |-
+                        Name is the resource's identity within this SCPC. Referenced from
+                        other resources via .Resources.<name> in their templates, and from
+                        KubeconfigSource.ResourceName.
+                      minLength: 1
+                      pattern: ^[a-zA-Z][a-zA-Z0-9_-]*$
+                      type: string
+                    namePrefix:
+                      description: |-
+                        NamePrefix prepended to the generated R name. The actual name is
+                        sanitise(<NamePrefix><SC.name>-<Name>).
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace overrides Target.Namespace for this resource.
+                        Required for namespaced kinds when Target.Namespace is also empty.
+                      type: string
+                    readiness:
+                      description: |-
+                        Readiness projects R's status into the universal Phase enum.
+                        Optional - when omitted, the operator walks
+                        R.status.conditions[type=Ready].
+                      properties:
+                        lastErrorPath:
+                          description: LastErrorPath optionally provides a human-readable
+                            error string.
+                          type: string
+                        lastOperationPath:
+                          description: LastOperationPath optionally provides a human-readable
+                            progress string.
+                          type: string
+                        phaseFailedValues:
+                          description: PhaseFailedValues are values at PhasePath that
+                            indicate Failed.
+                          items:
+                            type: string
+                          type: array
+                        phasePath:
+                          description: |-
+                            PhasePath is a JSONPath into R that resolves to a state value
+                            (e.g. status.lastOperation.state).
+                          type: string
+                        phaseReadyValue:
+                          description: |-
+                            PhaseReadyValue is the value at PhasePath that indicates Ready
+                            (e.g. Succeeded).
+                          type: string
+                      required:
+                      - phasePath
+                      - phaseReadyValue
+                      type: object
+                    template:
+                      description: |-
+                        Template is the YAML body of R rendered through the Helm-style
+                        text/template + sprig/v3 engine. The post-render result MUST embed
+                        apiVersion/kind consistent with this ResourceSpec.
+                      minLength: 1
+                      type: string
+                  required:
+                  - apiVersion
+                  - kind
+                  - name
+                  - template
+                  type: object
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              target:
+                description: |-
+                  Target describes which cluster the resources are created on plus the
+                  default Namespace.
+                properties:
                   kubeconfigSecretRef:
                     description: |-
                       KubeconfigSecretRef points at a Secret in the management cluster
                       whose "kubeconfig" key holds credentials for the target cluster.
-                      When nil, R is created on the management cluster.
+                      When nil, resources are created on the management cluster.
                     properties:
                       name:
                         description: name is unique within a namespace to reference
@@ -236,30 +293,16 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  namePrefix:
-                    description: 'NamePrefix prepended to the generated R name (default:
-                      SC.name).'
-                    type: string
                   namespace:
                     description: |-
-                      Namespace on the target cluster where R is created.
-                      Required for namespaced kinds, ignored for cluster-scoped.
+                      Namespace used by default for namespaced resources. Each ResourceSpec
+                      may override this via its own Namespace.
                     type: string
-                required:
-                - apiVersion
-                - kind
                 type: object
-              template:
-                description: |-
-                  Template is the YAML body of resource R rendered through the Helm-style
-                  text/template + sprig/v3 engine. The post-render result MUST embed
-                  apiVersion/kind consistent with Target.
-                minLength: 1
-                type: string
             required:
             - kubeconfigSource
+            - resources
             - target
-            - template
             type: object
           status:
             description: SimpleClusterProviderConfigStatus defines the observed state
@@ -329,12 +372,29 @@ spec:
                   Reachable mirrors a smoke test against Target.KubeconfigSecretRef.
                   True when omitted (local cluster).
                 type: boolean
-              target:
+              resources:
                 description: |-
-                  Target is a friendly summary of where R will be created: "<namespace>/<kind>"
-                  for namespaced targets, just "<kind>" for cluster-scoped ones. Populated
-                  after the GVK is successfully resolved on the target cluster.
-                type: string
+                  Resources lists each ResourceSpec's resolution outcome against the
+                  target cluster. Populated when all GVKs resolve successfully.
+                items:
+                  description: ResolvedResource records a successfully resolved ResourceSpec
+                    on the target cluster.
+                  properties:
+                    gvk:
+                      description: GVK is the resolved GroupVersionKind ("<group>/<version>,
+                        Kind=<Kind>").
+                      type: string
+                    name:
+                      description: Name matches ResourceSpec.Name.
+                      type: string
+                  required:
+                  - gvk
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
             type: object
         required:
         - spec
