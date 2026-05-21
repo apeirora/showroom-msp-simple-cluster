@@ -23,13 +23,13 @@ import (
 
 // SimpleClusterSpec defines the desired state of SimpleCluster.
 type SimpleClusterSpec struct {
-	// Workers is the number of worker nodes; surfaced as .SC.workers in the template.
+	// Workers is the number of worker nodes; surfaced as .SC.workers in templates.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=100
 	Workers int32 `json:"workers"`
 
-	// ProviderConfigRef pins the SimpleClusterProviderConfig used to build R.
-	// Required; the operator does not auto-select a provider.
+	// ProviderConfigRef pins the SimpleClusterProviderConfig used to build
+	// the resources. Required; the operator does not auto-select a provider.
 	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef"`
 
 	// Inputs are per-cluster overrides. Every key MUST be declared in
@@ -47,36 +47,56 @@ type SimpleClusterSpec struct {
 	KubeconfigRenewalBefore *metav1.Duration `json:"kubeconfigRenewalBefore,omitempty"`
 }
 
-// SimpleClusterStatus defines the observed state of SimpleCluster.
-type SimpleClusterStatus struct {
-	// ProviderConfigRef is locked at first reconcile so priority churn does
-	// not migrate Rs across SCPCs.
+// ResourceStatus mirrors the live state of one node in the SCPC's DAG into SC.
+type ResourceStatus struct {
+	// Name matches ResourceSpec.Name.
+	Name string `json:"name"`
+	// GVK is the resolved GroupVersionKind of R.
 	// +optional
-	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef,omitempty"`
-
-	// TargetGVK is the resolved GroupVersionKind of R.
-	// +optional
-	TargetGVK string `json:"targetGVK,omitempty"`
+	GVK string `json:"gvk,omitempty"`
 	// TargetName is the name of R on the target cluster.
 	// +optional
 	TargetName string `json:"targetName,omitempty"`
 	// TargetNamespace is the namespace of R on the target cluster.
 	// +optional
 	TargetNamespace string `json:"targetNamespace,omitempty"`
-	// TargetCluster identifies where R lives: SCPC name (for remote) or "local".
-	// +optional
-	TargetCluster string `json:"targetCluster,omitempty"`
-
-	// Phase is the coarse state machine.
+	// Phase is this resource's coarse state.
 	// +optional
 	Phase Phase `json:"phase,omitempty"`
-
 	// LastOperation mirrors a human-readable progress string from R.
 	// +optional
 	LastOperation string `json:"lastOperation,omitempty"`
 	// LastError mirrors a human-readable error string from R.
 	// +optional
 	LastError string `json:"lastError,omitempty"`
+}
+
+// SimpleClusterStatus defines the observed state of SimpleCluster.
+type SimpleClusterStatus struct {
+	// ProviderConfigRef is locked at first reconcile so SCPC changes do not
+	// migrate resources mid-flight.
+	// +optional
+	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef,omitempty"`
+
+	// TargetCluster identifies where the resources live: SCPC name (for remote)
+	// or "local".
+	// +optional
+	TargetCluster string `json:"targetCluster,omitempty"`
+
+	// Resources is per-ResourceSpec status, keyed by Name. Populated as the
+	// DAG progresses.
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	Resources []ResourceStatus `json:"resources,omitempty"`
+
+	// Phase is the aggregate state machine across Resources:
+	//   Ready        - every Resource is Ready.
+	//   Failed       - at least one Resource is Failed.
+	//   Provisioning - otherwise (at least one is not yet Ready).
+	//   Deleting     - SC.deletionTimestamp set.
+	// +optional
+	Phase Phase `json:"phase,omitempty"`
 
 	// KubeconfigSecretRef points at the Secret in SC.namespace holding NC's kubeconfig.
 	// +optional
@@ -103,8 +123,6 @@ type SimpleClusterStatus struct {
 // +kubebuilder:printcolumn:name="SCPC",type=string,JSONPath=`.spec.providerConfigRef.name`
 // +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.status.targetName`
-// +kubebuilder:printcolumn:name="Last Operation",type=string,JSONPath=`.status.lastOperation`
 // +kubebuilder:printcolumn:name="Kubeconfig Expires",type=string,JSONPath=`.status.kubeconfigExpiresAt`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

@@ -44,9 +44,10 @@ const (
 	kubeconfigSecretKey = "kubeconfig"
 )
 
-// SimpleClusterProviderConfigReconciler resolves the target GVK declared by an
-// SCPC and probes connectivity to its target cluster. It does not create the
-// downstream resource R — that lives on the SimpleCluster reconciler.
+// SimpleClusterProviderConfigReconciler validates the SCPC DAG, resolves
+// every ResourceSpec's GVK against the target cluster, and reports
+// reachability. It does not create the downstream resources R — that lives
+// on the SimpleCluster reconciler.
 type SimpleClusterProviderConfigReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -65,10 +66,10 @@ func (r *SimpleClusterProviderConfigReconciler) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	target, reachable, cond, retryErr := r.probe(ctx, &scpc)
+	resolved, reachable, cond, retryErr := r.probe(ctx, &scpc)
 
 	patch := client.MergeFrom(scpc.DeepCopy())
-	scpc.Status.Target = target
+	scpc.Status.Resources = resolved
 	scpc.Status.Reachable = &reachable
 	apimeta.SetStatusCondition(&scpc.Status.Conditions, cond)
 
@@ -83,45 +84,49 @@ func (r *SimpleClusterProviderConfigReconciler) Reconcile(ctx context.Context, r
 	return ctrl.Result{RequeueAfter: scpcRequeue}, nil
 }
 
-// probe computes the next status for the SCPC. It returns the friendly
-// target summary (empty when unresolved), the reachable flag, the Ready
-// condition, and an error that should trigger an immediate retry
-// (transient-only — terminal errors live in the condition and return nil).
+// probe validates the SCPC DAG, then resolves each ResourceSpec's GVK
+// against the target cluster. Returns the resolved entries, the
+// reachability flag, the Ready condition, and an error that should
+// trigger an immediate retry (transient only — terminal errors live in
+// the condition and return nil).
 func (r *SimpleClusterProviderConfigReconciler) probe(
 	ctx context.Context, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
-) (string, bool, metav1.Condition, error) {
-	gvk, err := parseGVK(scpc.Spec.Target.APIVersion, scpc.Spec.Target.Kind)
-	if err != nil {
-		return "", false, readyCond(metav1.ConditionFalse, "InvalidTarget", err.Error()), nil
+) ([]showroomv1alpha1.ResolvedResource, bool, metav1.Condition, error) {
+	if _, err := validateAndTopoSort(scpc); err != nil {
+		return nil, false, readyCond(metav1.ConditionFalse, "InvalidSCPC", err.Error()), nil
 	}
 
 	mapper, condErr, retryErr := r.targetMapper(ctx, scpc)
 	if condErr != nil {
-		return "", false, *condErr, retryErr
+		return nil, false, *condErr, retryErr
 	}
 
-	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return "", false, readyCond(metav1.ConditionFalse, "GVKNotFound",
-			fmt.Sprintf("RESTMapping %s: %v", gvk, err)), nil
+	resolved := make([]showroomv1alpha1.ResolvedResource, 0, len(scpc.Spec.Resources))
+	for _, rs := range scpc.Spec.Resources {
+		gv, err := schema.ParseGroupVersion(rs.APIVersion)
+		if err != nil {
+			return nil, false, readyCond(metav1.ConditionFalse, "InvalidTarget",
+				fmt.Sprintf("resource %q: %v", rs.Name, err)), nil
+		}
+		gvk := gv.WithKind(rs.Kind)
+		if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+			return nil, false, readyCond(metav1.ConditionFalse, "GVKNotFound",
+				fmt.Sprintf("resource %q: RESTMapping %s: %v", rs.Name, gvk, err)), nil
+		}
+		resolved = append(resolved, showroomv1alpha1.ResolvedResource{
+			Name: rs.Name,
+			GVK:  gvk.String(),
+		})
 	}
 
 	location := "management cluster"
 	if scpc.Spec.Target.KubeconfigSecretRef != nil {
 		location = "remote cluster"
 	}
-	return targetSummary(scpc.Spec.Target, mapping), true,
-		readyCond(metav1.ConditionTrue, "Reachable", "Target GVK resolved on "+location),
+	return resolved, true,
+		readyCond(metav1.ConditionTrue, "Reachable",
+			fmt.Sprintf("%d resource(s) resolved on %s", len(resolved), location)),
 		nil
-}
-
-// targetSummary renders "<namespace>/<kind>" for namespaced targets, just
-// "<kind>" when the target is cluster-scoped per RESTMapper.
-func targetSummary(t showroomv1alpha1.TargetSpec, mapping *apimeta.RESTMapping) string {
-	if mapping.Scope.Name() == apimeta.RESTScopeNameNamespace && t.Namespace != "" {
-		return t.Namespace + "/" + t.Kind
-	}
-	return t.Kind
 }
 
 // targetMapper returns a RESTMapper for the SCPC's target cluster. Local
@@ -166,17 +171,6 @@ func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 		return nil, &c, nil
 	}
 	return mapper, nil, nil
-}
-
-func parseGVK(apiVersion, kind string) (schema.GroupVersionKind, error) {
-	if apiVersion == "" || kind == "" {
-		return schema.GroupVersionKind{}, fmt.Errorf("spec.target.apiVersion and kind are required")
-	}
-	gv, err := schema.ParseGroupVersion(apiVersion)
-	if err != nil {
-		return schema.GroupVersionKind{}, err
-	}
-	return gv.WithKind(kind), nil
 }
 
 func newDiscoveryMapper(cfg *rest.Config) (apimeta.RESTMapper, error) {
