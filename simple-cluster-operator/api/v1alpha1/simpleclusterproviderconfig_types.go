@@ -46,8 +46,6 @@ type InputDeclaration struct {
 	Type InputType `json:"type,omitempty"`
 
 	// Default value substituted when SC.spec.inputs[Name] is unset.
-	// Stored as string for kubectl ergonomics regardless of Type;
-	// parsing happens at reconcile.
 	Default string `json:"default"`
 
 	// Description shown in CRD docs / UI tooling.
@@ -55,47 +53,116 @@ type InputDeclaration struct {
 	Description string `json:"description,omitempty"`
 
 	// AllowEmpty permits "" as a meaningful value for Type=string.
-	// Ignored for other types (empty never parses as int/bool/duration).
 	// +optional
 	AllowEmpty bool `json:"allowEmpty,omitempty"`
 }
 
-// TargetSpec describes WHERE and WHAT to create.
+// TargetSpec describes which cluster the rendered resources are created on
+// and the default namespace for namespaced resources. Per-resource overrides
+// (apiVersion/kind, namespace, namePrefix, deletionAnnotations) live on
+// each ResourceSpec.
 type TargetSpec struct {
+	// Namespace used by default for namespaced resources. Each ResourceSpec
+	// may override this via its own Namespace.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// KubeconfigSecretRef points at a Secret in the management cluster
+	// whose "kubeconfig" key holds credentials for the target cluster.
+	// When nil, resources are created on the management cluster.
+	// +optional
+	KubeconfigSecretRef *corev1.SecretReference `json:"kubeconfigSecretRef,omitempty"`
+}
+
+// ResourceSpec describes one node in the SCPC's DAG: a YAML template plus
+// dependency and readiness metadata.
+type ResourceSpec struct {
+	// Name is the resource's identity within this SCPC. Referenced from
+	// other resources via .Resources.<name> in their templates, and from
+	// KubeconfigSource.ResourceName.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_-]*$`
+	Name string `json:"name"`
+
 	// APIVersion of the target resource R (e.g. core.gardener.cloud/v1beta1).
 	APIVersion string `json:"apiVersion"`
 
 	// Kind of the target resource R (e.g. Shoot).
 	Kind string `json:"kind"`
 
-	// Namespace on the target cluster where R is created.
-	// Required for namespaced kinds, ignored for cluster-scoped.
+	// Namespace overrides Target.Namespace for this resource.
+	// Required for namespaced kinds when Target.Namespace is also empty.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
-	// NamePrefix prepended to the generated R name (default: SC.name).
+	// NamePrefix prepended to the generated R name. The actual name is
+	// sanitise(<NamePrefix><SC.name>-<Name>).
 	// +optional
 	NamePrefix string `json:"namePrefix,omitempty"`
 
-	// KubeconfigSecretRef points at a Secret in the management cluster
-	// whose "kubeconfig" key holds credentials for the target cluster.
-	// When nil, R is created on the management cluster.
-	// +optional
-	KubeconfigSecretRef *corev1.SecretReference `json:"kubeconfigSecretRef,omitempty"`
+	// Template is the YAML body of R rendered through the Helm-style
+	// text/template + sprig/v3 engine. The post-render result MUST embed
+	// apiVersion/kind consistent with this ResourceSpec.
+	// +kubebuilder:validation:MinLength=1
+	Template string `json:"template"`
 
-	// DeletionAnnotations are applied to R before the operator attempts to
-	// delete it. Required by some controllers as a "double opt-in"
+	// DependsOn is the list of sibling ResourceSpec names that must reach
+	// Ready before this resource is rendered. Cycles, unknown names, and
+	// self-references are rejected at reconcile-time.
+	// +optional
+	DependsOn []string `json:"dependsOn,omitempty"`
+
+	// Readiness projects R's status into the universal Phase enum.
+	// Optional - when omitted, the operator walks
+	// R.status.conditions[type=Ready].
+	// +optional
+	Readiness *ReadinessCheck `json:"readiness,omitempty"`
+
+	// DeletionAnnotations are applied to R before the operator deletes it.
+	// Required by some controllers as a "double opt-in"
 	// (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
 	// +optional
 	DeletionAnnotations map[string]string `json:"deletionAnnotations,omitempty"`
 }
 
-// KubeconfigSource describes how to obtain the kubeconfig of NC once R is Ready.
+// ReadinessCheck (formerly StatusMap) projects a target resource's status
+// onto the universal Phase enum.
+type ReadinessCheck struct {
+	// PhasePath is a JSONPath into R that resolves to a state value
+	// (e.g. status.lastOperation.state).
+	PhasePath string `json:"phasePath"`
+
+	// PhaseReadyValue is the value at PhasePath that indicates Ready
+	// (e.g. Succeeded).
+	PhaseReadyValue string `json:"phaseReadyValue"`
+
+	// PhaseFailedValues are values at PhasePath that indicate Failed.
+	// +optional
+	PhaseFailedValues []string `json:"phaseFailedValues,omitempty"`
+
+	// LastOperationPath optionally provides a human-readable progress string.
+	// +optional
+	LastOperationPath string `json:"lastOperationPath,omitempty"`
+
+	// LastErrorPath optionally provides a human-readable error string.
+	// +optional
+	LastErrorPath string `json:"lastErrorPath,omitempty"`
+}
+
+// KubeconfigSource describes how to obtain the kubeconfig of NC once the
+// resource named by ResourceName is Ready.
 // Exactly one of SecretRef / SubResource / Inline must be set.
 type KubeconfigSource struct {
-	// SecretRef - kubeconfig lives in a Secret in the target cluster's namespace
-	// (typical for Cluster API / Gardener seed Secrets). Name/Namespace are Go
-	// templates evaluated against the same context as Template so they can refer to R.
+	// ResourceName names the ResourceSpec whose kubeconfig is synced to SC.
+	// Must match one of SCPC.spec.resources[].name.
+	// +kubebuilder:validation:MinLength=1
+	ResourceName string `json:"resourceName"`
+
+	// SecretRef - kubeconfig lives in a Secret in the target cluster's
+	// namespace (typical for Cluster API / Gardener seed Secrets). Name/
+	// Namespace are Go templates evaluated against the same context as the
+	// named resource's Template, with the live R bound at
+	// .Resources.<resourceName>.
 	// +optional
 	SecretRef *KubeconfigSecretSource `json:"secretRef,omitempty"`
 
@@ -103,7 +170,8 @@ type KubeconfigSource struct {
 	// +optional
 	SubResource *KubeconfigSubResourceSource `json:"subResource,omitempty"`
 
-	// Inline - JSONPath expression that locates the kubeconfig bytes inside R itself.
+	// Inline - JSONPath expression that locates the kubeconfig bytes inside
+	// R itself.
 	// +optional
 	Inline *KubeconfigInlineSource `json:"inline,omitempty"`
 
@@ -128,15 +196,10 @@ type KubeconfigSecretSource struct {
 }
 
 type KubeconfigSubResourceSource struct {
-	// APIVersion of the request object (e.g. authentication.gardener.cloud/v1alpha1).
-	APIVersion string `json:"apiVersion"`
-	// Kind of the request object (e.g. AdminKubeconfigRequest).
-	Kind string `json:"kind"`
-	// SubResource name (e.g. adminkubeconfig).
-	SubResource string `json:"subResource"`
-	// KubeconfigPath inside the response that holds the kubeconfig bytes (e.g. status.kubeconfig).
+	APIVersion     string `json:"apiVersion"`
+	Kind           string `json:"kind"`
+	SubResource    string `json:"subResource"`
 	KubeconfigPath string `json:"kubeconfigPath"`
-	// ExpirationPath inside the response that holds the expiry timestamp.
 	// +optional
 	ExpirationPath string `json:"expirationPath,omitempty"`
 }
@@ -146,49 +209,37 @@ type KubeconfigInlineSource struct {
 	KubeconfigPath string `json:"kubeconfigPath"`
 }
 
-// StatusMap projects the target resource's status into the universal Phase enum.
-// Optional - when omitted, the operator walks R.status.conditions[type=Ready].
-type StatusMap struct {
-	// PhasePath is a JSONPath into R that resolves to a state value (e.g. status.lastOperation.state).
-	PhasePath string `json:"phasePath"`
-	// PhaseReadyValue is the value at PhasePath that indicates Ready (e.g. Succeeded).
-	PhaseReadyValue string `json:"phaseReadyValue"`
-	// PhaseFailedValues are values at PhasePath that indicate Failed.
-	// +optional
-	PhaseFailedValues []string `json:"phaseFailedValues,omitempty"`
-	// LastOperationPath optionally provides a human-readable progress string.
-	// +optional
-	LastOperationPath string `json:"lastOperationPath,omitempty"`
-	// LastErrorPath optionally provides a human-readable error string.
-	// +optional
-	LastErrorPath string `json:"lastErrorPath,omitempty"`
-}
-
 // SimpleClusterProviderConfigSpec defines the desired state of SimpleClusterProviderConfig.
 type SimpleClusterProviderConfigSpec struct {
-	// Target describes WHERE and WHAT to create.
+	// Target describes which cluster the resources are created on plus the
+	// default Namespace.
 	Target TargetSpec `json:"target"`
 
-	// Template is the YAML body of resource R rendered through the Helm-style
-	// text/template + sprig/v3 engine. The post-render result MUST embed
-	// apiVersion/kind consistent with Target.
-	// +kubebuilder:validation:MinLength=1
-	Template string `json:"template"`
+	// Resources is the ordered DAG of resources to render and create.
+	// Edges are declared via ResourceSpec.DependsOn.
+	// +kubebuilder:validation:MinItems=1
+	// +listType=map
+	// +listMapKey=name
+	Resources []ResourceSpec `json:"resources"`
 
-	// KubeconfigSource describes HOW to obtain the kubeconfig of NC once R is Ready.
+	// KubeconfigSource describes how to obtain the kubeconfig of NC once
+	// the resource named by KubeconfigSource.ResourceName reports Ready.
 	KubeconfigSource KubeconfigSource `json:"kubeconfigSource"`
 
-	// Inputs is the closed set of keys a SimpleCluster may override via spec.inputs.
-	// Every entry MUST carry a default - the template always sees a fully-populated value.
+	// Inputs is the closed set of keys a SimpleCluster may override via
+	// spec.inputs. Every entry MUST carry a default.
 	// +optional
 	// +listType=map
 	// +listMapKey=name
 	Inputs []InputDeclaration `json:"inputs,omitempty"`
+}
 
-	// StatusMap projects R's status into Phase. Optional; defaults to the
-	// Ready-condition walker when omitted.
-	// +optional
-	StatusMap *StatusMap `json:"statusMap,omitempty"`
+// ResolvedResource records a successfully resolved ResourceSpec on the target cluster.
+type ResolvedResource struct {
+	// Name matches ResourceSpec.Name.
+	Name string `json:"name"`
+	// GVK is the resolved GroupVersionKind ("<group>/<version>, Kind=<Kind>").
+	GVK string `json:"gvk"`
 }
 
 // SimpleClusterProviderConfigStatus defines the observed state of SimpleClusterProviderConfig.
@@ -198,11 +249,12 @@ type SimpleClusterProviderConfigStatus struct {
 	// +optional
 	Reachable *bool `json:"reachable,omitempty"`
 
-	// Target is a friendly summary of where R will be created: "<namespace>/<kind>"
-	// for namespaced targets, just "<kind>" for cluster-scoped ones. Populated
-	// after the GVK is successfully resolved on the target cluster.
+	// Resources lists each ResourceSpec's resolution outcome against the
+	// target cluster. Populated when all GVKs resolve successfully.
+	// +listType=map
+	// +listMapKey=name
 	// +optional
-	Target string `json:"target,omitempty"`
+	Resources []ResolvedResource `json:"resources,omitempty"`
 
 	// +listType=map
 	// +listMapKey=type
@@ -213,7 +265,6 @@ type SimpleClusterProviderConfigStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName=scpc
-// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.status.target`
 // +kubebuilder:printcolumn:name="Reachable",type=boolean,JSONPath=`.status.reachable`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

@@ -26,12 +26,6 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.targetName
-      name: Target
-      type: string
-    - jsonPath: .status.lastOperation
-      name: Last Operation
-      type: string
     - jsonPath: .status.kubeconfigExpiresAt
       name: Kubeconfig Expires
       type: string
@@ -81,8 +75,8 @@ spec:
                 type: string
               providerConfigRef:
                 description: |-
-                  ProviderConfigRef pins the SimpleClusterProviderConfig used to build R.
-                  Required; the operator does not auto-select a provider.
+                  ProviderConfigRef pins the SimpleClusterProviderConfig used to build
+                  the resources. Required; the operator does not auto-select a provider.
                 properties:
                   name:
                     default: ""
@@ -97,7 +91,7 @@ spec:
                 x-kubernetes-map-type: atomic
               workers:
                 description: Workers is the number of worker nodes; surfaced as .SC.workers
-                  in the template.
+                  in templates.
                 format: int32
                 maximum: 100
                 minimum: 1
@@ -193,19 +187,16 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              lastError:
-                description: LastError mirrors a human-readable error string from
-                  R.
-                type: string
-              lastOperation:
-                description: LastOperation mirrors a human-readable progress string
-                  from R.
-                type: string
               observedGeneration:
                 format: int64
                 type: integer
               phase:
-                description: Phase is the coarse state machine.
+                description: |-
+                  Phase is the aggregate state machine across Resources:
+                    Ready        - every Resource is Ready.
+                    Failed       - at least one Resource is Failed.
+                    Provisioning - otherwise (at least one is not yet Ready).
+                    Deleting     - SC.deletionTimestamp set.
                 enum:
                 - Pending
                 - Provisioning
@@ -215,8 +206,8 @@ spec:
                 type: string
               providerConfigRef:
                 description: |-
-                  ProviderConfigRef is locked at first reconcile so priority churn does
-                  not migrate Rs across SCPCs.
+                  ProviderConfigRef is locked at first reconcile so SCPC changes do not
+                  migrate resources mid-flight.
                 properties:
                   name:
                     default: ""
@@ -229,18 +220,55 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              resources:
+                description: |-
+                  Resources is per-ResourceSpec status, keyed by Name. Populated as the
+                  DAG progresses.
+                items:
+                  description: ResourceStatus mirrors the live state of one node in
+                    the SCPC's DAG into SC.
+                  properties:
+                    gvk:
+                      description: GVK is the resolved GroupVersionKind of R.
+                      type: string
+                    lastError:
+                      description: LastError mirrors a human-readable error string
+                        from R.
+                      type: string
+                    lastOperation:
+                      description: LastOperation mirrors a human-readable progress
+                        string from R.
+                      type: string
+                    name:
+                      description: Name matches ResourceSpec.Name.
+                      type: string
+                    phase:
+                      description: Phase is this resource's coarse state.
+                      enum:
+                      - Pending
+                      - Provisioning
+                      - Ready
+                      - Failed
+                      - Deleting
+                      type: string
+                    targetName:
+                      description: TargetName is the name of R on the target cluster.
+                      type: string
+                    targetNamespace:
+                      description: TargetNamespace is the namespace of R on the target
+                        cluster.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               targetCluster:
-                description: 'TargetCluster identifies where R lives: SCPC name (for
-                  remote) or "local".'
-                type: string
-              targetGVK:
-                description: TargetGVK is the resolved GroupVersionKind of R.
-                type: string
-              targetName:
-                description: TargetName is the name of R on the target cluster.
-                type: string
-              targetNamespace:
-                description: TargetNamespace is the namespace of R on the target cluster.
+                description: |-
+                  TargetCluster identifies where the resources live: SCPC name (for remote)
+                  or "local".
                 type: string
             type: object
         required:

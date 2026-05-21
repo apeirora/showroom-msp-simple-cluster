@@ -22,7 +22,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -31,56 +32,201 @@ import (
 )
 
 var _ = Describe("SimpleCluster Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
-
+	Context("when the referenced SCPC is missing", func() {
+		const scName = "missing-scpc-ref"
 		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default",
-		}
-		simplecluster := &showroomv1alpha1.SimpleCluster{}
+		key := types.NamespacedName{Name: scName, Namespace: "default"}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind SimpleCluster")
-			err := k8sClient.Get(ctx, typeNamespacedName, simplecluster)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &showroomv1alpha1.SimpleCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					Spec: showroomv1alpha1.SimpleClusterSpec{
-						Workers:           1,
-						ProviderConfigRef: &corev1.LocalObjectReference{Name: "missing-scpc"},
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
+			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
+				Spec: showroomv1alpha1.SimpleClusterSpec{
+					Workers:           1,
+					ProviderConfigRef: &corev1.LocalObjectReference{Name: "ghost"},
+				},
+			})).To(Succeed())
 		})
 
 		AfterEach(func() {
-			resource := &showroomv1alpha1.SimpleCluster{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			sc := &showroomv1alpha1.SimpleCluster{}
+			if err := k8sClient.Get(ctx, key, sc); err == nil {
+				sc.Finalizers = nil
+				_ = k8sClient.Update(ctx, sc)
+				_ = k8sClient.Delete(ctx, sc)
+			}
+		})
+
+		It("records ConditionError(SCPCNotFound) and Phase=Pending", func() {
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
+			}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance SimpleCluster")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			updated := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, key, updated)).To(Succeed())
+
+			errCond := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionError)
+			Expect(errCond).NotTo(BeNil())
+			Expect(errCond.Status).To(Equal(metav1.ConditionTrue))
+			Expect(errCond.Reason).To(Equal("SCPCNotFound"))
+			Expect(updated.Status.Phase).To(Equal(showroomv1alpha1.PhasePending))
 		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &SimpleClusterReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+	})
+
+	Context("with a valid SCPC creating a ConfigMap on the local cluster", func() {
+		const scpcName = "local-configmap"
+		const scName = "demo"
+		ctx := context.Background()
+		scKey := types.NamespacedName{Name: scName, Namespace: "default"}
+
+		BeforeEach(func() {
+			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleClusterProviderConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: scpcName},
+				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
+					Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
+					Resources: []showroomv1alpha1.ResourceSpec{{
+						Name:       "config",
+						APIVersion: "v1",
+						Kind:       "ConfigMap",
+						// kind is always "ConfigMap", so Ready is always true:
+						// good fake-readiness signal for ConfigMap (which has no status).
+						Readiness: &showroomv1alpha1.ReadinessCheck{
+							PhasePath:       "kind",
+							PhaseReadyValue: "ConfigMap",
+						},
+						Template: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ignored
+data:
+  workers: "{{ .SC.workers }}"
+  kubeconfig: |
+    apiVersion: v1
+    kind: Config
+    users:
+    - name: u
+      user:
+        token: opaque-not-a-jwt
+`,
+					}},
+					KubeconfigSource: showroomv1alpha1.KubeconfigSource{
+						ResourceName: "config",
+						Inline:       &showroomv1alpha1.KubeconfigInlineSource{KubeconfigPath: "data.kubeconfig"},
+					},
+				},
+			})).To(Succeed())
+
+			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
+				Spec: showroomv1alpha1.SimpleClusterSpec{
+					Workers:           4,
+					ProviderConfigRef: &corev1.LocalObjectReference{Name: scpcName},
+				},
+			})).To(Succeed())
+		})
+
+		AfterEach(func() {
+			sc := &showroomv1alpha1.SimpleCluster{}
+			if err := k8sClient.Get(ctx, scKey, sc); err == nil {
+				sc.Finalizers = nil
+				_ = k8sClient.Update(ctx, sc)
+				_ = k8sClient.Delete(ctx, sc)
+			}
+			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc); err == nil {
+				_ = k8sClient.Delete(ctx, scpc)
+			}
+			cm := &corev1.ConfigMap{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: "demo-config", Namespace: "default"}, cm); err == nil {
+				_ = k8sClient.Delete(ctx, cm)
+			}
+			secret := &corev1.Secret{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: "demo-kubeconfig", Namespace: "default"}, secret); err == nil {
+				_ = k8sClient.Delete(ctx, secret)
+			}
+		})
+
+		It("creates the target ConfigMap and mirrors a kubeconfig Secret", func() {
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
 			}
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			// SCPC is missing on purpose; the reconciler must surface this
-			// via Conditions[Error] and return without an error.
+			// Reconcile twice: the first call adds the finalizer (and returns
+			// before doing anything else); the second walks the DAG.
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
 			Expect(err).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating the target ConfigMap on the local cluster")
+			cm := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: "demo-config", Namespace: "default",
+			}, cm)).To(Succeed())
+			Expect(cm.Data).To(HaveKeyWithValue("workers", "4"))
+
+			By("recording per-resource status and aggregate Phase=Ready on the SC")
+			updated := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, scKey, updated)).To(Succeed())
+			Expect(updated.Status.Phase).To(Equal(showroomv1alpha1.PhaseReady))
+			Expect(updated.Status.Resources).To(HaveLen(1))
+			Expect(updated.Status.Resources[0].Name).To(Equal("config"))
+			Expect(updated.Status.Resources[0].Phase).To(Equal(showroomv1alpha1.PhaseReady))
+			Expect(updated.Status.Resources[0].TargetName).To(Equal("demo-config"))
+
+			By("setting ConditionReady=True and clearing any Error condition")
+			ready := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionReady)
+			Expect(ready).NotTo(BeNil())
+			Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+			Expect(apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionError)).To(BeNil())
+
+			By("mirroring the kubeconfig into a Secret in SC.Namespace")
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: "demo-kubeconfig", Namespace: "default",
+			}, secret)).To(Succeed())
+			Expect(secret.Data).To(HaveKey("kubeconfig"))
+			Expect(secret.OwnerReferences).NotTo(BeEmpty())
+			Expect(secret.OwnerReferences[0].Kind).To(Equal("SimpleCluster"))
+			Expect(updated.Status.KubeconfigSecretRef).NotTo(BeNil())
+			Expect(updated.Status.KubeconfigSecretRef.Name).To(Equal("demo-kubeconfig"))
+
+			kcCond := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionKubeconfigValid)
+			Expect(kcCond).NotTo(BeNil())
+			Expect(kcCond.Status).To(Equal(metav1.ConditionTrue))
+		})
+
+		It("propagates SCPC DAG validation failures into ConditionError", func() {
+			// Mutate the SCPC into an invalid state (self-reference) and
+			// re-reconcile; the SC must surface the error.
+			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc)).To(Succeed())
+			scpc.Spec.Resources[0].DependsOn = []string{"config"} // self-reference
+			Expect(k8sClient.Update(ctx, scpc)).To(Succeed())
+
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
+			}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			updated := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, scKey, updated)).To(Succeed())
+			errCond := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionError)
+			Expect(errCond).NotTo(BeNil())
+			Expect(errCond.Status).To(Equal(metav1.ConditionTrue))
+			Expect(errCond.Reason).To(Equal("InvalidSCPC"))
+			Expect(errCond.Message).To(ContainSubstring("self-reference"))
 		})
 	})
 })
+
+// silence linter about unused apierrors import when narrowing tests.
+var _ = apierrors.IsNotFound

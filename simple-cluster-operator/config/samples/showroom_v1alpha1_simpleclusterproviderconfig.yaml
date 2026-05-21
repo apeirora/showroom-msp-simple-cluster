@@ -1,9 +1,0 @@
-apiVersion: showroom.apeirora.eu/v1alpha1
-kind: SimpleClusterProviderConfig
-metadata:
-  labels:
-    app.kubernetes.io/name: simple-cluster-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: simpleclusterproviderconfig-sample
-spec:
-  # TODO(user): Add fields here
