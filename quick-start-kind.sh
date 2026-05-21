@@ -54,25 +54,33 @@ require jq
 # ----------------------------------------------------------------------
 # 1. kind cluster
 # ----------------------------------------------------------------------
+# Always mount the host docker socket so the kind-cluster-operator can
+# spawn sibling kind clusters from inside this one (DooD). /dev/kvm is
+# mounted only when present, so KubeVirt gets HW accel where possible.
+KIND_CONFIG="$(mktemp)"
+{
+    echo "kind: Cluster"
+    echo "apiVersion: kind.x-k8s.io/v1alpha4"
+    echo "nodes:"
+    echo "  - role: control-plane"
+    echo "    extraMounts:"
+    echo "      - hostPath: /var/run/docker.sock"
+    echo "        containerPath: /var/run/docker.sock"
+    if [ -e /dev/kvm ]; then
+        echo "      - hostPath: /dev/kvm"
+        echo "        containerPath: /dev/kvm"
+    fi
+} > "$KIND_CONFIG"
+
 if [ -e /dev/kvm ]; then
     log "/dev/kvm present: kind nodes will use hardware-accelerated KVM"
     USE_EMULATION=false
-    KIND_CONFIG="$(mktemp)"
-    cat > "$KIND_CONFIG" <<EOF
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-  - role: control-plane
-    extraMounts:
-      - hostPath: /dev/kvm
-        containerPath: /dev/kvm
-EOF
-    KIND_ARGS=(--config "$KIND_CONFIG")
 else
     warn "/dev/kvm missing: KubeVirt will run in software-emulation mode (slow)"
     USE_EMULATION=true
-    KIND_ARGS=()
 fi
+log "host docker.sock will be mounted into the kind node (for kind-cluster-operator DooD)"
+KIND_ARGS=(--config "$KIND_CONFIG")
 
 if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
     log "kind cluster '$CLUSTER_NAME' already exists; deleting it"
@@ -143,14 +151,47 @@ log "waiting for $OPERATOR_DEPLOY to become Available"
 kubectl -n "$OPERATOR_NS" wait --for=condition=Available --timeout=180s "deployment/$OPERATOR_DEPLOY"
 
 # ----------------------------------------------------------------------
-# 4. Done
+# 4. kind-cluster-operator (DooD via mounted /var/run/docker.sock)
+# ----------------------------------------------------------------------
+KIND_OP_DIR="$SCRIPT_DIR/kind-cluster-operator"
+KIND_OP_IMG=kind-cluster-operator:dev
+KIND_OP_NS=kind-cluster-operator-system
+KIND_OP_DEPLOY=kind-cluster-operator-controller-manager
+
+if [ -d "$KIND_OP_DIR" ]; then
+    log "building $KIND_OP_IMG"
+    docker build -t "$KIND_OP_IMG" "$KIND_OP_DIR"
+
+    log "loading $KIND_OP_IMG into kind cluster '$CLUSTER_NAME'"
+    kind load docker-image "$KIND_OP_IMG" --name "$CLUSTER_NAME"
+
+    log "applying kind-cluster-operator manifests"
+    KIND_OVERLAY="$(mktemp -d -p "$KIND_OP_DIR/config" .quickstart.XXXXXX)"
+    trap 'rm -rf "$OVERLAY" "$KIND_OVERLAY"' EXIT
+    cat > "$KIND_OVERLAY/kustomization.yaml" <<EOF
+resources:
+  - ../default
+EOF
+    kubectl apply -k "$KIND_OVERLAY"
+    kubectl -n "$KIND_OP_NS" rollout restart "deployment/$KIND_OP_DEPLOY" >/dev/null
+
+    log "waiting for $KIND_OP_DEPLOY to become Available"
+    kubectl -n "$KIND_OP_NS" wait --for=condition=Available --timeout=180s "deployment/$KIND_OP_DEPLOY"
+else
+    warn "$KIND_OP_DIR not found; skipping kind-cluster-operator install"
+fi
+
+# ----------------------------------------------------------------------
+# 5. Done
 # ----------------------------------------------------------------------
 cat <<EOF
 
 ▶ ready.
     kubectl get kubevirt -A
-    kubectl get scpc,simc -A
-    kubectl apply -k $SCRIPT_DIR/samples                # dati-openstack + k3s-kubevirt SCPCs
+    kubectl get scpc,simc,kindclusters -A
+    kubectl apply -k $SCRIPT_DIR/samples                # all SCPCs (gardener / kind / kubevirt)
+    kubectl apply -k $SCRIPT_DIR/samples/kind           # just the kind-on-host pair
+    kubectl apply -k $SCRIPT_DIR/samples/kubevirt       # just the k3s-on-kubevirt pair
 
   tear down:
     kind delete cluster --name $CLUSTER_NAME
