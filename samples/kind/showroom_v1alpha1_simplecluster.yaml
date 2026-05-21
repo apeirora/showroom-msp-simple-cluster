@@ -1,0 +1,8 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: kind-demo
+spec:
+  workers: 2
+  providerConfigRef:
+    name: kind-on-host
