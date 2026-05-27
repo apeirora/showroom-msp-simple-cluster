@@ -16,11 +16,9 @@ spec:
   groups:
     - name: test
       count: 1
-      # resources is the per-VM CPU/memory FLOOR; the operator picks the
-      # smallest visible Nova flavor that satisfies BOTH and writes its
-      # name into status.groups[].flavor (with flavorDescription).
       resources:
         cpu: 1
         memory: 1Gi
+        flavorPattern: '^eo[12]a\.'
       image: "Ubuntu 24.04 LTS"
       floatingIP: true

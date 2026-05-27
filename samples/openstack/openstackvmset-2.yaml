@@ -16,15 +16,9 @@ spec:
   groups:
     - name: test
       count: 1
-      # resources is the per-VM CPU/memory FLOOR; the operator picks
-      # the smallest Nova flavor that satisfies both. Status reports
-      # which flavor was chosen.
       resources:
         cpu: 16
         memory: 60Gi
-      # CloudFerro Glance images (exact name required; `openstack image list`):
-      #   Ubuntu 22.04 LTS, Ubuntu 24.04 LTS, Rocky Linux 9, AlmaLinux 9, CentOS 9 Stream,
-      #   Fedora CoreOS 39 K8s-Magnum, Windows 2019/2022,
-      #   ubuntu-2404-kube-v1.31.x / v1.32.x (pre-baked k8s)
+        flavorPattern: '^eo[12]a\.'
       image: "Ubuntu 24.04 LTS"
       floatingIP: true
