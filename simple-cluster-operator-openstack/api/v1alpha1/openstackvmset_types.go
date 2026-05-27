@@ -127,6 +127,14 @@ type NodeResources struct {
 	// Memory is the minimum RAM (e.g. "4Gi", "32GB"). Rounded up to MiB
 	// to compare with Nova's flavor RAM field.
 	Memory resource.Quantity `json:"memory"`
+
+	// FlavorPattern, when set, narrows the picker to Nova flavors whose
+	// name matches this Go regex. Use it to exclude specialised
+	// hardware: e.g. `^eo[12]a\.` keeps only CloudFerro general-purpose
+	// flavors and rules out gpu.* / vm.l40s.* which otherwise win the
+	// "smallest fit" comparison.
+	// +optional
+	FlavorPattern string `json:"flavorPattern,omitempty"`
 }
 
 // OpenStackVMSetStatus is the observed state of an OpenStackVMSet.
