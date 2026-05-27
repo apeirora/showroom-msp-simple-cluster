@@ -9,4 +9,4 @@
 ## credentials out of git regardless of which path you take.
 resources:
   - cloudferro-creds-secret.yaml
-  - openstackvmset.yaml
+  - openstackvmset-single-vm.yaml
