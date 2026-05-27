@@ -1,6 +1,10 @@
 # Raw dumps from remote clusters — may contain bearer tokens / Secrets.
 imports/
 
+# Local cluster kubeconfig harvested by quick-start-kind.sh — contains
+# real client cert/key for the on-host KinD cluster.
+samples/kind/kubeconfig.yaml
+
 # IDE / sandbox state
 .idea/
 .chroot/

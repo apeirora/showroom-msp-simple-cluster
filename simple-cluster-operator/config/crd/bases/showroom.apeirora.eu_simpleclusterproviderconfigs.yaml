@@ -86,7 +86,33 @@ spec:
                       - int
                       - bool
                       - duration
+                      - enum
                       type: string
+                    values:
+                      description: |-
+                        Values enumerates the allowed choices when Type=enum. Required and
+                        non-empty for enum inputs; ignored otherwise. Default (if set) and any
+                        SC override must match one of Values[].Key.
+                      items:
+                        description: InputEnumValue is one allowed choice for an enum-typed
+                          input.
+                        properties:
+                          key:
+                            description: Key is the value substituted into the template
+                              (e.g. "eu-de-1").
+                            minLength: 1
+                            type: string
+                          label:
+                            description: Label is the human-readable description shown
+                              in UIs / kubectl explain.
+                            type: string
+                        required:
+                        - key
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - key
+                      x-kubernetes-list-type: map
                   required:
                   - default
                   - name

@@ -110,14 +110,19 @@ func BuildContext(
 		}
 	}
 
+	scCtx := map[string]any{
+		"name":      sc.Name,
+		"namespace": sc.Namespace,
+		"uid":       string(sc.UID),
+		"workers":   workersContext(sc.Spec.Workers),
+		"labels":    sc.Labels,
+	}
+	if sc.Spec.ControlPlane != nil {
+		scCtx["controlPlane"] = controlPlaneContext(*sc.Spec.ControlPlane)
+	}
+
 	return map[string]any{
-		"SC": map[string]any{
-			"name":      sc.Name,
-			"namespace": sc.Namespace,
-			"uid":       string(sc.UID),
-			"workers":   sc.Spec.Workers,
-			"labels":    sc.Labels,
-		},
+		"SC":     scCtx,
 		"Inputs": inputs,
 		"Target": map[string]any{
 			"name":      targetName,
@@ -126,6 +131,56 @@ func BuildContext(
 		},
 		"Resources": resourcesCtx,
 	}, nil
+}
+
+// workersContext flattens WorkersSpec into the .SC.workers template map.
+// MaxNodes defaults to Nodes when unset (no autoscaling). Requested
+// quantities are stringified so templates emit canonical values
+// (e.g. "16", "32Gi").
+func workersContext(w showroomv1alpha1.WorkersSpec) map[string]any {
+	maxNodes := w.Nodes
+	if w.MaxNodes != nil {
+		maxNodes = *w.MaxNodes
+	}
+	out := map[string]any{
+		"nodes":    w.Nodes,
+		"maxNodes": maxNodes,
+	}
+	if r := nodeResourcesContext(w.Requested); r != nil {
+		out["requested"] = r
+	}
+	return out
+}
+
+// controlPlaneContext flattens ControlPlaneSpec into the .SC.controlPlane
+// template map.
+func controlPlaneContext(cp showroomv1alpha1.ControlPlaneSpec) map[string]any {
+	out := map[string]any{
+		"nodes": cp.Nodes,
+	}
+	if r := nodeResourcesContext(cp.Requested); r != nil {
+		out["requested"] = r
+	}
+	return out
+}
+
+// nodeResourcesContext stringifies CPU/Memory quantities. Returns nil when
+// no fields are set so templates can `{{ if .SC.workers.requested }}`.
+func nodeResourcesContext(r *showroomv1alpha1.NodeResources) map[string]any {
+	if r == nil {
+		return nil
+	}
+	req := map[string]any{}
+	if !r.CPU.IsZero() {
+		req["cpu"] = r.CPU.String()
+	}
+	if !r.Memory.IsZero() {
+		req["memory"] = r.Memory.String()
+	}
+	if len(req) == 0 {
+		return nil
+	}
+	return req
 }
 
 // RenderString renders an arbitrary template body against an arbitrary
@@ -207,6 +262,20 @@ func parseInput(d showroomv1alpha1.InputDeclaration, raw string) (any, error) {
 			return nil, fmt.Errorf("invalid duration %q: %w", raw, err)
 		}
 		return v, nil
+	case showroomv1alpha1.InputTypeEnum:
+		if len(d.Values) == 0 {
+			return nil, fmt.Errorf("enum input declares no values")
+		}
+		for _, v := range d.Values {
+			if v.Key == raw {
+				return raw, nil
+			}
+		}
+		keys := make([]string, len(d.Values))
+		for i, v := range d.Values {
+			keys[i] = v.Key
+		}
+		return nil, fmt.Errorf("value %q not in allowed set [%s]", raw, strings.Join(keys, ", "))
 	}
 	return nil, fmt.Errorf("unsupported input type %q", t)
 }

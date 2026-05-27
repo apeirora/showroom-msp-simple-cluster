@@ -3,6 +3,7 @@ kind: SimpleCluster
 metadata:
   name: kind-demo
 spec:
-  workers: 2
-  providerConfigRef:
-    name: kind-on-host
+  workers:
+    nodes: 2
+  providerConfigRefs:
+    - kind-on-host

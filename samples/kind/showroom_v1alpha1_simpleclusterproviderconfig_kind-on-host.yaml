@@ -30,7 +30,7 @@ spec:
         kind: KindCluster
         spec:
           clusterName: {{ .Target.name }}
-          workers: {{ .SC.workers }}
+          workers: {{ .SC.workers.nodes }}
           {{- if .Inputs.nodeImage }}
           nodeImage: {{ .Inputs.nodeImage }}
           {{- end }}
