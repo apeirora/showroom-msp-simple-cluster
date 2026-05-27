@@ -108,7 +108,7 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		existing := byGroup[g.Name]
 		sort.Slice(existing, func(i, j int) bool { return existing[i].Name < existing[j].Name })
 
-		flavor, err := openstack.PickFlavor(ctx, clients.Compute, g.Resources.CPU, g.Resources.Memory)
+		flavor, err := openstack.PickFlavor(ctx, clients.Compute, g.Resources.CPU, g.Resources.Memory, g.Resources.FlavorPattern)
 		if err != nil {
 			return r.fail(ctx, &vmset, "FlavorError", err.Error())
 		}

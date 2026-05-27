@@ -102,6 +102,12 @@ spec:
                           description: 'Memory is the minimum RAM (e.g. "4Gi", "32GB").'
                           pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                           x-kubernetes-int-or-string: true
+                        flavorPattern:
+                          description: |-
+                            Optional Go regex that flavor names must match. Use it to
+                            exclude specialised hardware — e.g. `^eo[12]a\.` rules out
+                            CloudFerro GPU flavors (gpu.*, vm.l40s.*).
+                          type: string
                       required:
                       - cpu
                       - memory

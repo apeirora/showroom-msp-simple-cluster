@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -346,16 +347,31 @@ type FlavorPick struct {
 // pick is deterministic across reconciles and chooses the cheapest
 // candidate. Memory floor is rounded up to MiB; CPU floor (which may be
 // expressed as millicores) is rounded up to whole vCPUs.
+//
+// If namePattern is non-empty, only flavor names matching the Go regex
+// are considered. Use it to exclude specialised flavors that would
+// otherwise win on the size comparison (e.g. CloudFerro's `vm.l40s.*`
+// GPU flavors).
 func PickFlavor(
 	ctx context.Context,
 	compute *gophercloud.ServiceClient,
 	cpu, memory resource.Quantity,
+	namePattern string,
 ) (*FlavorPick, error) {
 	cpuFloor := ceilCPU(cpu)
 	memFloorMiB := ceilMiB(memory)
 
+	var nameRE *regexp.Regexp
+	if namePattern != "" {
+		var err error
+		nameRE, err = regexp.Compile(namePattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid flavorPattern %q: %w", namePattern, err)
+		}
+	}
+
 	type candidate struct {
-		id, name             string
+		id, name               string
 		vcpus, ramMiB, diskGiB int
 	}
 	var (
@@ -370,6 +386,9 @@ func PickFlavor(
 		for _, f := range list {
 			c := candidate{id: f.ID, name: f.Name, vcpus: f.VCPUs, ramMiB: f.RAM, diskGiB: f.Disk}
 			all = append(all, c)
+			if nameRE != nil && !nameRE.MatchString(c.name) {
+				continue
+			}
 			if c.vcpus >= cpuFloor && c.ramMiB >= memFloorMiB {
 				matching = append(matching, c)
 			}
@@ -385,8 +404,12 @@ func PickFlavor(
 			names = append(names, fmt.Sprintf("%s (%d vCPU / %d MiB / %d GiB)", c.name, c.vcpus, c.ramMiB, c.diskGiB))
 		}
 		sort.Strings(names)
-		return nil, fmt.Errorf("no flavor satisfies cpu>=%d, memory>=%dMiB; available: %s",
-			cpuFloor, memFloorMiB, strings.Join(names, ", "))
+		patternHint := ""
+		if namePattern != "" {
+			patternHint = fmt.Sprintf(", matching /%s/", namePattern)
+		}
+		return nil, fmt.Errorf("no flavor satisfies cpu>=%d, memory>=%dMiB%s; available: %s",
+			cpuFloor, memFloorMiB, patternHint, strings.Join(names, ", "))
 	}
 	sort.Slice(matching, func(i, j int) bool {
 		a, b := matching[i], matching[j]
