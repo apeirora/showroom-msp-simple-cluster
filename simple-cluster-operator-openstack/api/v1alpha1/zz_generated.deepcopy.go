@@ -22,6 +22,7 @@ import (
 
 func (in *VMGroup) DeepCopyInto(out *VMGroup) {
 	*out = *in
+	in.Resources.DeepCopyInto(&out.Resources)
 }
 
 func (in *VMGroup) DeepCopy() *VMGroup {
@@ -29,6 +30,21 @@ func (in *VMGroup) DeepCopy() *VMGroup {
 		return nil
 	}
 	out := new(VMGroup)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *NodeResources) DeepCopyInto(out *NodeResources) {
+	*out = *in
+	out.CPU = in.CPU.DeepCopy()
+	out.Memory = in.Memory.DeepCopy()
+}
+
+func (in *NodeResources) DeepCopy() *NodeResources {
+	if in == nil {
+		return nil
+	}
+	out := new(NodeResources)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -75,7 +91,9 @@ func (in *OpenStackVMSetSpec) DeepCopyInto(out *OpenStackVMSetSpec) {
 	if in.Groups != nil {
 		in, out := &in.Groups, &out.Groups
 		*out = make([]VMGroup, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 

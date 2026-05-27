@@ -108,10 +108,16 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		existing := byGroup[g.Name]
 		sort.Slice(existing, func(i, j int) bool { return existing[i].Name < existing[j].Name })
 
+		flavor, err := openstack.PickFlavor(ctx, clients.Compute, g.Resources.CPU, g.Resources.Memory)
+		if err != nil {
+			return r.fail(ctx, &vmset, "FlavorError", err.Error())
+		}
+		log.Info("picked flavor", "vmset", vmsetKey, "group", g.Name, "flavor", flavor.Name, "spec", flavor.Description)
+
 		for i := int32(len(existing)); i < g.Count; i++ {
 			name := openstack.SanitizeServerName(fmt.Sprintf("%s-%s-%d", vmset.Name, g.Name, i))
-			log.Info("creating Nova server", "vmset", vmsetKey, "group", g.Name, "name", name)
-			if _, err := openstack.CreateServer(ctx, clients, vmsetKey, g, name, networkID, keypairName, vmset.Spec.SecurityGroups); err != nil {
+			log.Info("creating Nova server", "vmset", vmsetKey, "group", g.Name, "name", name, "flavor", flavor.Name)
+			if _, err := openstack.CreateServer(ctx, clients, vmsetKey, g, name, networkID, keypairName, flavor.ID, vmset.Spec.SecurityGroups); err != nil {
 				return r.fail(ctx, &vmset, "CreateError", err.Error())
 			}
 		}
@@ -162,9 +168,11 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			allReady = false
 		}
 		groupStatuses = append(groupStatuses, openstackv1alpha1.GroupStatus{
-			Name:  g.Name,
-			Ready: ready,
-			Hosts: hosts,
+			Name:              g.Name,
+			Ready:             ready,
+			Flavor:            flavor.Name,
+			FlavorDescription: flavor.Description,
+			Hosts:             hosts,
 		})
 	}
 
