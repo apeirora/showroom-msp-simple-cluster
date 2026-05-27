@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/gophercloud/gophercloud/v2"
@@ -29,10 +30,12 @@ import (
 	openstackv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1"
 )
 
-// Metadata keys the operator stamps on every server it owns.
+// Metadata keys the operator stamps on every server it owns. Nova's
+// metadata-key regex is `^[a-zA-Z0-9-_:. ]{1,255}$` — no slashes, so we
+// can't reuse the k8s-label form `osvms.apeirora.eu/vmset` here.
 const (
-	MetaVMSetKey = "osvms.apeirora.eu/vmset"
-	MetaGroupKey = "osvms.apeirora.eu/group"
+	MetaVMSetKey = "osvms.apeirora.eu.vmset"
+	MetaGroupKey = "osvms.apeirora.eu.group"
 )
 
 // Server is the slice of Nova state the controller needs.
@@ -131,12 +134,14 @@ func DeleteServer(ctx context.Context, compute *gophercloud.ServiceClient, id st
 }
 
 // ResolveNetwork returns the Neutron network UUID for the spec'd name (or
-// passes the UUID through unchanged).
+// passes the UUID through unchanged). When the name does not resolve, the
+// error message includes the names of every visible network so it can be
+// surfaced verbatim in the CR's Condition.
 func ResolveNetwork(ctx context.Context, network *gophercloud.ServiceClient, nameOrID string) (string, error) {
 	if looksLikeUUID(nameOrID) {
 		return nameOrID, nil
 	}
-	pages, err := networks.List(network, networks.ListOpts{Name: nameOrID}).AllPages(ctx)
+	pages, err := networks.List(network, networks.ListOpts{}).AllPages(ctx)
 	if err != nil {
 		return "", fmt.Errorf("list networks: %w", err)
 	}
@@ -144,21 +149,24 @@ func ResolveNetwork(ctx context.Context, network *gophercloud.ServiceClient, nam
 	if err != nil {
 		return "", fmt.Errorf("extract networks: %w", err)
 	}
+	names := make([]string, 0, len(all))
 	for _, n := range all {
 		if n.Name == nameOrID {
 			return n.ID, nil
 		}
+		names = append(names, n.Name)
 	}
-	return "", fmt.Errorf("network %q not found", nameOrID)
+	return "", notFoundError("network", nameOrID, names)
 }
 
 // ResolveImage resolves a Glance image name to UUID. Pass-through when
-// the value already looks like a UUID.
+// the value already looks like a UUID. Like ResolveNetwork, a miss
+// returns an error listing every visible image so the user can pick.
 func ResolveImage(ctx context.Context, image *gophercloud.ServiceClient, nameOrID string) (string, error) {
 	if looksLikeUUID(nameOrID) {
 		return nameOrID, nil
 	}
-	pages, err := images.List(image, images.ListOpts{Name: nameOrID}).AllPages(ctx)
+	pages, err := images.List(image, images.ListOpts{}).AllPages(ctx)
 	if err != nil {
 		return "", fmt.Errorf("list images: %w", err)
 	}
@@ -166,12 +174,14 @@ func ResolveImage(ctx context.Context, image *gophercloud.ServiceClient, nameOrI
 	if err != nil {
 		return "", fmt.Errorf("extract images: %w", err)
 	}
+	names := make([]string, 0, len(list))
 	for _, img := range list {
 		if img.Name == nameOrID {
 			return img.ID, nil
 		}
+		names = append(names, img.Name)
 	}
-	return "", fmt.Errorf("image %q not found", nameOrID)
+	return "", notFoundError("image", nameOrID, names)
 }
 
 // EnsureFloatingIP allocates and attaches a FIP from the named external
@@ -324,16 +334,19 @@ func resolveFlavor(ctx context.Context, compute *gophercloud.ServiceClient, name
 	if looksLikeUUID(name) {
 		return name, nil
 	}
-	var found string
+	var (
+		found     string
+		available []string
+	)
 	err := flavors.ListDetail(compute, nil).EachPage(ctx, func(_ context.Context, page pagination.Page) (bool, error) {
 		list, err := flavors.ExtractFlavors(page)
 		if err != nil {
 			return false, err
 		}
 		for _, f := range list {
-			if f.Name == name {
+			available = append(available, f.Name)
+			if f.Name == name && found == "" {
 				found = f.ID
-				return false, nil
 			}
 		}
 		return true, nil
@@ -341,10 +354,30 @@ func resolveFlavor(ctx context.Context, compute *gophercloud.ServiceClient, name
 	if err != nil {
 		return "", fmt.Errorf("list flavors: %w", err)
 	}
-	if found == "" {
-		return "", fmt.Errorf("flavor %q not found", name)
+	if found != "" {
+		return found, nil
 	}
-	return found, nil
+	return "", notFoundError("flavor", name, available)
+}
+
+// notFoundError builds a Condition-friendly error: "<kind> %q not found;
+// available: a, b, c". Names are de-duplicated and sorted so two
+// reconciles produce identical messages (cleaner status diffs).
+func notFoundError(kind, requested string, names []string) error {
+	seen := make(map[string]struct{}, len(names))
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return fmt.Errorf("%s %q not found (no %ss visible to this credential)", kind, requested, kind)
+	}
+	return fmt.Errorf("%s %q not found; available: %s", kind, requested, strings.Join(out, ", "))
 }
 
 func looksLikeUUID(s string) bool {
