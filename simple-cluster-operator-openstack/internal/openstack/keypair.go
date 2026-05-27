@@ -56,10 +56,11 @@ func EnsureKeypair(ctx context.Context, compute *gophercloud.ServiceClient, name
 		return fmt.Errorf("get keypair %q: %w", name, err)
 	}
 
+	// Type ("ssh") would need Nova microversion 2.2; CloudFerro's default
+	// endpoint rejects it as an unknown property. Default is "ssh" anyway.
 	_, err := keypairs.Create(ctx, compute, keypairs.CreateOpts{
 		Name:      name,
 		PublicKey: publicKey,
-		Type:      "ssh",
 	}).Extract()
 	if err != nil {
 		return fmt.Errorf("create keypair %q: %w", name, err)
