@@ -1,0 +1,35 @@
+# Standalone smoke test for simple-cluster-operator-openstack against
+# CloudFerro (region WAW4-1). Spins up one Ubuntu 24.04 VM with a
+# floating IP attached. The full SC → SCPC → OpenStackVMSet + UbuntuCluster
+# chain is gated on simple-cluster-operator-ubuntu landing.
+apiVersion: openstack.apeirora.eu/v1alpha1
+kind: OpenStackVMSet
+metadata:
+  name: vm
+spec:
+  credentialsRef:
+    name: cloudferro-creds
+  network: cloud_080745_1
+  floatingIPPool: external
+  securityGroups:
+    - default
+  groups:
+    - name: test
+      count: 1
+      # CloudFerro WAW4-1 flavors (full list: `openstack flavor list`):
+      #   eo1a.xsmall    1 vCPU /  1 GiB /  8 GiB disk
+      #   eo1a.xmedium   1 vCPU /  2 GiB /  8 GiB
+      #   eo1a.small     2 vCPU /  2 GiB / 16 GiB
+      #   eo1a.medium    2 vCPU /  4 GiB / 16 GiB
+      #   eo1a.large     4 vCPU /  8 GiB / 32 GiB
+      #   eo2a.{small..5xlarge}   general purpose (up to 64 vCPU / 244 GiB)
+      #   hma.{large..4xlarge}    high-memory (up to 64 vCPU / 461 GiB), hmad.* NVMe, hmaw.* throughput
+      #   gpu.h100[xN]   NVIDIA H100,  gpu.h200[xN]   NVIDIA H200
+      #   vm.l40s.{1,2,4,8}       NVIDIA L40S
+      flavor: eo1a.small
+      # CloudFerro Glance images (exact name required; `openstack image list`):
+      #   Ubuntu 22.04 LTS, Ubuntu 24.04 LTS, Rocky Linux 9, AlmaLinux 9, CentOS 9 Stream,
+      #   Fedora CoreOS 39 K8s-Magnum, Windows 2019/2022,
+      #   ubuntu-2404-kube-v1.31.x / v1.32.x (pre-baked k8s)
+      image: "Ubuntu 24.04 LTS"
+      floatingIP: true
