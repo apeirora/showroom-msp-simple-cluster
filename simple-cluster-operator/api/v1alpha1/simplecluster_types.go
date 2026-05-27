@@ -18,19 +18,28 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SimpleClusterSpec defines the desired state of SimpleCluster.
 type SimpleClusterSpec struct {
-	// Workers is the number of worker nodes; surfaced as .SC.workers in templates.
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=100
-	Workers int32 `json:"workers"`
+	// ControlPlane describes the control-plane pool. Optional: providers like
+	// Gardener manage the CP themselves and ignore this. When set, exposed as
+	// .SC.controlPlane.{nodes,requested.{cpu,memory}} in templates.
+	// +optional
+	ControlPlane *ControlPlaneSpec `json:"controlPlane,omitempty"`
 
-	// ProviderConfigRef pins the SimpleClusterProviderConfig used to build
-	// the resources. Required; the operator does not auto-select a provider.
-	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef"`
+	// Workers describes the worker pool sizing and per-worker resources.
+	// Exposed to templates as .SC.workers.{nodes,maxNodes,requested.{cpu,memory}}.
+	Workers WorkersSpec `json:"workers"`
+
+	// ProviderConfigRefs is the ordered list of SCPC candidates by name. The
+	// operator picks one and records the choice in status.providerConfigRef;
+	// the locked choice is then immune to spec edits. v0.x picks the first
+	// entry; future revisions will probe SCPC reachability/capacity.
+	// +kubebuilder:validation:MinItems=1
+	ProviderConfigRefs []string `json:"providerConfigRefs"`
 
 	// Inputs are per-cluster overrides. Every key MUST be declared in
 	// SCPC.spec.inputs; unknown keys are rejected. Keys left unset fall back
@@ -45,6 +54,52 @@ type SimpleClusterSpec struct {
 	// KubeconfigRenewalBefore overrides SCPC.kubeconfigSource.renewalBefore for this SC.
 	// +optional
 	KubeconfigRenewalBefore *metav1.Duration `json:"kubeconfigRenewalBefore,omitempty"`
+}
+
+// ControlPlaneSpec describes the control-plane node pool.
+type ControlPlaneSpec struct {
+	// Nodes is the control-plane node count. Typical values: 1 (dev), 3 (HA).
+	// Surfaced as .SC.controlPlane.nodes.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10
+	Nodes int32 `json:"nodes"`
+
+	// Requested is the per-node resource ask. Templates may translate this
+	// to a machine type / VM size.
+	// +optional
+	Requested *NodeResources `json:"requested,omitempty"`
+}
+
+// WorkersSpec describes the worker pool size and per-worker resource ask.
+type WorkersSpec struct {
+	// Nodes is the worker count (autoscaling floor when MaxNodes is set).
+	// Surfaced as .SC.workers.nodes.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	Nodes int32 `json:"nodes"`
+
+	// MaxNodes is the autoscaling ceiling. Defaults to Nodes when omitted
+	// (no autoscaling). Surfaced as .SC.workers.maxNodes.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	// +optional
+	MaxNodes *int32 `json:"maxNodes,omitempty"`
+
+	// Requested is the per-worker resource ask. Templates surface these as
+	// the worker machine type / VM size / replica resources.
+	// +optional
+	Requested *NodeResources `json:"requested,omitempty"`
+}
+
+// NodeResources is the per-node resource ask, shared by ControlPlaneSpec and
+// WorkersSpec.
+type NodeResources struct {
+	// CPU is the requested CPU per node (e.g. "16", "500m").
+	// +optional
+	CPU resource.Quantity `json:"cpu,omitempty"`
+	// Memory is the requested memory per node (e.g. "32Gi", "32GB").
+	// +optional
+	Memory resource.Quantity `json:"memory,omitempty"`
 }
 
 // ResourceReason narrows why a ResourceStatus has its current Phase. It is
@@ -152,8 +207,8 @@ type SimpleClusterStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=simc
-// +kubebuilder:printcolumn:name="SCPC",type=string,JSONPath=`.spec.providerConfigRef.name`
-// +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
+// +kubebuilder:printcolumn:name="SCPC",type=string,JSONPath=`.status.providerConfigRef.name`
+// +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers.nodes`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Kubeconfig",type=string,JSONPath=`.status.kubeconfigSecretRef.name`
 // +kubebuilder:printcolumn:name="Kubeconfig Expires",type=string,JSONPath=`.status.kubeconfigExpiresAt`

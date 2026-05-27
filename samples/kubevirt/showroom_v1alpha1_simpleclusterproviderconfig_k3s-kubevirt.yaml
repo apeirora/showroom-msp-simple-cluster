@@ -136,7 +136,7 @@ spec:
                             sh -
 
     # -----------------------------------------------------------------
-    # Workers: VirtualMachineInstanceReplicaSet sized by .SC.workers,
+    # Workers: VirtualMachineInstanceReplicaSet sized by .SC.workers.nodes,
     # each running k3s agent against the CP via the ClusterIP Service.
     # -----------------------------------------------------------------
     - name: workers
@@ -155,7 +155,7 @@ spec:
         apiVersion: kubevirt.io/v1
         kind: VirtualMachineInstanceReplicaSet
         spec:
-          replicas: {{ .SC.workers }}
+          replicas: {{ .SC.workers.nodes }}
           selector:
             matchLabels:
               simplecluster.apeirora.eu/sc-name: {{ .SC.name }}

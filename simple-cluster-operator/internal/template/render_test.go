@@ -32,7 +32,7 @@ func minimalSC(workers int32, inputs map[string]string) *showroomv1alpha1.Simple
 	sc := &showroomv1alpha1.SimpleCluster{}
 	sc.Name = "foo"
 	sc.Namespace = "users"
-	sc.Spec.Workers = workers
+	sc.Spec.Workers = showroomv1alpha1.WorkersSpec{Nodes: workers}
 	sc.Spec.Inputs = inputs
 	return sc
 }
@@ -52,7 +52,7 @@ kind: ConfigMap
 metadata:
   name: ignored
 data:
-  workers: "{{ .SC.workers }}"
+  workers: "{{ .SC.workers.nodes }}"
   region: "{{ .Inputs.region }}"
   max: "{{ .Inputs.max }}"
 `,
@@ -77,7 +77,7 @@ data:
 	}
 	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
 	if data["workers"] != "3" {
-		t.Errorf("SC.workers not substituted: %q", data["workers"])
+		t.Errorf("SC.workers.nodes not substituted: %q", data["workers"])
 	}
 	if data["region"] != "us-east-1" {
 		t.Errorf("input override not applied: %q", data["region"])
@@ -193,6 +193,60 @@ data:
 	if data["d"] != "5m0s" {
 		t.Errorf("duration default expected 5m0s, got %q", data["d"])
 	}
+}
+
+func TestRender_EnumInput(t *testing.T) {
+	values := []showroomv1alpha1.InputEnumValue{
+		{Key: "eu-de-1", Label: "Frankfurt"},
+		{Key: "us-east-1", Label: "N. Virginia"},
+	}
+	scpc := minimalSCPC([]showroomv1alpha1.InputDeclaration{
+		{Name: "region", Type: showroomv1alpha1.InputTypeEnum, Default: "eu-de-1", Values: values},
+	})
+
+	t.Run("default key renders", func(t *testing.T) {
+		sc := minimalSC(1, nil)
+		r := &showroomv1alpha1.ResourceSpec{
+			Name: "config", APIVersion: "v1", Kind: "ConfigMap",
+			Template: "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\ndata:\n  region: \"{{ .Inputs.region }}\"\n",
+		}
+		obj, err := Render(scpc, sc, r, nil)
+		if err != nil {
+			t.Fatalf("Render: %v", err)
+		}
+		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+		if data["region"] != "eu-de-1" {
+			t.Errorf("enum default not substituted: %q", data["region"])
+		}
+	})
+
+	t.Run("valid override renders", func(t *testing.T) {
+		sc := minimalSC(1, map[string]string{"region": "us-east-1"})
+		r := &showroomv1alpha1.ResourceSpec{
+			Name: "config", APIVersion: "v1", Kind: "ConfigMap",
+			Template: "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\ndata:\n  region: \"{{ .Inputs.region }}\"\n",
+		}
+		obj, err := Render(scpc, sc, r, nil)
+		if err != nil {
+			t.Fatalf("Render: %v", err)
+		}
+		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+		if data["region"] != "us-east-1" {
+			t.Errorf("enum override not substituted: %q", data["region"])
+		}
+	})
+
+	t.Run("unknown key rejected", func(t *testing.T) {
+		sc := minimalSC(1, map[string]string{"region": "mars-1"})
+		r := &showroomv1alpha1.ResourceSpec{
+			Name: "config", APIVersion: "v1", Kind: "ConfigMap",
+			Template: "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n",
+		}
+		_, err := Render(scpc, sc, r, nil)
+		if err == nil || !strings.Contains(err.Error(), "not in allowed set") {
+			t.Fatalf("expected enum-membership error, got %v", err)
+		}
+	})
 }
 
 func TestRender_EnvFuncRemoved(t *testing.T) {
