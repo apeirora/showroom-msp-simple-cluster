@@ -52,8 +52,8 @@ spec:
             type: ironcore
             workers:
               - name: worker-main
-                minimum: 1
-                maximum: {{ .SC.workers }}
+                minimum: {{ .SC.workers.nodes }}
+                maximum: {{ .SC.workers.maxNodes }}
                 machine:
                   type: {{ .Inputs.machineType }}
                   image:

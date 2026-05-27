@@ -5,6 +5,17 @@ metadata:
   # <project>-<shoot> across project+namePrefix+SC.name.
   name: t1
 spec:
-  workers: 2
-  providerConfigRef:
-    name: dati-openstack
+  controlPlane:
+    nodes: 1
+    requested:
+      cpu: 2
+      memory: 16Gi
+  workers:
+    nodes: 1
+    maxNodes: 4
+    requested:
+      cpu: 16
+      memory: 32Gi
+  providerConfigRefs:
+    - dati-openstack
+    - sap-ironcore

@@ -80,10 +80,11 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	scpcRef := sc.Status.ProviderConfigRef
 	if scpcRef == nil {
-		scpcRef = sc.Spec.ProviderConfigRef
-	}
-	if scpcRef == nil || scpcRef.Name == "" {
-		return r.failSC(ctx, &sc, "InvalidSpec", "providerConfigRef is required")
+		chosen := selectProvider(sc.Spec.ProviderConfigRefs)
+		if chosen == "" {
+			return r.failSC(ctx, &sc, "InvalidSpec", "providerConfigRefs must list at least one SCPC name")
+		}
+		scpcRef = &corev1.LocalObjectReference{Name: chosen}
 	}
 
 	var scpc showroomv1alpha1.SimpleClusterProviderConfig
@@ -188,7 +189,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	patch := client.MergeFrom(sc.DeepCopy())
 	if sc.Status.ProviderConfigRef == nil {
-		sc.Status.ProviderConfigRef = sc.Spec.ProviderConfigRef.DeepCopy()
+		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
 	}
 	sc.Status.TargetCluster = "local"
 	if scpc.Spec.Target.KubeconfigSecretRef != nil {
@@ -322,7 +323,9 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 
 	scpcRef := sc.Status.ProviderConfigRef
 	if scpcRef == nil {
-		scpcRef = sc.Spec.ProviderConfigRef
+		if name := selectProvider(sc.Spec.ProviderConfigRefs); name != "" {
+			scpcRef = &corev1.LocalObjectReference{Name: name}
+		}
 	}
 
 	if scpcRef != nil && scpcRef.Name != "" {
@@ -431,6 +434,18 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			"resource", name, "name", targetName, "gvk", gvk.String())
 	}
 	return nil
+}
+
+// selectProvider picks an SCPC name from the SC's candidate list. v0.x
+// returns the first non-empty entry; future revisions will probe each
+// SCPC's status (reachability, capacity) before picking.
+func selectProvider(refs []string) string {
+	for _, r := range refs {
+		if r != "" {
+			return r
+		}
+	}
+	return ""
 }
 
 // orderFromStatus reconstructs a best-effort ordering when the live SCPC

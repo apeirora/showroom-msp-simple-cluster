@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum=string;int;bool;duration
+// +kubebuilder:validation:Enum=string;int;bool;duration;enum
 type InputType string
 
 const (
@@ -29,7 +29,18 @@ const (
 	InputTypeInt      InputType = "int"
 	InputTypeBool     InputType = "bool"
 	InputTypeDuration InputType = "duration"
+	InputTypeEnum     InputType = "enum"
 )
+
+// InputEnumValue is one allowed choice for an enum-typed input.
+type InputEnumValue struct {
+	// Key is the value substituted into the template (e.g. "eu-de-1").
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
+	// Label is the human-readable description shown in UIs / kubectl explain.
+	// +optional
+	Label string `json:"label,omitempty"`
+}
 
 // InputDeclaration is a single SC input slot: name, type, default, and metadata
 // to make the SCPC self-documenting (kubectl explain / UI rendering).
@@ -55,6 +66,14 @@ type InputDeclaration struct {
 	// AllowEmpty permits "" as a meaningful value for Type=string.
 	// +optional
 	AllowEmpty bool `json:"allowEmpty,omitempty"`
+
+	// Values enumerates the allowed choices when Type=enum. Required and
+	// non-empty for enum inputs; ignored otherwise. Default (if set) and any
+	// SC override must match one of Values[].Key.
+	// +optional
+	// +listType=map
+	// +listMapKey=key
+	Values []InputEnumValue `json:"values,omitempty"`
 }
 
 // TargetSpec describes which cluster the rendered resources are created on
