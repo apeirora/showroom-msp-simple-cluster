@@ -17,10 +17,10 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.providerConfigRef.name
+    - jsonPath: .status.providerConfigRef.name
       name: SCPC
       type: string
-    - jsonPath: .spec.workers
+    - jsonPath: .spec.workers.nodes
       name: Workers
       type: integer
     - jsonPath: .status.phase
@@ -60,6 +60,45 @@ spec:
           spec:
             description: SimpleClusterSpec defines the desired state of SimpleCluster.
             properties:
+              controlPlane:
+                description: |-
+                  ControlPlane describes the control-plane pool. Optional: providers like
+                  Gardener manage the CP themselves and ignore this. When set, exposed as
+                  .SC.controlPlane.{nodes,requested.{cpu,memory}} in templates.
+                properties:
+                  nodes:
+                    description: |-
+                      Nodes is the control-plane node count. Typical values: 1 (dev), 3 (HA).
+                      Surfaced as .SC.controlPlane.nodes.
+                    format: int32
+                    maximum: 10
+                    minimum: 1
+                    type: integer
+                  requested:
+                    description: |-
+                      Requested is the per-node resource ask. Templates may translate this
+                      to a machine type / VM size.
+                    properties:
+                      cpu:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: CPU is the requested CPU per node (e.g. "16",
+                          "500m").
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      memory:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Memory is the requested memory per node (e.g.
+                          "32Gi", "32GB").
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                    type: object
+                required:
+                - nodes
+                type: object
               inputs:
                 additionalProperties:
                   type: string
@@ -76,31 +115,64 @@ spec:
                 description: KubeconfigValidity overrides SCPC.kubeconfigSource.validity
                   for this SC.
                 type: string
-              providerConfigRef:
+              providerConfigRefs:
                 description: |-
-                  ProviderConfigRef pins the SimpleClusterProviderConfig used to build
-                  the resources. Required; the operator does not auto-select a provider.
-                properties:
-                  name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
+                  ProviderConfigRefs is the ordered list of SCPC candidates by name. The
+                  operator picks one and records the choice in status.providerConfigRef;
+                  the locked choice is then immune to spec edits. v0.x picks the first
+                  entry; future revisions will probe SCPC reachability/capacity.
+                items:
+                  type: string
+                minItems: 1
+                type: array
               workers:
-                description: Workers is the number of worker nodes; surfaced as .SC.workers
-                  in templates.
-                format: int32
-                maximum: 100
-                minimum: 1
-                type: integer
+                description: |-
+                  Workers describes the worker pool sizing and per-worker resources.
+                  Exposed to templates as .SC.workers.{nodes,maxNodes,requested.{cpu,memory}}.
+                properties:
+                  maxNodes:
+                    description: |-
+                      MaxNodes is the autoscaling ceiling. Defaults to Nodes when omitted
+                      (no autoscaling). Surfaced as .SC.workers.maxNodes.
+                    format: int32
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                  nodes:
+                    description: |-
+                      Nodes is the worker count (autoscaling floor when MaxNodes is set).
+                      Surfaced as .SC.workers.nodes.
+                    format: int32
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                  requested:
+                    description: |-
+                      Requested is the per-worker resource ask. Templates surface these as
+                      the worker machine type / VM size / replica resources.
+                    properties:
+                      cpu:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: CPU is the requested CPU per node (e.g. "16",
+                          "500m").
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      memory:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        description: Memory is the requested memory per node (e.g.
+                          "32Gi", "32GB").
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                    type: object
+                required:
+                - nodes
+                type: object
             required:
-            - providerConfigRef
+            - providerConfigRefs
             - workers
             type: object
           status:

@@ -41,8 +41,8 @@ var _ = Describe("SimpleCluster Controller", func() {
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterSpec{
-					Workers:           1,
-					ProviderConfigRef: &corev1.LocalObjectReference{Name: "ghost"},
+					Workers:            showroomv1alpha1.WorkersSpec{Nodes: 1},
+					ProviderConfigRefs: []string{"ghost"},
 				},
 			})).To(Succeed())
 		})
@@ -102,7 +102,7 @@ kind: ConfigMap
 metadata:
   name: ignored
 data:
-  workers: "{{ .SC.workers }}"
+  workers: "{{ .SC.workers.nodes }}"
   kubeconfig: |
     apiVersion: v1
     kind: Config
@@ -122,8 +122,8 @@ data:
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterSpec{
-					Workers:           4,
-					ProviderConfigRef: &corev1.LocalObjectReference{Name: scpcName},
+					Workers:            showroomv1alpha1.WorkersSpec{Nodes: 4},
+					ProviderConfigRefs: []string{scpcName},
 				},
 			})).To(Succeed())
 		})
