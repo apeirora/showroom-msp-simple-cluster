@@ -1,0 +1,12 @@
+## simple-cluster-operator-openstack: standalone smoke test on CloudFerro.
+##
+## Before `kubectl apply -k samples/openstack/`, create the cloudferro-creds
+## Secret in the target namespace. Two ways:
+##   ./create-secret.sh                       # source .claude/openstack-cf/
+##   cp secret.example.yaml secret.yaml && $EDITOR secret.yaml && kubectl apply -f secret.yaml
+##
+## This Kustomization does NOT include the Secret — that keeps real
+## credentials out of git regardless of which path you take.
+resources:
+  - cloudferro-creds-secret.yaml
+  - openstackvmset.yaml
