@@ -12,6 +12,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -95,9 +96,10 @@ type VMGroup struct {
 	// +kubebuilder:validation:Maximum=50
 	Count int32 `json:"count"`
 
-	// Flavor is the Nova flavor name (e.g. "eo1a.medium").
-	// +kubebuilder:validation:MinLength=1
-	Flavor string `json:"flavor"`
+	// Resources is the per-VM CPU/memory floor. The operator picks the
+	// smallest Nova flavor that meets BOTH requirements and records the
+	// choice in status.groups[].flavor.
+	Resources NodeResources `json:"resources"`
 
 	// Image is the Glance image name (e.g. "Ubuntu 24.04 LTS").
 	// +kubebuilder:validation:MinLength=1
@@ -112,6 +114,19 @@ type VMGroup struct {
 	// text — the operator base64-encodes it before calling Nova).
 	// +optional
 	UserData string `json:"userData,omitempty"`
+}
+
+// NodeResources is the per-VM CPU/memory request. The operator picks
+// the smallest visible Nova flavor whose vCPUs >= cpu and RAM >= memory.
+type NodeResources struct {
+	// CPU is the minimum vCPU count. Parsed as resource.Quantity so both
+	// integer ("2") and millicore ("1500m") forms work; millicores are
+	// rounded up since Nova flavors are integer-vCPU.
+	CPU resource.Quantity `json:"cpu"`
+
+	// Memory is the minimum RAM (e.g. "4Gi", "32GB"). Rounded up to MiB
+	// to compare with Nova's flavor RAM field.
+	Memory resource.Quantity `json:"memory"`
 }
 
 // OpenStackVMSetStatus is the observed state of an OpenStackVMSet.
@@ -153,6 +168,16 @@ type GroupStatus struct {
 	// Ready counts servers in ACTIVE state.
 	// +optional
 	Ready int32 `json:"ready,omitempty"`
+
+	// Flavor is the Nova flavor name picked by the operator to satisfy
+	// VMGroup.Resources (e.g. "eo1a.medium").
+	// +optional
+	Flavor string `json:"flavor,omitempty"`
+
+	// FlavorDescription is a one-line summary of the picked flavor's
+	// specs (vCPU / RAM / disk).
+	// +optional
+	FlavorDescription string `json:"flavorDescription,omitempty"`
 
 	// Hosts lists every server's address summary.
 	// +listType=map

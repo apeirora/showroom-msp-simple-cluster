@@ -16,16 +16,11 @@ spec:
   groups:
     - name: test
       count: 1
-      # CloudFerro WAW4-1 flavors (full list: `openstack flavor list`):
-      #   eo1a.xsmall    1 vCPU /  1 GiB /  8 GiB disk
-      #   eo1a.xmedium   1 vCPU /  2 GiB /  8 GiB
-      #   eo1a.small     2 vCPU /  2 GiB / 16 GiB
-      #   eo1a.medium    2 vCPU /  4 GiB / 16 GiB
-      #   eo1a.large     4 vCPU /  8 GiB / 32 GiB
-      #   eo2a.{small..5xlarge}   general purpose (up to 64 vCPU / 244 GiB)
-      #   hma.{large..4xlarge}    high-memory (up to 64 vCPU / 461 GiB), hmad.* NVMe, hmaw.* throughput
-      #   gpu.h100[xN]   NVIDIA H100,  gpu.h200[xN]   NVIDIA H200
-      #   vm.l40s.{1,2,4,8}       NVIDIA L40S
-      flavor: eo1a.small
+      # resources is the per-VM CPU/memory FLOOR; the operator picks the
+      # smallest visible Nova flavor that satisfies BOTH and writes its
+      # name into status.groups[].flavor (with flavorDescription).
+      resources:
+        cpu: 1
+        memory: 1Gi
       image: "Ubuntu 24.04 LTS"
       floatingIP: true

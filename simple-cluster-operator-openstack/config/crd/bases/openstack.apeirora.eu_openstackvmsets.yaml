@@ -82,10 +82,30 @@ spec:
                       maximum: 50
                       minimum: 0
                       type: integer
-                    flavor:
-                      description: Flavor is the Nova flavor name (e.g. "eo1a.medium").
-                      minLength: 1
-                      type: string
+                    resources:
+                      description: |-
+                        Resources is the per-VM CPU/memory floor. The operator picks the
+                        smallest Nova flavor that meets BOTH requirements and records the
+                        choice in status.groups[].flavor.
+                      properties:
+                        cpu:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: 'CPU is the minimum vCPU count (e.g. "2", "1500m").'
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: 'Memory is the minimum RAM (e.g. "4Gi", "32GB").'
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      required:
+                      - cpu
+                      - memory
+                      type: object
                     image:
                       description: Image is the Glance image name (e.g. "Ubuntu 24.04 LTS").
                       minLength: 1
@@ -98,9 +118,9 @@ spec:
                       type: string
                   required:
                   - count
-                  - flavor
                   - image
                   - name
+                  - resources
                   type: object
                 minItems: 1
                 type: array
@@ -139,6 +159,12 @@ spec:
                     ready:
                       format: int32
                       type: integer
+                    flavor:
+                      description: Nova flavor name the operator picked to satisfy spec.groups[].resources.
+                      type: string
+                    flavorDescription:
+                      description: One-line summary of the picked flavor (vCPU / RAM / disk).
+                      type: string
                     hosts:
                       items:
                         properties:

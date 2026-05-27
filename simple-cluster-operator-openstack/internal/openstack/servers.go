@@ -26,6 +26,7 @@ import (
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
 	"github.com/gophercloud/gophercloud/v2/pagination"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	openstackv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1"
 )
@@ -80,19 +81,19 @@ func ListByVMSet(ctx context.Context, compute *gophercloud.ServiceClient, vmsetK
 	return out, nil
 }
 
-// CreateServer launches one Nova server tagged with the VMSet.
+// CreateServer launches one Nova server tagged with the VMSet. The
+// caller is responsible for resolving the flavor (via PickFlavor) and
+// passing the resulting Nova flavor ID — that keeps the picker's
+// outcome visible to the reconciler so it can mirror flavor name +
+// description into status.
 func CreateServer(
 	ctx context.Context,
 	clients *Clients,
 	vmsetKey string,
 	group openstackv1alpha1.VMGroup,
-	name, networkID, keypairName string,
+	name, networkID, keypairName, flavorID string,
 	securityGroups []string,
 ) (string, error) {
-	flavorID, err := resolveFlavor(ctx, clients.Compute, group.Flavor)
-	if err != nil {
-		return "", err
-	}
 	imageID, err := ResolveImage(ctx, clients.Image, group.Image)
 	if err != nil {
 		return "", err
@@ -330,13 +331,36 @@ func findFIPByPort(ctx context.Context, network *gophercloud.ServiceClient, port
 	return all[0].FloatingIP
 }
 
-func resolveFlavor(ctx context.Context, compute *gophercloud.ServiceClient, name string) (string, error) {
-	if looksLikeUUID(name) {
-		return name, nil
+// FlavorPick is the outcome of selecting a flavor for a VMGroup.
+type FlavorPick struct {
+	ID          string
+	Name        string
+	Description string
+	VCPUs       int
+	RAMMiB      int
+	DiskGiB     int
+}
+
+// PickFlavor returns the smallest visible Nova flavor whose VCPUs and RAM
+// meet the requested floor. Sort key: VCPUs, RAM, Disk, Name — so the
+// pick is deterministic across reconciles and chooses the cheapest
+// candidate. Memory floor is rounded up to MiB; CPU floor (which may be
+// expressed as millicores) is rounded up to whole vCPUs.
+func PickFlavor(
+	ctx context.Context,
+	compute *gophercloud.ServiceClient,
+	cpu, memory resource.Quantity,
+) (*FlavorPick, error) {
+	cpuFloor := ceilCPU(cpu)
+	memFloorMiB := ceilMiB(memory)
+
+	type candidate struct {
+		id, name             string
+		vcpus, ramMiB, diskGiB int
 	}
 	var (
-		found     string
-		available []string
+		all      []candidate
+		matching []candidate
 	)
 	err := flavors.ListDetail(compute, nil).EachPage(ctx, func(_ context.Context, page pagination.Page) (bool, error) {
 		list, err := flavors.ExtractFlavors(page)
@@ -344,20 +368,80 @@ func resolveFlavor(ctx context.Context, compute *gophercloud.ServiceClient, name
 			return false, err
 		}
 		for _, f := range list {
-			available = append(available, f.Name)
-			if f.Name == name && found == "" {
-				found = f.ID
+			c := candidate{id: f.ID, name: f.Name, vcpus: f.VCPUs, ramMiB: f.RAM, diskGiB: f.Disk}
+			all = append(all, c)
+			if c.vcpus >= cpuFloor && c.ramMiB >= memFloorMiB {
+				matching = append(matching, c)
 			}
 		}
 		return true, nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("list flavors: %w", err)
+		return nil, fmt.Errorf("list flavors: %w", err)
 	}
-	if found != "" {
-		return found, nil
+	if len(matching) == 0 {
+		names := make([]string, 0, len(all))
+		for _, c := range all {
+			names = append(names, fmt.Sprintf("%s (%d vCPU / %d MiB / %d GiB)", c.name, c.vcpus, c.ramMiB, c.diskGiB))
+		}
+		sort.Strings(names)
+		return nil, fmt.Errorf("no flavor satisfies cpu>=%d, memory>=%dMiB; available: %s",
+			cpuFloor, memFloorMiB, strings.Join(names, ", "))
 	}
-	return "", notFoundError("flavor", name, available)
+	sort.Slice(matching, func(i, j int) bool {
+		a, b := matching[i], matching[j]
+		switch {
+		case a.vcpus != b.vcpus:
+			return a.vcpus < b.vcpus
+		case a.ramMiB != b.ramMiB:
+			return a.ramMiB < b.ramMiB
+		case a.diskGiB != b.diskGiB:
+			return a.diskGiB < b.diskGiB
+		default:
+			return a.name < b.name
+		}
+	})
+	pick := matching[0]
+	return &FlavorPick{
+		ID:          pick.id,
+		Name:        pick.name,
+		VCPUs:       pick.vcpus,
+		RAMMiB:      pick.ramMiB,
+		DiskGiB:     pick.diskGiB,
+		Description: fmt.Sprintf("%d vCPU / %s RAM / %d GiB disk", pick.vcpus, formatMiB(pick.ramMiB), pick.diskGiB),
+	}, nil
+}
+
+// ceilCPU rounds a CPU quantity up to whole vCPUs (Nova flavors are
+// integer cores).
+func ceilCPU(q resource.Quantity) int {
+	m := q.MilliValue()
+	if m <= 0 {
+		return 0
+	}
+	return int((m + 999) / 1000)
+}
+
+// ceilMiB rounds a memory quantity up to whole MiB.
+func ceilMiB(q resource.Quantity) int {
+	b := q.Value()
+	if b <= 0 {
+		return 0
+	}
+	const mib = 1024 * 1024
+	return int((b + mib - 1) / mib)
+}
+
+// formatMiB renders an MiB count as the most readable unit ("4 GiB",
+// "512 MiB"). Nova flavor RAM is always a whole number of MiB.
+func formatMiB(mib int) string {
+	if mib >= 1024 && mib%1024 == 0 {
+		return fmt.Sprintf("%d GiB", mib/1024)
+	}
+	if mib >= 1024 {
+		return fmt.Sprintf("%.1f GiB", float64(mib)/1024)
+	}
+	return fmt.Sprintf("%d MiB", mib)
 }
 
 // notFoundError builds a Condition-friendly error: "<kind> %q not found;
