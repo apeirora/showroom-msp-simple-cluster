@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -42,13 +43,15 @@ const (
 // IPs in sync with the OpenStackVMSet CR.
 type OpenStackVMSetReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvmsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvmsets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvmsets/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // nolint:gocyclo // sequential orchestration; splitting hides intent
 func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -67,6 +70,14 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		patch := client.MergeFrom(vmset.DeepCopy())
 		controllerutil.AddFinalizer(&vmset, openstackv1alpha1.FinalizerName)
 		if err := r.Patch(ctx, &vmset, patch); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	// First sighting of this CR — surface "Init" so users see we picked
+	// it up, even before credentials / SSH keypair are resolved.
+	if vmset.Status.Phase == "" {
+		if err := r.setPhase(ctx, &vmset, openstackv1alpha1.PhaseInit, "Initialising", "operator picked up the CR"); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -96,10 +107,6 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.fail(ctx, &vmset, "ListError", err.Error())
 	}
 
-	if err := r.setPhase(ctx, &vmset, openstackv1alpha1.PhaseProvisioning, "Reconciling", "ensuring servers"); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	byGroup := indexByGroup(owned)
 	groupStatuses := make([]openstackv1alpha1.GroupStatus, 0, len(vmset.Spec.Groups))
 	allReady := true
@@ -112,11 +119,22 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if err != nil {
 			return r.fail(ctx, &vmset, "FlavorError", err.Error())
 		}
+		resolvedSpec := openstackv1alpha1.ResolvedGroupSpec{
+			Flavor:            flavor.Name,
+			FlavorDescription: flavor.Description,
+			CPU:               int32(flavor.VCPUs),
+			Memory:            flavor.MemoryHuman,
+			Image:             g.Image,
+		}
 		log.Info("picked flavor", "vmset", vmsetKey, "group", g.Name, "flavor", flavor.Name, "spec", flavor.Description)
+		r.eventf(&vmset, corev1.EventTypeNormal, "PreparingConfiguration",
+			"group %q: flavor %s (%s), image %s", g.Name, flavor.Name, flavor.Description, g.Image)
 
 		for i := int32(len(existing)); i < g.Count; i++ {
 			name := openstack.SanitizeServerName(fmt.Sprintf("%s-%s-%d", vmset.Name, g.Name, i))
 			log.Info("creating Nova server", "vmset", vmsetKey, "group", g.Name, "name", name, "flavor", flavor.Name)
+			r.eventf(&vmset, corev1.EventTypeNormal, "CreatingVM",
+				"creating %s in group %q (flavor %s, image %s)", name, g.Name, flavor.Name, g.Image)
 			if _, err := openstack.CreateServer(ctx, clients, vmsetKey, g, name, networkID, keypairName, flavor.ID, vmset.Spec.SecurityGroups); err != nil {
 				return r.fail(ctx, &vmset, "CreateError", err.Error())
 			}
@@ -124,8 +142,10 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 		// Surplus: delete the highest-indexed servers to converge down to Count.
 		for i := g.Count; i < int32(len(existing)); i++ {
-			log.Info("deleting surplus server", "id", existing[i].ID, "name", existing[i].Name)
 			s := existing[i]
+			log.Info("deleting surplus server", "id", s.ID, "name", s.Name)
+			r.eventf(&vmset, corev1.EventTypeNormal, "DeletingVM",
+				"deleting %s in group %q", s.Name, g.Name)
 			if err := openstack.ReleaseFloatingIPsForServer(ctx, clients, &s); err != nil {
 				return r.fail(ctx, &vmset, "FIPCleanupError", err.Error())
 			}
@@ -168,16 +188,21 @@ func (r *OpenStackVMSetReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			allReady = false
 		}
 		groupStatuses = append(groupStatuses, openstackv1alpha1.GroupStatus{
-			Name:              g.Name,
-			Ready:             ready,
-			Flavor:            flavor.Name,
-			FlavorDescription: flavor.Description,
-			Hosts:             hosts,
+			Name:  g.Name,
+			Spec:  resolvedSpec,
+			Ready: ready,
+			Hosts: hosts,
 		})
+	}
+
+	totalVMs := int32(0)
+	for _, gs := range groupStatuses {
+		totalVMs += int32(len(gs.Hosts))
 	}
 
 	patch := client.MergeFrom(vmset.DeepCopy())
 	vmset.Status.Groups = groupStatuses
+	vmset.Status.VMs = totalVMs
 	vmset.Status.KeypairName = keypairName
 	vmset.Status.SSHSecretRef = &corev1.LocalObjectReference{Name: sshSecretName}
 	vmset.Status.ObservedGeneration = vmset.Generation
@@ -251,6 +276,15 @@ func (r *OpenStackVMSetReconciler) reconcileDelete(ctx context.Context, vmset *o
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// eventf records a Kubernetes Event on the CR, tolerating a nil
+// recorder (envtest / unit tests don't always wire one up).
+func (r *OpenStackVMSetReconciler) eventf(vmset *openstackv1alpha1.OpenStackVMSet, eventType, reason, format string, args ...any) {
+	if r.Recorder == nil {
+		return
+	}
+	r.Recorder.Eventf(vmset, eventType, reason, format, args...)
 }
 
 func (r *OpenStackVMSetReconciler) openstackClients(ctx context.Context, vmset *openstackv1alpha1.OpenStackVMSet) (*openstack.Clients, error) {
