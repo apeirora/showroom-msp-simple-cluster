@@ -1,0 +1,41 @@
+# Standalone smoke test for simple-cluster-operator-ubuntu.
+#
+# Drop your real host addresses into the placeholders below, create a
+# Secret with the SSH private key (see sshkey.example.yaml), and
+# `kubectl apply -k samples/ubuntu/`. The operator SSHs as the listed
+# sudo-capable user, installs k3s (server on control-plane hosts +
+# agent on workers), publishes the cluster's kubeconfig as Secret
+# `<name>-kubeconfig`.
+apiVersion: ubuntu.apeirora.eu/v1alpha1
+kind: UbuntuCluster
+metadata:
+  name: demo
+spec:
+  # Optional. Empty = installer default (latest stable).
+  # version: v1.31.4+k3s1
+  ssh:
+    user: eouser                # CloudFerro Ubuntu default; "ubuntu" elsewhere
+    privateKeySecretRef:
+      name: ubuntu-ssh
+  # When set, this address goes into the kubeconfig + every CP's
+  # `--tls-san`. Point it at a load balancer or VIP for real HA.
+  # Empty = first CP host's address (single-CP works, multi-CP works
+  # but loses the LB hop).
+  # controlPlaneEndpoint: 10.0.0.100:6443
+  controlPlane:
+    hosts:
+      - name: cp-0
+        address: REPLACE_ME_CP0_IP
+      # Add more CPs for HA. The first host runs `k3s server
+      # --cluster-init`; the rest join via --server.
+      # - {name: cp-1, address: REPLACE_ME_CP1_IP}
+      # - {name: cp-2, address: REPLACE_ME_CP2_IP}
+  workers:
+    hosts:
+      - name: w-0
+        address: REPLACE_ME_W0_IP
+      # - {name: w-1, address: REPLACE_ME_W1_IP}
+  # Forwarded verbatim to `k3s server` / `k3s agent`.
+  # k3sServerArgs:
+  #   - --disable=traefik
+  # k3sAgentArgs: []
