@@ -1,0 +1,242 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: ubuntuclusters.ubuntu.apeirora.eu
+spec:
+  group: ubuntu.apeirora.eu
+  names:
+    kind: UbuntuCluster
+    listKind: UbuntuClusterList
+    plural: ubuntuclusters
+    shortNames:
+    - ubuc
+    singular: ubuntucluster
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.readyHosts
+      name: Ready
+      type: integer
+    - jsonPath: .status.hosts
+      name: Hosts
+      type: integer
+    - jsonPath: .status.k3sVersion
+      name: K3s
+      type: string
+    - jsonPath: .status.kubeconfigSecretRef.name
+      name: Kubeconfig
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          UbuntuCluster installs k3s on a fleet of already-running Ubuntu hosts
+          reached over SSH.
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: UbuntuClusterSpec is the user request.
+            properties:
+              version:
+                description: 'k3s release tag (e.g. "v1.31.4+k3s1"). Empty = installer default.'
+                type: string
+              controlPlaneEndpoint:
+                description: |-
+                  Public address (host or host:port) clients reach the kube-apiserver on.
+                  When empty, the first control-plane host's address is used.
+                type: string
+              ssh:
+                description: SSH credential + login used to reach every host.
+                properties:
+                  user:
+                    description: Sudo-capable login.
+                    minLength: 1
+                    type: string
+                  port:
+                    description: SSH port. Defaults to 22.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                  privateKeySecretRef:
+                    description: Secret in the same namespace holding `ssh-privatekey`.
+                    properties:
+                      name:
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                required:
+                - user
+                - privateKeySecretRef
+                type: object
+              controlPlane:
+                description: Set of hosts that run `k3s server`.
+                properties:
+                  hosts:
+                    items:
+                      properties:
+                        name:
+                          maxLength: 63
+                          pattern: ^[a-z0-9][a-z0-9-]*$
+                          type: string
+                        address:
+                          minLength: 1
+                          type: string
+                      required:
+                      - address
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                type: object
+              workers:
+                description: Set of hosts that run `k3s agent`. Optional.
+                properties:
+                  hosts:
+                    items:
+                      properties:
+                        name:
+                          maxLength: 63
+                          pattern: ^[a-z0-9][a-z0-9-]*$
+                          type: string
+                        address:
+                          minLength: 1
+                          type: string
+                      required:
+                      - address
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                type: object
+              k3sServerArgs:
+                description: Extra args appended to `k3s server`.
+                items:
+                  type: string
+                type: array
+              k3sAgentArgs:
+                description: Extra args appended to `k3s agent`.
+                items:
+                  type: string
+                type: array
+            required:
+            - controlPlane
+            - ssh
+            type: object
+          status:
+            description: UbuntuClusterStatus is the observed state.
+            properties:
+              phase:
+                enum:
+                - Init
+                - Provisioning
+                - Ready
+                - Failed
+                - Deleting
+                type: string
+              controlPlaneEndpoint:
+                type: string
+              k3sVersion:
+                type: string
+              kubeconfigSecretRef:
+                properties:
+                  name:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              readyHosts:
+                format: int32
+                type: integer
+              hosts:
+                format: int32
+                type: integer
+              hostStatuses:
+                items:
+                  properties:
+                    name:
+                      type: string
+                    role:
+                      type: string
+                    address:
+                      type: string
+                    phase:
+                      type: string
+                    message:
+                      type: string
+                    kubeletVersion:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              observedGeneration:
+                format: int64
+                type: integer
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

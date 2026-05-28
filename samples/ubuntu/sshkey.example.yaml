@@ -1,0 +1,20 @@
+# Template for the SSH key Secret. Copy to sshkey.yaml, paste the
+# private key, and `kubectl apply -f sshkey.yaml`. sshkey.yaml is
+# gitignored — see .gitignore.
+#
+# Equivalent imperative form:
+#   kubectl create secret generic ubuntu-ssh \
+#     --type=kubernetes.io/ssh-auth \
+#     --from-file=ssh-privatekey=/path/to/id_ed25519
+#
+# If the upstream operator (simple-cluster-operator-openstack) created
+# the VMs, point this directly at its <vmset>-ssh Secret instead:
+# `spec.ssh.privateKeySecretRef.name: <vmset>-ssh`.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ubuntu-ssh
+type: kubernetes.io/ssh-auth
+stringData:
+  ssh-privatekey: |
+    <PASTE YOUR OPENSSH PRIVATE KEY HERE>

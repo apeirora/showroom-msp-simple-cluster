@@ -1,0 +1,13 @@
+namespace: simple-cluster-operator-ubuntu-system
+namePrefix: simple-cluster-operator-ubuntu-
+
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/name: simple-cluster-operator-ubuntu
+      app.kubernetes.io/managed-by: kustomize
+
+resources:
+  - ../crd
+  - ../rbac
+  - ../manager
