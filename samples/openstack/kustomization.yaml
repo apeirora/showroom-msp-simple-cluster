@@ -10,3 +10,4 @@
 resources:
   - cloudferro-creds-secret.yaml
   - openstackvmset-single-vm.yaml
+  - openstackvmset-cluster-vms.yaml
