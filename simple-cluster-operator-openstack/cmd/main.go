@@ -63,8 +63,9 @@ func main() {
 	}
 
 	if err := (&controller.OpenStackVMSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("openstackvmset"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenStackVMSet")
 		os.Exit(1)
