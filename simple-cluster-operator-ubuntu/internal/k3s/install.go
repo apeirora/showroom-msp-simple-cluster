@@ -157,10 +157,13 @@ func ReportedVersion(ctx context.Context, c *ssh.Client) (string, error) {
 	if res.ExitCode != 0 {
 		return "", nil
 	}
-	// "k3s version v1.31.4+k3s1 (abc123)"
+	// "k3s version v1.31.4+k3s1 (abc123)" — second "v…" word, not the
+	// literal "version" token before it. The k3s tag always carries the
+	// `+k3s` suffix; if we don't see it, fall back to whatever the
+	// command printed (helps the next debugger).
 	parts := strings.Fields(res.Stdout)
 	for _, p := range parts {
-		if strings.HasPrefix(p, "v") {
+		if strings.HasPrefix(p, "v") && strings.Contains(p, "+k3s") {
 			return p, nil
 		}
 	}
