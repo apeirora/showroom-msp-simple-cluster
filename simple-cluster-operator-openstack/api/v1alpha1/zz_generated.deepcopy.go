@@ -64,6 +64,7 @@ func (in *HostStatus) DeepCopy() *HostStatus {
 
 func (in *GroupStatus) DeepCopyInto(out *GroupStatus) {
 	*out = *in
+	out.Spec = in.Spec
 	if in.Hosts != nil {
 		in, out := &in.Hosts, &out.Hosts
 		*out = make([]HostStatus, len(*in))
@@ -76,6 +77,19 @@ func (in *GroupStatus) DeepCopy() *GroupStatus {
 		return nil
 	}
 	out := new(GroupStatus)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *ResolvedGroupSpec) DeepCopyInto(out *ResolvedGroupSpec) {
+	*out = *in
+}
+
+func (in *ResolvedGroupSpec) DeepCopy() *ResolvedGroupSpec {
+	if in == nil {
+		return nil
+	}
+	out := new(ResolvedGroupSpec)
 	in.DeepCopyInto(out)
 	return out
 }

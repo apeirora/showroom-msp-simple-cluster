@@ -20,6 +20,9 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .status.vms
+      name: VMs
+      type: integer
     - jsonPath: .status.sshSecretRef.name
       name: SSH
       type: string
@@ -143,12 +146,16 @@ spec:
             properties:
               phase:
                 enum:
-                - Pending
+                - Init
                 - Provisioning
                 - Ready
                 - Failed
                 - Deleting
                 type: string
+              vms:
+                description: Total Nova servers this resource currently owns, summed across every group.
+                format: int32
+                type: integer
               sshSecretRef:
                 properties:
                   name:
@@ -165,12 +172,28 @@ spec:
                     ready:
                       format: int32
                       type: integer
-                    flavor:
-                      description: Nova flavor name the operator picked to satisfy spec.groups[].resources.
-                      type: string
-                    flavorDescription:
-                      description: One-line summary of the picked flavor (vCPU / RAM / disk).
-                      type: string
+                    spec:
+                      description: |-
+                        Resolved plan for this group: the operator's flavor pick + the
+                        image. Filled even when zero servers exist yet.
+                      properties:
+                        flavor:
+                          description: Nova flavor name the operator picked.
+                          type: string
+                        flavorDescription:
+                          description: One-line summary of the picked flavor (vCPU / RAM / disk).
+                          type: string
+                        cpu:
+                          description: vCPU count of the picked flavor.
+                          format: int32
+                          type: integer
+                        memory:
+                          description: RAM of the picked flavor as a human-readable size (e.g. "4 GiB").
+                          type: string
+                        image:
+                          description: Glance image name (mirrors VMGroup.Image).
+                          type: string
+                      type: object
                     hosts:
                       items:
                         properties:

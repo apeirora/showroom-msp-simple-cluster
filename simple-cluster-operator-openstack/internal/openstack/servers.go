@@ -340,6 +340,9 @@ type FlavorPick struct {
 	VCPUs       int
 	RAMMiB      int
 	DiskGiB     int
+	// MemoryHuman is RAM rendered as the most readable unit, e.g.
+	// "4 GiB" or "512 MiB". Same value also appears inside Description.
+	MemoryHuman string
 }
 
 // PickFlavor returns the smallest visible Nova flavor whose VCPUs and RAM
@@ -425,13 +428,15 @@ func PickFlavor(
 		}
 	})
 	pick := matching[0]
+	memHuman := formatMiB(pick.ramMiB)
 	return &FlavorPick{
 		ID:          pick.id,
 		Name:        pick.name,
 		VCPUs:       pick.vcpus,
 		RAMMiB:      pick.ramMiB,
 		DiskGiB:     pick.diskGiB,
-		Description: fmt.Sprintf("%d vCPU / %s RAM / %d GiB disk", pick.vcpus, formatMiB(pick.ramMiB), pick.diskGiB),
+		MemoryHuman: memHuman,
+		Description: fmt.Sprintf("%d vCPU / %s RAM / %d GiB disk", pick.vcpus, memHuman, pick.diskGiB),
 	}, nil
 }
 
