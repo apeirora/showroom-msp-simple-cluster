@@ -1,0 +1,118 @@
+# End-to-end SCPC: SimpleCluster -> OpenStackVMSet (CloudFerro VMs) ->
+# UbuntuCluster (k3s install over SSH). The DAG is:
+#
+#   vms (OpenStackVMSet) -> cluster (UbuntuCluster)
+#
+# The UbuntuCluster's spec.ssh.privateKeySecretRef points straight at the
+# Secret the openstack operator produced (`<vmset>-ssh`) — no copying.
+# Its host lists are filled from the OpenStackVMSet's status.groups[].
+#
+# Prerequisites on the management cluster:
+#   - simple-cluster-operator running
+#   - simple-cluster-operator-openstack running
+#   - simple-cluster-operator-ubuntu running
+#   - cloudferro-creds Secret in the SC's namespace (see
+#     samples/openstack/create-secret.sh)
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: cloudferro-ubuntu
+spec:
+  target:
+    namespace: default
+
+  inputs:
+    - { name: image,            type: string, default: "Ubuntu 24.04 LTS",   description: "Glance image used for every VM" }
+    - { name: network,          type: string, default: "cloud_080745_1",     description: "Neutron network for the VMs" }
+    - { name: floatingIPPool,   type: string, default: "external",           description: "External network FIPs are pulled from" }
+    - { name: sshUser,          type: string, default: "eouser",             description: "Sudo login the ubuntu operator SSHs as (eouser on CloudFerro Ubuntu)" }
+    - { name: k3sVersion,       type: string, default: "",  allowEmpty: true, description: "Optional INSTALL_K3S_VERSION pin. Empty = installer default" }
+    - { name: flavorPattern,    type: string, default: '^eo[12]a\.',         description: "Regex narrowing the openstack flavor picker to general-purpose families" }
+
+  resources:
+    # -----------------------------------------------------------------
+    # 1) The VMs themselves. Two groups: cp (control-plane) and workers.
+    # Both with floating IPs so the ubuntu operator can SSH from KinD.
+    # -----------------------------------------------------------------
+    - name: vms
+      apiVersion: openstack.apeirora.eu/v1alpha1
+      kind: OpenStackVMSet
+      readiness:
+        phasePath: status.phase
+        phaseReadyValue: Ready
+      template: |
+        apiVersion: openstack.apeirora.eu/v1alpha1
+        kind: OpenStackVMSet
+        spec:
+          credentialsRef:
+            name: cloudferro-creds
+          network: {{ .Inputs.network }}
+          floatingIPPool: {{ .Inputs.floatingIPPool }}
+          securityGroups: [default]
+          groups:
+            - name: cp
+              count: {{ .SC.controlPlane.nodes }}
+              resources:
+                cpu: {{ .SC.controlPlane.requested.cpu }}
+                memory: {{ .SC.controlPlane.requested.memory }}
+                flavorPattern: {{ .Inputs.flavorPattern | quote }}
+              image: {{ .Inputs.image | quote }}
+              floatingIP: true
+            - name: workers
+              count: {{ .SC.workers.nodes }}
+              resources:
+                cpu: {{ .SC.workers.requested.cpu }}
+                memory: {{ .SC.workers.requested.memory }}
+                flavorPattern: {{ .Inputs.flavorPattern | quote }}
+              image: {{ .Inputs.image | quote }}
+              floatingIP: true
+
+    # -----------------------------------------------------------------
+    # 2) k3s on top of those VMs. SSH keypair comes from the
+    # OpenStackVMSet's status; host lists come from per-group hosts[].
+    # -----------------------------------------------------------------
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn: [vms]
+      readiness:
+        phasePath: status.phase
+        phaseReadyValue: Ready
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          {{- if .Inputs.k3sVersion }}
+          version: {{ .Inputs.k3sVersion | quote }}
+          {{- end }}
+          ssh:
+            user: {{ .Inputs.sshUser | quote }}
+            privateKeySecretRef:
+              name: {{ .Resources.vms.status.sshSecretRef.name | quote }}
+          controlPlane:
+            hosts:
+            {{- range .Resources.vms.status.groups }}
+              {{- if eq .name "cp" }}
+                {{- range .hosts }}
+              - name: {{ .name | quote }}
+                address: {{ .floatingIP | quote }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+          workers:
+            hosts:
+            {{- range .Resources.vms.status.groups }}
+              {{- if eq .name "workers" }}
+                {{- range .hosts }}
+              - name: {{ .name | quote }}
+                address: {{ .floatingIP | quote }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+
+  # UbuntuCluster publishes `<cluster>-kubeconfig` Secret in target.namespace.
+  # simple-cluster-operator mirrors it into SC.namespace as <sc>-kubeconfig.
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"
