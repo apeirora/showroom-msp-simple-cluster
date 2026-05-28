@@ -1,0 +1,29 @@
+# Lets simple-cluster-operator (which renders the SCPC) create the two
+# CRDs this chain produces: OpenStackVMSet on CloudFerro side and
+# UbuntuCluster for the k3s install.
+#
+# Same shape as samples/kind/permissions.yaml.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: simple-cluster-operator-cloudferro-ubuntu
+rules:
+  - apiGroups: ["openstack.apeirora.eu"]
+    resources: ["openstackvmsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["ubuntu.apeirora.eu"]
+    resources: ["ubuntuclusters"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: simple-cluster-operator-cloudferro-ubuntu
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: simple-cluster-operator-cloudferro-ubuntu
+subjects:
+  - kind: ServiceAccount
+    name: simple-cluster-operator-controller-manager
+    namespace: simple-cluster-operator-system
