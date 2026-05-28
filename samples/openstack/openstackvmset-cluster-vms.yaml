@@ -5,7 +5,7 @@
 apiVersion: openstack.apeirora.eu/v1alpha1
 kind: OpenStackVMSet
 metadata:
-  name: single-vm
+  name: cluster-vms
 spec:
   credentialsRef:
     name: cloudferro-creds
@@ -18,7 +18,7 @@ spec:
       count: 1
       resources:
         cpu: 1
-        memory: 10Gi
+        memory: 500Mi
         flavorPattern: '^eo[12]a\.'
       image: "Ubuntu 24.04 LTS"
       floatingIP: true
@@ -26,7 +26,7 @@ spec:
       count: 2
       resources:
         cpu: 1
-        memory: 3Gi
+        memory: 500Mi
         flavorPattern: '^eo[12]a\.'
       image: "Ubuntu 24.04 LTS"
       floatingIP: false
