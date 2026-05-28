@@ -41,11 +41,15 @@ const (
 	CredentialsAppCredSecretKey = "OS_APPLICATION_CREDENTIAL_SECRET"
 )
 
-// +kubebuilder:validation:Enum=Pending;Provisioning;Ready;Failed;Deleting
+// +kubebuilder:validation:Enum=Init;Provisioning;Ready;Failed;Deleting
 type Phase string
 
 const (
-	PhasePending      Phase = "Pending"
+	// PhaseInit is the first phase set when the operator first picks
+	// up a CR. It covers credential / SSH-keypair / network resolution
+	// — i.e. all the pre-VM setup. Transitions to Provisioning once the
+	// operator starts creating or deleting Nova servers.
+	PhaseInit         Phase = "Init"
 	PhaseProvisioning Phase = "Provisioning"
 	PhaseReady        Phase = "Ready"
 	PhaseFailed       Phase = "Failed"
@@ -143,6 +147,12 @@ type OpenStackVMSetStatus struct {
 	// +optional
 	Phase Phase `json:"phase,omitempty"`
 
+	// VMs is the total number of Nova servers this resource currently
+	// owns, summed across every group (regardless of Status). Surfaced
+	// as the VMs printer column for `kubectl get osvms`.
+	// +optional
+	VMs int32 `json:"vms,omitempty"`
+
 	// SSHSecretRef references the Secret in this namespace holding the
 	// ed25519 keypair the operator generated and uploaded as the
 	// keypair-name `<vmset-name>`. Key names: ssh-privatekey, ssh-publickey.
@@ -173,10 +183,29 @@ type GroupStatus struct {
 	// Name matches VMGroup.Name.
 	Name string `json:"name"`
 
+	// Spec is the resolved plan for this group: the operator's flavor
+	// pick + the image that will be (or was) handed to Nova. Filled at
+	// the first reconcile after PickFlavor decides, even when zero
+	// servers exist yet — useful to preview the choice in `kubectl
+	// describe`.
+	// +optional
+	Spec ResolvedGroupSpec `json:"spec,omitempty,omitzero"`
+
 	// Ready counts servers in ACTIVE state.
 	// +optional
 	Ready int32 `json:"ready,omitempty"`
 
+	// Hosts lists every server's address summary.
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	Hosts []HostStatus `json:"hosts,omitempty"`
+}
+
+// ResolvedGroupSpec is the operator's plan for a group: what Nova
+// flavor and Glance image will back every server, and a small summary
+// of the flavor's headline specs.
+type ResolvedGroupSpec struct {
 	// Flavor is the Nova flavor name picked by the operator to satisfy
 	// VMGroup.Resources (e.g. "eo1a.medium").
 	// +optional
@@ -187,11 +216,19 @@ type GroupStatus struct {
 	// +optional
 	FlavorDescription string `json:"flavorDescription,omitempty"`
 
-	// Hosts lists every server's address summary.
-	// +listType=map
-	// +listMapKey=name
+	// CPU is the picked flavor's vCPU count.
 	// +optional
-	Hosts []HostStatus `json:"hosts,omitempty"`
+	CPU int32 `json:"cpu,omitempty"`
+
+	// Memory is the picked flavor's RAM as a human-readable size
+	// (e.g. "4 GiB", "512 MiB").
+	// +optional
+	Memory string `json:"memory,omitempty"`
+
+	// Image mirrors VMGroup.Image — the Glance image name handed to
+	// Nova on server create.
+	// +optional
+	Image string `json:"image,omitempty"`
 }
 
 // HostStatus describes one Nova server visible to consumers (typically
@@ -217,6 +254,7 @@ type HostStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=osvms
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="VMs",type=integer,JSONPath=`.status.vms`
 // +kubebuilder:printcolumn:name="SSH",type=string,JSONPath=`.status.sshSecretRef.name`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
