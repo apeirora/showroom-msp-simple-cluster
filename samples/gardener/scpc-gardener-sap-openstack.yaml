@@ -1,32 +1,28 @@
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
-  name: sap-ironcore
+  name: gardener-sap-openstack
   labels:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
 spec:
   target:
     namespace: garden-pm-cc-d2
-    # NOTE: on msp03 the original Gardener CR pointed at
-    # default/gardener-sap-kubeconfig which does not exist. Pointing at the
-    # same simple-shoot/gardener-sap-kubeconfig used by sap-openstack since
-    # both target garden-pm-cc-d2 on the same Gardener API.
     kubeconfigSecretRef:
       name: gardener-sap-kubeconfig
       namespace: simple-shoot
   inputs:
-    - { name: cloudProfile, type: string,   default: ironcore,                    description: "Gardener CloudProfile name" }
-    - { name: region,       type: string,   default: wdf4,                        description: "Cloud region" }
-    - { name: k8sVersion,   type: string,   default: "1.34.5",                    description: "Kubernetes version" }
-    - { name: machineType,  type: string,   default: x3-standard-4,               description: "Worker machine type from the CloudProfile (verify name against the cluster's CloudProfile)" }
+    - { name: cloudProfile, type: string,   default: converged-cloud-ora-fp,      description: "Gardener CloudProfile name" }
+    - { name: region,       type: string,   default: eu-de-1,                     description: "Cloud region" }
+    - { name: k8sVersion,   type: string,   default: "1.33.9",                    description: "Kubernetes version" }
+    - { name: machineType,  type: string,   default: g_c4_m8,                     description: "Worker machine type from the CloudProfile (verify name against the cluster's CloudProfile)" }
     - { name: machineImage, type: string,   default: gardenlinux,                 description: "Worker OS image name" }
-    - { name: zone,         type: string,   default: wdf4-a,                      description: "Availability zone for the worker pool" }
+    - { name: zone,         type: string,   default: eu-de-1a,                    description: "Availability zone for the worker pool" }
   resources:
     - name: shoot
       apiVersion: core.gardener.cloud/v1beta1
       kind: Shoot
-      namePrefix: ic
+      namePrefix: ap
       deletionAnnotations:
         confirmation.gardener.cloud/deletion: "true"
       readiness:
@@ -44,12 +40,22 @@ spec:
           cloudProfile:
             name: {{ .Inputs.cloudProfile }}
             kind: CloudProfile
-          credentialsBindingName: my-ironcore-secret
+          secretBindingName: cc-eu-de-1
           region: {{ .Inputs.region }}
           kubernetes:
             version: "{{ .Inputs.k8sVersion }}"
           provider:
-            type: ironcore
+            type: openstack
+            infrastructureConfig:
+              apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+              kind: InfrastructureConfig
+              floatingPoolName: FloatingIP-external-ora-01
+              networks:
+                workers: 10.250.0.0/16
+            controlPlaneConfig:
+              apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+              kind: ControlPlaneConfig
+              loadBalancerProvider: f5
             workers:
               - name: worker-main
                 minimum: {{ .SC.workers.nodes }}

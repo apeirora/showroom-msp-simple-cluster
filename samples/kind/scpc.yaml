@@ -1,16 +1,8 @@
 # SCPC that delegates "make me a cluster" to kind-cluster-operator.
-# simple-cluster-operator renders a KindCluster CR (kind.apeirora.eu/v1alpha1);
-# kind-cluster-operator picks it up and runs `kind create cluster` on the
-# host's docker (DooD via the operator's mounted /var/run/docker.sock).
-#
-# Prerequisites on the management cluster:
-#   - kind-cluster-operator installed (kubectl apply -k kind-cluster-operator/config/default)
-#   - The host's /var/run/docker.sock must be mounted into the kind node
-#     (quick-start-kind.sh now does this).
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
-  name: kind-on-host
+  name: kind
   labels:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
@@ -34,10 +26,6 @@ spec:
           {{- if .Inputs.nodeImage }}
           nodeImage: {{ .Inputs.nodeImage }}
           {{- end }}
-
-  # kind-cluster-operator publishes the new cluster's kubeconfig into a
-  # Secret named `<KindCluster.name>-kubeconfig` in the same namespace.
-  # simple-cluster-operator then mirrors that Secret into SC.Namespace.
   kubeconfigSource:
     resourceName: cluster
     secretRef:
