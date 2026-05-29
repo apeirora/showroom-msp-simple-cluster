@@ -26,7 +26,7 @@ rules:
 - apiGroups:
   - openstack.apeirora.eu
   resources:
-  - openstackvmsets
+  - openstackvms
   verbs:
   - create
   - delete
@@ -38,13 +38,13 @@ rules:
 - apiGroups:
   - openstack.apeirora.eu
   resources:
-  - openstackvmsets/finalizers
+  - openstackvms/finalizers
   verbs:
   - update
 - apiGroups:
   - openstack.apeirora.eu
   resources:
-  - openstackvmsets/status
+  - openstackvms/status
   verbs:
   - get
   - patch

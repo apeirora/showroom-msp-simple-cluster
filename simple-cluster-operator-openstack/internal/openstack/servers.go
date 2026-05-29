@@ -28,36 +28,32 @@ import (
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
 	"github.com/gophercloud/gophercloud/v2/pagination"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	openstackv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1"
 )
 
-// Metadata keys the operator stamps on every server it owns. Nova's
-// metadata-key regex is `^[a-zA-Z0-9-_:. ]{1,255}$` — no slashes, so we
-// can't reuse the k8s-label form `osvms.apeirora.eu/vmset` here.
-const (
-	MetaVMSetKey = "osvms.apeirora.eu.vmset"
-	MetaGroupKey = "osvms.apeirora.eu.group"
-)
+// MetaVMKey is the Nova metadata key the operator stamps on every server
+// it owns. Nova's metadata-key regex is `^[a-zA-Z0-9-_:. ]{1,255}$` — no
+// slashes — so we can't reuse the k8s-label form `osvm.apeirora.eu/vm`
+// here. Value is `<namespace>/<vm-cr-name>` formatted by VMKey.
+const MetaVMKey = "osvm.apeirora.eu.vm"
 
 // Server is the slice of Nova state the controller needs.
 type Server struct {
 	ID         string
 	Name       string
-	Group      string
 	Status     string
 	InternalIP string
 	FloatingIP string
 	PortID     string
 }
 
-// VMSetKey formats the metadata tag value used to claim ownership.
-func VMSetKey(namespace, name string) string {
+// VMKey formats the metadata tag value used to claim ownership.
+func VMKey(namespace, name string) string {
 	return namespace + "/" + name
 }
 
-// ListByVMSet returns every server tagged with the given VMSet key.
-func ListByVMSet(ctx context.Context, compute *gophercloud.ServiceClient, vmsetKey string) ([]Server, error) {
+// FindByVM returns the server tagged with this VM's key, if one exists.
+// Returns (nil, nil) when no server has been created yet.
+func FindByVM(ctx context.Context, compute *gophercloud.ServiceClient, vmKey string) (*Server, error) {
 	pages, err := servers.List(compute, servers.ListOpts{}).AllPages(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list servers: %w", err)
@@ -66,40 +62,32 @@ func ListByVMSet(ctx context.Context, compute *gophercloud.ServiceClient, vmsetK
 	if err != nil {
 		return nil, fmt.Errorf("extract servers: %w", err)
 	}
-	out := make([]Server, 0, len(all))
 	for _, s := range all {
-		if s.Metadata[MetaVMSetKey] != vmsetKey {
+		if s.Metadata[MetaVMKey] != vmKey {
 			continue
 		}
-		out = append(out, Server{
+		return &Server{
 			ID:         s.ID,
 			Name:       s.Name,
-			Group:      s.Metadata[MetaGroupKey],
 			Status:     s.Status,
 			InternalIP: firstFixedIP(s),
-		})
+		}, nil
 	}
-	return out, nil
+	return nil, nil
 }
 
-// CreateServer launches one Nova server tagged with the VMSet. The
-// caller is responsible for resolving the flavor (via PickFlavor) and
-// passing the resulting Nova flavor ID — that keeps the picker's
-// outcome visible to the reconciler so it can mirror flavor name +
-// description into status.
+// CreateServer launches one Nova server tagged with the VM. The caller
+// is responsible for resolving the flavor (via PickFlavor) and the
+// image (via ResolveImage) — that keeps both outcomes visible to the
+// reconciler so it can mirror them into status.
 func CreateServer(
 	ctx context.Context,
 	clients *Clients,
-	vmsetKey string,
-	group openstackv1alpha1.VMGroup,
-	name, networkID, keypairName, flavorID string,
+	vmKey string,
+	name, networkID, keypairName, flavorID, imageID string,
 	securityGroups []string,
+	userData string,
 ) (string, error) {
-	imageID, err := ResolveImage(ctx, clients.Image, group.Image)
-	if err != nil {
-		return "", err
-	}
-
 	base := servers.CreateOpts{
 		Name:           name,
 		FlavorRef:      flavorID,
@@ -107,12 +95,11 @@ func CreateServer(
 		Networks:       []servers.Network{{UUID: networkID}},
 		SecurityGroups: securityGroups,
 		Metadata: map[string]string{
-			MetaVMSetKey: vmsetKey,
-			MetaGroupKey: group.Name,
+			MetaVMKey: vmKey,
 		},
 	}
-	if group.UserData != "" {
-		base.UserData = []byte(base64.StdEncoding.EncodeToString([]byte(group.UserData)))
+	if userData != "" {
+		base.UserData = []byte(base64.StdEncoding.EncodeToString([]byte(userData)))
 	}
 
 	opts := keypairs.CreateOptsExt{
@@ -194,7 +181,7 @@ func EnsureFloatingIP(
 	clients *Clients,
 	server *Server,
 	externalNet string,
-	vmsetKey string,
+	vmKey string,
 ) (string, error) {
 	if server.FloatingIP != "" {
 		return server.FloatingIP, nil
@@ -216,7 +203,7 @@ func EnsureFloatingIP(
 	fip, err := floatingips.Create(ctx, clients.Network, floatingips.CreateOpts{
 		FloatingNetworkID: externalID,
 		PortID:            portID,
-		Description:       "vmset=" + vmsetKey,
+		Description:       "vm=" + vmKey,
 	}).Extract()
 	if err != nil {
 		return "", fmt.Errorf("create floating IP for %s: %w", server.Name, err)

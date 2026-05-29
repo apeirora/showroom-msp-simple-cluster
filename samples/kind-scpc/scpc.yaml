@@ -1,0 +1,32 @@
+# SCPC that delegates "make me a cluster" to kind-cluster-operator.
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: kind-on-host
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  target:
+    namespace: default
+
+  inputs:
+    - { name: nodeImage, type: string, default: "", allowEmpty: true, description: "Optional kindest/node tag to pin Kubernetes version. Empty = kind compiled-in default." }
+
+  resources:
+    - name: cluster
+      apiVersion: kind.apeirora.eu/v1alpha1
+      kind: KindCluster
+      template: |
+        apiVersion: kind.apeirora.eu/v1alpha1
+        kind: KindCluster
+        spec:
+          clusterName: {{ .Target.name }}
+          workers: {{ .SC.workers.nodes }}
+          {{- if .Inputs.nodeImage }}
+          nodeImage: {{ .Inputs.nodeImage }}
+          {{- end }}
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"
