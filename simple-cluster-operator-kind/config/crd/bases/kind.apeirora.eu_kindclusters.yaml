@@ -17,14 +17,17 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.workers
-      name: Workers
-      type: integer
-    - jsonPath: .status.phase
-      name: Phase
+    - jsonPath: .status.cp
+      name: CP
+      type: string
+    - jsonPath: .status.wkr
+      name: WKR
       type: string
     - jsonPath: .status.kubeconfigSecretRef.name
       name: Kubeconfig
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -144,6 +147,12 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              cp:
+                description: |-
+                  CP is "<readyControlPlanes>/<declaredControlPlanes>" — surfaced
+                  as the CP printer column (e.g. "1/1"). kind is hardcoded to a
+                  single control-plane node.
+                type: string
               kubeconfigSecretRef:
                 description: |-
                   KubeconfigSecretRef references the Secret in this namespace
@@ -171,6 +180,11 @@ spec:
                 - Ready
                 - Failed
                 - Deleting
+                type: string
+              wkr:
+                description: |-
+                  WKR is "<readyWorkers>/<declaredWorkers>" — surfaced as the
+                  WKR printer column (e.g. "0/2").
                 type: string
             type: object
         required:

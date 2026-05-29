@@ -70,6 +70,17 @@ type KindClusterStatus struct {
 	// +optional
 	KubeconfigSecretRef *corev1.LocalObjectReference `json:"kubeconfigSecretRef,omitempty"`
 
+	// CP is "<readyControlPlanes>/<declaredControlPlanes>" — surfaced
+	// as the CP printer column (e.g. "1/1"). kind is hardcoded to a
+	// single control-plane node.
+	// +optional
+	CP string `json:"cp,omitempty"`
+
+	// WKR is "<readyWorkers>/<declaredWorkers>" — surfaced as the
+	// WKR printer column (e.g. "0/2").
+	// +optional
+	WKR string `json:"wkr,omitempty"`
+
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
@@ -82,9 +93,10 @@ type KindClusterStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=kindc
-// +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers`
-// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="CP",type=string,JSONPath=`.status.cp`
+// +kubebuilder:printcolumn:name="WKR",type=string,JSONPath=`.status.wkr`
 // +kubebuilder:printcolumn:name="Kubeconfig",type=string,JSONPath=`.status.kubeconfigSecretRef.name`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // KindCluster requests creation of a standalone KinD cluster on the
