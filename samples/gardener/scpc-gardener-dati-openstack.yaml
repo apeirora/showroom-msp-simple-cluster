@@ -59,7 +59,7 @@ spec:
             workers:
               - name: worker-main
                 minimum: {{ .SC.workers.nodes }}
-                maximum: {{ .SC.workers.maxNodes }}
+                maximum: {{ .SC.workers.nodes }}
                 machine:
                   type: {{ .Inputs.machineType }}
                   image:

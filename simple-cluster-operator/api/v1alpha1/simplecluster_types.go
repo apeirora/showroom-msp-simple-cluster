@@ -31,7 +31,7 @@ type SimpleClusterSpec struct {
 	ControlPlane *ControlPlaneSpec `json:"controlPlane,omitempty"`
 
 	// Workers describes the worker pool sizing and per-worker resources.
-	// Exposed to templates as .SC.workers.{nodes,maxNodes,requested.{cpu,memory}}.
+	// Exposed to templates as .SC.workers.{nodes,requested.{cpu,memory}}.
 	Workers WorkersSpec `json:"workers"`
 
 	// ProviderConfigRefs is the ordered list of SCPC candidates by name. The
@@ -72,18 +72,10 @@ type ControlPlaneSpec struct {
 
 // WorkersSpec describes the worker pool size and per-worker resource ask.
 type WorkersSpec struct {
-	// Nodes is the worker count (autoscaling floor when MaxNodes is set).
-	// Surfaced as .SC.workers.nodes.
+	// Nodes is the worker count. Surfaced as .SC.workers.nodes.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=100
 	Nodes int32 `json:"nodes"`
-
-	// MaxNodes is the autoscaling ceiling. Defaults to Nodes when omitted
-	// (no autoscaling). Surfaced as .SC.workers.maxNodes.
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=100
-	// +optional
-	MaxNodes *int32 `json:"maxNodes,omitempty"`
 
 	// Requested is the per-worker resource ask. Templates surface these as
 	// the worker machine type / VM size / replica resources.
@@ -128,19 +120,24 @@ const (
 )
 
 // ResourceStatus mirrors the live state of one node in the SCPC's DAG into SC.
+// For repeated ResourceSpecs (ResourceSpec.Repeat set) the per-index detail
+// lives in Instances and the top-level Phase/Reason/Message is the aggregate.
 type ResourceStatus struct {
 	// Name matches ResourceSpec.Name.
 	Name string `json:"name"`
 	// GVK is the resolved GroupVersionKind of R.
 	// +optional
 	GVK string `json:"gvk,omitempty"`
-	// TargetName is the name of R on the target cluster.
+	// TargetName is the name of R on the target cluster. Empty when the
+	// ResourceSpec is repeated; see Instances for per-index names.
 	// +optional
 	TargetName string `json:"targetName,omitempty"`
 	// TargetNamespace is the namespace of R on the target cluster.
 	// +optional
 	TargetNamespace string `json:"targetNamespace,omitempty"`
-	// Phase is this resource's coarse state.
+	// Phase is this resource's coarse state. For repeated specs it is
+	// aggregated across Instances (Ready iff all instances Ready; Failed
+	// if any instance Failed; otherwise Provisioning/Pending).
 	// +optional
 	Phase Phase `json:"phase,omitempty"`
 	// Reason is the operator's per-resource state code, narrowing Phase.
@@ -154,6 +151,32 @@ type ResourceStatus struct {
 	// +optional
 	LastOperation string `json:"lastOperation,omitempty"`
 	// LastError mirrors a human-readable error string from R itself.
+	// +optional
+	LastError string `json:"lastError,omitempty"`
+	// Instances lists per-index state when the ResourceSpec is repeated.
+	// Empty for non-repeated ResourceSpecs.
+	// +listType=map
+	// +listMapKey=index
+	// +optional
+	Instances []InstanceStatus `json:"instances,omitempty"`
+}
+
+// InstanceStatus is one R-object's state when its ResourceSpec is repeated.
+type InstanceStatus struct {
+	// Index is the 0-based iteration this entry tracks.
+	Index int32 `json:"index"`
+	// TargetName is the name of this R-object on the target cluster.
+	TargetName string `json:"targetName"`
+	// TargetNamespace is the namespace of this R-object.
+	// +optional
+	TargetNamespace string `json:"targetNamespace,omitempty"`
+	// Phase is this instance's coarse state.
+	// +optional
+	Phase Phase `json:"phase,omitempty"`
+	// LastOperation mirrors a human-readable progress string from R.
+	// +optional
+	LastOperation string `json:"lastOperation,omitempty"`
+	// LastError mirrors a human-readable error string from R.
 	// +optional
 	LastError string `json:"lastError,omitempty"`
 }
