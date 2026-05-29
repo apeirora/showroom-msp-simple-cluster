@@ -165,6 +165,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Version:   k3sVer,
 			ExtraArgs: cluster.Spec.K3sServerArgs,
 			TLSSAN:    hostOnly(endpoint),
+			NodeIP:    bootstrap.Address,
 		}); err != nil {
 			failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
 			return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
@@ -222,6 +223,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sServerArgs,
 				TLSSAN:    hostOnly(endpoint),
+				NodeIP:    h.Address,
 			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
@@ -243,6 +245,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return k3s.InstallAgent(ctx, c, k3s.InstallOptions{
 				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sAgentArgs,
+				NodeIP:    h.Address,
 			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
@@ -291,7 +294,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if allReady && prevPhase != ubuntuv1alpha1.PhaseReady {
 		r.eventf(&cluster, corev1.EventTypeNormal, "InstallationCompleted",
-			"k3s installed on all %d hosts (CP_WKR %s)", len(hostStatuses), cluster.Status.CPWorkers)
+			"k3s installed on all %d hosts (CP %s, WKR %s)", len(hostStatuses), cluster.Status.CP, cluster.Status.WKR)
 	}
 
 	if allReady {
@@ -591,8 +594,9 @@ func (r *UbuntuClusterReconciler) installRole(
 	return true, ver, ""
 }
 
-// setRoleCounts populates the CP_WKR / READY_CP_WKR printer columns —
-// declared counts from spec, ready counts from observed hostStatuses.
+// setRoleCounts populates the CP / WKR printer columns as
+// "<ready>/<declared>" strings, computed from the spec (declared) and
+// observed hostStatuses (ready).
 func setRoleCounts(cluster *ubuntuv1alpha1.UbuntuCluster, hostStatuses []ubuntuv1alpha1.HostStatus) {
 	cpDeclared := len(cluster.Spec.ControlPlane.Hosts)
 	wkrDeclared := len(cluster.Spec.Workers.Hosts)
@@ -608,8 +612,8 @@ func setRoleCounts(cluster *ubuntuv1alpha1.UbuntuCluster, hostStatuses []ubuntuv
 			wkrReady++
 		}
 	}
-	cluster.Status.CPWorkers = fmt.Sprintf("%d/%d", cpDeclared, wkrDeclared)
-	cluster.Status.ReadyCPWorkers = fmt.Sprintf("%d/%d", cpReady, wkrReady)
+	cluster.Status.CP = fmt.Sprintf("%d/%d", cpReady, cpDeclared)
+	cluster.Status.WKR = fmt.Sprintf("%d/%d", wkrReady, wkrDeclared)
 }
 
 func phaseFromOK(ok bool) string {
