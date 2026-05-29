@@ -198,6 +198,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	sc.Status.Resources = orderedStatuses(order, statuses)
 	sc.Status.Phase = aggregate
 	sc.Status.ObservedGeneration = sc.Generation
+	setRoleCounts(&sc)
 
 	cond := metav1.Condition{
 		Type:    showroomv1alpha1.ConditionReady,
@@ -473,10 +474,33 @@ func (r *SimpleClusterReconciler) failSC(
 	if sc.Status.Phase == "" {
 		sc.Status.Phase = showroomv1alpha1.PhasePending
 	}
+	setRoleCounts(sc)
 	if err := r.Status().Patch(ctx, sc, patch); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+}
+
+// setRoleCounts fills the CP / WKR printer columns from the SC spec
+// and aggregate Phase. SC has no per-node visibility into NC, so the
+// ready side tracks Phase (Ready ⇒ full, otherwise 0). When the SCPC
+// owns the control plane (spec.controlPlane omitted), CP is "-/-".
+func setRoleCounts(sc *showroomv1alpha1.SimpleCluster) {
+	wkrDeclared := int(sc.Spec.Workers.Nodes)
+	cpReady, wkrReady := 0, 0
+	if sc.Status.Phase == showroomv1alpha1.PhaseReady {
+		wkrReady = wkrDeclared
+	}
+	if sc.Spec.ControlPlane != nil {
+		cpDeclared := int(sc.Spec.ControlPlane.Nodes)
+		if sc.Status.Phase == showroomv1alpha1.PhaseReady {
+			cpReady = cpDeclared
+		}
+		sc.Status.CP = fmt.Sprintf("%d/%d", cpReady, cpDeclared)
+	} else {
+		sc.Status.CP = "-/-"
+	}
+	sc.Status.WKR = fmt.Sprintf("%d/%d", wkrReady, wkrDeclared)
 }
 
 // validateAndTopoSort validates the SCPC DAG and returns a topological
