@@ -39,11 +39,13 @@ func init() {
 }
 
 func main() {
-	var metricsAddr, probeAddr string
+	var metricsAddr, probeAddr, defaultK3sVersion string
 	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe endpoint")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "enable leader election")
+	flag.StringVar(&defaultK3sVersion, "default-k3s-version", "",
+		"k3s release tag used when UbuntuCluster.spec.version is empty (e.g. v1.31.4+k3s1). Empty falls back to the get.k3s.io installer default.")
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -63,9 +65,10 @@ func main() {
 	}
 
 	if err := (&controller.UbuntuClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("ubuntucluster"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorderFor("ubuntucluster"),
+		DefaultK3sVersion: defaultK3sVersion,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UbuntuCluster")
 		os.Exit(1)
