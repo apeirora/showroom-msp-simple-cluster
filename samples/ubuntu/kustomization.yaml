@@ -1,9 +1,3 @@
-## simple-cluster-operator-ubuntu: install k3s on a list of Ubuntu hosts.
-##
-## Before `kubectl apply -k samples/ubuntu/`:
-##   1. Fill in the host addresses in ubuntucluster.yaml.
-##   2. Create the SSH Secret (either copy sshkey.example.yaml -> sshkey.yaml
-##      and edit, or use the `kubectl create secret generic` one-liner in
-##      sshkey.example.yaml). sshkey.yaml is gitignored.
 resources:
-  - ubuntucluster.yaml
+  - sshkey-sample-prv-key.yaml
+  - ubuntu-cluster-sample.yaml
