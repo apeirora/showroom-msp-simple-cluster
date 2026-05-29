@@ -40,6 +40,11 @@ type InstallOptions struct {
 	// TLSSAN, when non-empty, is appended as `--tls-san=<value>` to
 	// server installs so the API cert is valid for the LB/VIP address.
 	TLSSAN string
+	// NodeIP, when non-empty, becomes `--node-ip=<value>` (server and
+	// agent) and `--advertise-address=<value>` (server only). Pins
+	// kube-apiserver and kubelet to the host's internal address so
+	// they don't fall back to localhost or the default route IP.
+	NodeIP string
 }
 
 // InstallServerBootstrap runs `k3s server --cluster-init` on the first
@@ -51,7 +56,7 @@ func InstallServerBootstrap(ctx context.Context, c *ssh.Client, opts InstallOpti
 	} else if installed {
 		return nil
 	}
-	args := append([]string{"server", "--cluster-init"}, withTLSSAN(opts)...)
+	args := append([]string{"server", "--cluster-init"}, serverArgs(opts)...)
 	return runInstallScript(ctx, c, opts, args, nil)
 }
 
@@ -66,7 +71,7 @@ func InstallServerJoin(ctx context.Context, c *ssh.Client, opts InstallOptions, 
 	args := append([]string{
 		"server",
 		"--server=" + bootstrapURL,
-	}, withTLSSAN(opts)...)
+	}, serverArgs(opts)...)
 	env := map[string]string{
 		"K3S_TOKEN": token,
 	}
@@ -84,7 +89,7 @@ func InstallAgent(ctx context.Context, c *ssh.Client, opts InstallOptions, serve
 		"K3S_URL":   serverURL,
 		"K3S_TOKEN": token,
 	}
-	return runInstallScript(ctx, c, opts, opts.ExtraArgs, env)
+	return runInstallScript(ctx, c, opts, agentArgs(opts), env)
 }
 
 // FetchToken reads /var/lib/rancher/k3s/server/node-token from the
@@ -193,12 +198,25 @@ func runInstallScript(ctx context.Context, c *ssh.Client, opts InstallOptions, a
 	return nil
 }
 
-// withTLSSAN appends `--tls-san=<value>` to the args slice when the
-// option is set, and the user's K3sServerArgs.
-func withTLSSAN(opts InstallOptions) []string {
+// serverArgs builds the k3s server flag tail: user's ExtraArgs +
+// --tls-san + --node-ip + --advertise-address when each is set.
+func serverArgs(opts InstallOptions) []string {
 	out := append([]string{}, opts.ExtraArgs...)
 	if opts.TLSSAN != "" {
 		out = append(out, "--tls-san="+opts.TLSSAN)
+	}
+	if opts.NodeIP != "" {
+		out = append(out, "--node-ip="+opts.NodeIP, "--advertise-address="+opts.NodeIP)
+	}
+	return out
+}
+
+// agentArgs builds the k3s agent flag tail: user's ExtraArgs +
+// --node-ip when set.
+func agentArgs(opts InstallOptions) []string {
+	out := append([]string{}, opts.ExtraArgs...)
+	if opts.NodeIP != "" {
+		out = append(out, "--node-ip="+opts.NodeIP)
 	}
 	return out
 }
