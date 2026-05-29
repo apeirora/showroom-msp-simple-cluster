@@ -86,7 +86,7 @@ func fetchSecretRef(
 	live *unstructured.Unstructured,
 ) ([]byte, *time.Time, error) {
 	renderCtx, err := rendertpl.BuildContext(scpc, sc, resource,
-		map[string]*unstructured.Unstructured{resource.Name: live})
+		map[string]rendertpl.Predecessor{resource.Name: {Objects: []*unstructured.Unstructured{live}}})
 	if err != nil {
 		return nil, nil, fmt.Errorf("build template context: %w", err)
 	}

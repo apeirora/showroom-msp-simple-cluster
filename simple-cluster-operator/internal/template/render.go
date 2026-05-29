@@ -32,20 +32,64 @@ const (
 	AnnoSCNamespace  = "simplecluster.apeirora.eu/sc-namespace"
 	AnnoSCPC         = "simplecluster.apeirora.eu/scpc"
 	AnnoResourceName = "simplecluster.apeirora.eu/resource-name"
+	AnnoResourceIdx  = "simplecluster.apeirora.eu/resource-index"
 )
 
-// Render expands resource.Template against (SCPC, SC, predecessors) and
-// returns the resulting object as Unstructured, with apiVersion/kind/name/
+// Predecessor is a sibling ResourceSpec's rendered output, plumbed to a
+// downstream ResourceSpec's Template via .Resources.<name>. Objects holds the
+// live (server-side) object(s); for non-repeated resources len(Objects)==1
+// and Repeated is false, in which case .Resources.<name> is the single object
+// map. For repeated resources Repeated is true and .Resources.<name> is the
+// slice of N object maps in index order.
+type Predecessor struct {
+	Repeated bool
+	Objects  []*unstructured.Unstructured
+}
+
+// Render expands resource.Template against (SCPC, SC, predecessors). When
+// resource.Repeat is unset it returns a single-element slice; when set, the
+// Repeat template is evaluated to N and the body is rendered N times with
+// .Index and .Prev in scope. Each returned object has apiVersion/kind/name/
 // namespace forced from the ResourceSpec and tracking annotations applied.
-// predecessors[name] is the live unstructured object of each name listed in
-// resource.DependsOn; it is exposed to the template as .Resources.<name>.
 func Render(
 	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 	sc *showroomv1alpha1.SimpleCluster,
 	resource *showroomv1alpha1.ResourceSpec,
-	predecessors map[string]*unstructured.Unstructured,
+	predecessors map[string]Predecessor,
+) ([]*unstructured.Unstructured, error) {
+	n := 1
+	repeated := resource.Repeat != ""
+	if repeated {
+		var err error
+		n, err = EvaluateRepeat(scpc, sc, resource, predecessors)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	out := make([]*unstructured.Unstructured, 0, n)
+	prev := make([]map[string]any, 0, n)
+	for i := 0; i < n; i++ {
+		obj, err := renderOne(scpc, sc, resource, predecessors, repeated, i, prev)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, obj)
+		prev = append(prev, obj.Object)
+	}
+	return out, nil
+}
+
+func renderOne(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	resource *showroomv1alpha1.ResourceSpec,
+	predecessors map[string]Predecessor,
+	repeated bool,
+	index int,
+	prev []map[string]any,
 ) (*unstructured.Unstructured, error) {
-	ctx, err := BuildContext(scpc, sc, resource, predecessors)
+	ctx, err := buildContext(scpc, sc, resource, predecessors, repeated, index, prev)
 	if err != nil {
 		return nil, err
 	}
@@ -60,14 +104,12 @@ func Render(
 		return nil, fmt.Errorf("parse rendered yaml: %w", err)
 	}
 
-	targetName := ctx["Target"].(map[string]any)["name"].(string)
-	targetNamespace := ctx["Target"].(map[string]any)["namespace"].(string)
-
+	target := ctx["Target"].(map[string]any)
 	obj.SetAPIVersion(resource.APIVersion)
 	obj.SetKind(resource.Kind)
-	obj.SetName(targetName)
-	if targetNamespace != "" {
-		obj.SetNamespace(targetNamespace)
+	obj.SetName(target["name"].(string))
+	if ns := target["namespace"].(string); ns != "" {
+		obj.SetNamespace(ns)
 	}
 
 	annos := obj.GetAnnotations()
@@ -78,19 +120,61 @@ func Render(
 	annos[AnnoSCNamespace] = sc.Namespace
 	annos[AnnoSCPC] = scpc.Name
 	annos[AnnoResourceName] = resource.Name
+	if repeated {
+		annos[AnnoResourceIdx] = strconv.Itoa(index)
+	}
 	obj.SetAnnotations(annos)
-
 	return obj, nil
 }
 
-// BuildContext builds the render context (.SC, .Inputs, .Target, .Resources)
-// used by Render. Exported so callers (notably the kubeconfig SecretRef
-// strategy) can render auxiliary templates with the same semantics.
+// EvaluateRepeat renders resource.Repeat and parses the result as a
+// non-negative integer. .Index / .Prev are NOT in scope.
+func EvaluateRepeat(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	resource *showroomv1alpha1.ResourceSpec,
+	predecessors map[string]Predecessor,
+) (int, error) {
+	ctx, err := buildContext(scpc, sc, resource, predecessors, false, 0, nil)
+	if err != nil {
+		return 0, err
+	}
+	raw, err := RenderString(resource.Name+".repeat", resource.Repeat, ctx)
+	if err != nil {
+		return 0, fmt.Errorf("render repeat: %w", err)
+	}
+	raw = strings.TrimSpace(raw)
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("repeat %q is not an integer", raw)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("repeat %d must be >= 0", n)
+	}
+	return n, nil
+}
+
+// BuildContext builds the render context (.SC, .Inputs, .Target, .Resources,
+// .Index, .Prev) used by Render. Exported so callers (notably the kubeconfig
+// SecretRef strategy) can render auxiliary templates with the same semantics.
+// For auxiliary templates the resource is treated as non-repeated.
 func BuildContext(
 	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 	sc *showroomv1alpha1.SimpleCluster,
 	resource *showroomv1alpha1.ResourceSpec,
-	predecessors map[string]*unstructured.Unstructured,
+	predecessors map[string]Predecessor,
+) (map[string]any, error) {
+	return buildContext(scpc, sc, resource, predecessors, false, 0, nil)
+}
+
+func buildContext(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	resource *showroomv1alpha1.ResourceSpec,
+	predecessors map[string]Predecessor,
+	repeated bool,
+	index int,
+	prev []map[string]any,
 ) (map[string]any, error) {
 	inputs, err := buildInputs(scpc.Spec.Inputs, sc.Spec.Inputs)
 	if err != nil {
@@ -101,12 +185,26 @@ func BuildContext(
 	if targetNamespace == "" {
 		targetNamespace = scpc.Spec.Target.Namespace
 	}
-	targetName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
+	baseName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
+	targetName := baseName
+	if repeated {
+		targetName = fmt.Sprintf("%s-%d", baseName, index)
+	}
 
 	resourcesCtx := make(map[string]any, len(predecessors))
-	for name, obj := range predecessors {
-		if obj != nil {
-			resourcesCtx[name] = obj.Object
+	for name, p := range predecessors {
+		if p.Repeated {
+			objs := make([]any, 0, len(p.Objects))
+			for _, o := range p.Objects {
+				if o != nil {
+					objs = append(objs, o.Object)
+				}
+			}
+			resourcesCtx[name] = objs
+			continue
+		}
+		if len(p.Objects) > 0 && p.Objects[0] != nil {
+			resourcesCtx[name] = p.Objects[0].Object
 		}
 	}
 
@@ -121,6 +219,11 @@ func BuildContext(
 		scCtx["controlPlane"] = controlPlaneContext(*sc.Spec.ControlPlane)
 	}
 
+	prevAny := make([]any, 0, len(prev))
+	for _, p := range prev {
+		prevAny = append(prevAny, p)
+	}
+
 	return map[string]any{
 		"SC":     scCtx,
 		"Inputs": inputs,
@@ -130,21 +233,17 @@ func BuildContext(
 			"kind":      resource.Kind,
 		},
 		"Resources": resourcesCtx,
+		"Index":     index,
+		"Prev":      prevAny,
 	}, nil
 }
 
 // workersContext flattens WorkersSpec into the .SC.workers template map.
-// MaxNodes defaults to Nodes when unset (no autoscaling). Requested
-// quantities are stringified so templates emit canonical values
+// Requested quantities are stringified so templates emit canonical values
 // (e.g. "16", "32Gi").
 func workersContext(w showroomv1alpha1.WorkersSpec) map[string]any {
-	maxNodes := w.Nodes
-	if w.MaxNodes != nil {
-		maxNodes = *w.MaxNodes
-	}
 	out := map[string]any{
-		"nodes":    w.Nodes,
-		"maxNodes": maxNodes,
+		"nodes": w.Nodes,
 	}
 	if r := nodeResourcesContext(w.Requested); r != nil {
 		out["requested"] = r

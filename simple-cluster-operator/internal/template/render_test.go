@@ -11,6 +11,7 @@ You may obtain a copy of the License at
 package template
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,10 +59,14 @@ data:
 `,
 	}
 
-	obj, err := Render(scpc, sc, r, nil)
+	objs, err := Render(scpc, sc, r, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
+	if len(objs) != 1 {
+		t.Fatalf("Render: expected 1 object, got %d", len(objs))
+	}
+	obj := objs[0]
 	if obj.GetAPIVersion() != "v1" || obj.GetKind() != "ConfigMap" {
 		t.Errorf("apiVersion/kind not enforced: got %s/%s", obj.GetAPIVersion(), obj.GetKind())
 	}
@@ -110,11 +115,13 @@ data:
 `,
 	}
 
-	obj, err := Render(scpc, sc, r, map[string]*unstructured.Unstructured{"network": predecessor})
+	objs, err := Render(scpc, sc, r, map[string]Predecessor{
+		"network": {Objects: []*unstructured.Unstructured{predecessor}},
+	})
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+	data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
 	if data["network"] != "net-1234" {
 		t.Errorf("predecessor field not read: %q", data["network"])
 	}
@@ -179,10 +186,14 @@ data:
   d: "{{ .Inputs.d }}"
 `,
 	}
-	obj, err := Render(scpc, sc, r, nil)
+	objs, err := Render(scpc, sc, r, nil)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
+	if len(objs) != 1 {
+		t.Fatalf("Render: expected 1 object, got %d", len(objs))
+	}
+	obj := objs[0]
 	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
 	if data["i"] != "8" {
 		t.Errorf("int + 1 expected 8, got %q", data["i"])
@@ -210,11 +221,11 @@ func TestRender_EnumInput(t *testing.T) {
 			Name: "config", APIVersion: "v1", Kind: "ConfigMap",
 			Template: "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\ndata:\n  region: \"{{ .Inputs.region }}\"\n",
 		}
-		obj, err := Render(scpc, sc, r, nil)
+		objs, err := Render(scpc, sc, r, nil)
 		if err != nil {
 			t.Fatalf("Render: %v", err)
 		}
-		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+		data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
 		if data["region"] != "eu-de-1" {
 			t.Errorf("enum default not substituted: %q", data["region"])
 		}
@@ -226,11 +237,11 @@ func TestRender_EnumInput(t *testing.T) {
 			Name: "config", APIVersion: "v1", Kind: "ConfigMap",
 			Template: "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\ndata:\n  region: \"{{ .Inputs.region }}\"\n",
 		}
-		obj, err := Render(scpc, sc, r, nil)
+		objs, err := Render(scpc, sc, r, nil)
 		if err != nil {
 			t.Fatalf("Render: %v", err)
 		}
-		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+		data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
 		if data["region"] != "us-east-1" {
 			t.Errorf("enum override not substituted: %q", data["region"])
 		}
@@ -261,6 +272,115 @@ func TestRender_EnvFuncRemoved(t *testing.T) {
 	_, err := Render(scpc, sc, r, nil)
 	if err == nil {
 		t.Fatal("expected error: env should be removed from sprig funcs")
+	}
+}
+
+func TestRender_Repeat(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	sc := minimalSC(3, nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "vm",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Repeat:     "{{ .SC.workers.nodes }}",
+		Template: `apiVersion: v1
+kind: ConfigMap
+metadata: {name: x}
+data:
+  idx: "{{ .Index }}"
+  priors: "{{ len .Prev }}"
+`,
+	}
+	objs, err := Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if len(objs) != 3 {
+		t.Fatalf("expected 3 objects, got %d", len(objs))
+	}
+	for i, obj := range objs {
+		wantName := "foo-vm-" + strconv.Itoa(i)
+		if obj.GetName() != wantName {
+			t.Errorf("obj %d: name=%q want %q", i, obj.GetName(), wantName)
+		}
+		if obj.GetAnnotations()[AnnoResourceIdx] != strconv.Itoa(i) {
+			t.Errorf("obj %d: index anno = %q", i, obj.GetAnnotations()[AnnoResourceIdx])
+		}
+		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
+		if data["idx"] != strconv.Itoa(i) {
+			t.Errorf("obj %d: .Index = %q", i, data["idx"])
+		}
+		if data["priors"] != strconv.Itoa(i) {
+			t.Errorf("obj %d: len(.Prev) = %q want %d", i, data["priors"], i)
+		}
+	}
+}
+
+func TestRender_RepeatedPredecessorSliceExposed(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	sc := minimalSC(2, nil)
+	pred0 := &unstructured.Unstructured{Object: map[string]any{"status": map[string]any{"ip": "10.0.0.1"}}}
+	pred1 := &unstructured.Unstructured{Object: map[string]any{"status": map[string]any{"ip": "10.0.0.2"}}}
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "svc",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		DependsOn:  []string{"vm"},
+		Template: `apiVersion: v1
+kind: ConfigMap
+metadata: {name: x}
+data:
+  first: "{{ (index .Resources.vm 0).status.ip }}"
+  count: "{{ len .Resources.vm }}"
+`,
+	}
+	objs, err := Render(scpc, sc, r, map[string]Predecessor{
+		"vm": {Repeated: true, Objects: []*unstructured.Unstructured{pred0, pred1}},
+	})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["first"] != "10.0.0.1" {
+		t.Errorf("indexed predecessor field = %q", data["first"])
+	}
+	if data["count"] != "2" {
+		t.Errorf("len predecessor slice = %q", data["count"])
+	}
+}
+
+func TestRender_RepeatZero(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	sc := minimalSC(1, nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "vm",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Repeat:     "0",
+		Template:   "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n",
+	}
+	objs, err := Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if len(objs) != 0 {
+		t.Errorf("expected 0 objects, got %d", len(objs))
+	}
+}
+
+func TestRender_RepeatBadValue(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	sc := minimalSC(1, nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "vm",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Repeat:     "abc",
+		Template:   "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n",
+	}
+	_, err := Render(scpc, sc, r, nil)
+	if err == nil || !strings.Contains(err.Error(), "is not an integer") {
+		t.Fatalf("expected integer-parse error, got %v", err)
 	}
 }
 
