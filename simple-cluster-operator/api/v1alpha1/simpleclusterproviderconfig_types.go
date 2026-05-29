@@ -125,6 +125,18 @@ type ResourceSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Template string `json:"template"`
 
+	// Repeat, when set, fans this ResourceSpec out to N target resources.
+	// The value is a Go template (same engine as Template, with .SC /
+	// .Inputs / .Resources in scope but NOT .Index / .Prev) that MUST
+	// render to a non-negative integer. Target names get suffixed with
+	// "-<index>" (0-based). Inside Template, .Index is the current
+	// iteration and .Prev is the list of objects rendered so far for this
+	// ResourceSpec. From sibling ResourceSpecs' Templates, .Resources.<name>
+	// is exposed as a list (rather than a single object) when <name> had
+	// Repeat set.
+	// +optional
+	Repeat string `json:"repeat,omitempty"`
+
 	// DependsOn is the list of sibling ResourceSpec names that must reach
 	// Ready before this resource is rendered. Cycles, unknown names, and
 	// self-references are rejected at reconcile-time.
@@ -132,8 +144,9 @@ type ResourceSpec struct {
 	DependsOn []string `json:"dependsOn,omitempty"`
 
 	// Readiness projects R's status into the universal Phase enum.
-	// Optional - when omitted, the operator walks
-	// R.status.conditions[type=Ready].
+	// Optional - when omitted, the operator reads R.status.phase and treats
+	// "Ready" as Ready, "Failed"/"Error" as Failed, empty/missing as
+	// Pending, and any other value as Provisioning.
 	// +optional
 	Readiness *ReadinessCheck `json:"readiness,omitempty"`
 

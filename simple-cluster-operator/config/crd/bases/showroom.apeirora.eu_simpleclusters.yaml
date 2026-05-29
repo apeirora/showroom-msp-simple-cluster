@@ -131,20 +131,10 @@ spec:
               workers:
                 description: |-
                   Workers describes the worker pool sizing and per-worker resources.
-                  Exposed to templates as .SC.workers.{nodes,maxNodes,requested.{cpu,memory}}.
+                  Exposed to templates as .SC.workers.{nodes,requested.{cpu,memory}}.
                 properties:
-                  maxNodes:
-                    description: |-
-                      MaxNodes is the autoscaling ceiling. Defaults to Nodes when omitted
-                      (no autoscaling). Surfaced as .SC.workers.maxNodes.
-                    format: int32
-                    maximum: 100
-                    minimum: 1
-                    type: integer
                   nodes:
-                    description: |-
-                      Nodes is the worker count (autoscaling floor when MaxNodes is set).
-                      Surfaced as .SC.workers.nodes.
+                    description: Nodes is the worker count. Surfaced as .SC.workers.nodes.
                     format: int32
                     maximum: 100
                     minimum: 1
@@ -309,12 +299,60 @@ spec:
                   Resources is per-ResourceSpec status, keyed by Name. Populated as the
                   DAG progresses.
                 items:
-                  description: ResourceStatus mirrors the live state of one node in
-                    the SCPC's DAG into SC.
+                  description: |-
+                    ResourceStatus mirrors the live state of one node in the SCPC's DAG into SC.
+                    For repeated ResourceSpecs (ResourceSpec.Repeat set) the per-index detail
+                    lives in Instances and the top-level Phase/Reason/Message is the aggregate.
                   properties:
                     gvk:
                       description: GVK is the resolved GroupVersionKind of R.
                       type: string
+                    instances:
+                      description: |-
+                        Instances lists per-index state when the ResourceSpec is repeated.
+                        Empty for non-repeated ResourceSpecs.
+                      items:
+                        description: InstanceStatus is one R-object's state when its
+                          ResourceSpec is repeated.
+                        properties:
+                          index:
+                            description: Index is the 0-based iteration this entry
+                              tracks.
+                            format: int32
+                            type: integer
+                          lastError:
+                            description: LastError mirrors a human-readable error
+                              string from R.
+                            type: string
+                          lastOperation:
+                            description: LastOperation mirrors a human-readable progress
+                              string from R.
+                            type: string
+                          phase:
+                            description: Phase is this instance's coarse state.
+                            enum:
+                            - Pending
+                            - Provisioning
+                            - Ready
+                            - Failed
+                            - Deleting
+                            type: string
+                          targetName:
+                            description: TargetName is the name of this R-object on
+                              the target cluster.
+                            type: string
+                          targetNamespace:
+                            description: TargetNamespace is the namespace of this
+                              R-object.
+                            type: string
+                        required:
+                        - index
+                        - targetName
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - index
+                      x-kubernetes-list-type: map
                     lastError:
                       description: LastError mirrors a human-readable error string
                         from R itself.
@@ -332,7 +370,10 @@ spec:
                       description: Name matches ResourceSpec.Name.
                       type: string
                     phase:
-                      description: Phase is this resource's coarse state.
+                      description: |-
+                        Phase is this resource's coarse state. For repeated specs it is
+                        aggregated across Instances (Ready iff all instances Ready; Failed
+                        if any instance Failed; otherwise Provisioning/Pending).
                       enum:
                       - Pending
                       - Provisioning
@@ -352,7 +393,9 @@ spec:
                       - Deleting
                       type: string
                     targetName:
-                      description: TargetName is the name of R on the target cluster.
+                      description: |-
+                        TargetName is the name of R on the target cluster. Empty when the
+                        ResourceSpec is repeated; see Instances for per-index names.
                       type: string
                     targetNamespace:
                       description: TargetNamespace is the namespace of R on the target
