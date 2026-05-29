@@ -1,20 +1,24 @@
+# This will install k3s cluster on ubuntu machines.
+# Bastion topology:
+# - bootstrap CP needs `externalAddress` — operator SSHes there directly.
 apiVersion: ubuntu.apeirora.eu/v1alpha1
 kind: UbuntuCluster
 metadata:
   name: ubuntu-cluster-sample
 spec:
-  version: "v1.31.4+k3s1" # # Optional. Empty = operator's default .
+  version: "v1.31.4+k3s1" # Optional. Empty = operator's default.
   ssh:
-    user: root
+    user: ubuntu-cluster
     privateKeySecretRef:
-      name: ubuntu-ssh
+      name: ubuntu-cluster-sample-ssh
   controlPlane:
     hosts:
       - name: cp-0
-        address: ubuntu0.host
+        address: 10.128.0.10          # internal IP — for k3s peer/agent
+        externalAddress: 10.128.0.10  # public IP
   workers:
     hosts:
       - name: worker-0
-        address: ubuntu-worker0.host
+        address: 10.128.0.9       # internal address
       - name: worker-1
-        address: ubuntu-worker1.host
+        address: 10.128.0.11      # internal address
