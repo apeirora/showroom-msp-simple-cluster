@@ -172,16 +172,15 @@ type UbuntuClusterStatus struct {
 	// +optional
 	Hosts int32 `json:"hosts,omitempty"`
 
-	// CPWorkers is "<controlPlanes>/<workers>" — declared counts from
-	// the spec, surfaced as the CP_WKR printer column.
+	// CP is "<readyControlPlanes>/<declaredControlPlanes>" — surfaced
+	// as the CP printer column (e.g. "1/3").
 	// +optional
-	CPWorkers string `json:"cpWorkers,omitempty"`
+	CP string `json:"cp,omitempty"`
 
-	// ReadyCPWorkers is "<readyControlPlanes>/<readyWorkers>" — counts
-	// of hosts the operator has driven to Ready, surfaced as the
-	// READY_CP_WKR printer column.
+	// WKR is "<readyWorkers>/<declaredWorkers>" — surfaced as the
+	// WKR printer column (e.g. "0/2").
 	// +optional
-	ReadyCPWorkers string `json:"readyCPWorkers,omitempty"`
+	WKR string `json:"wkr,omitempty"`
 
 	// HostStatuses lists per-host install state, keyed by name.
 	// +listType=map
@@ -222,8 +221,8 @@ type HostStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="CP_WKR",type=string,JSONPath=`.status.cpWorkers`
-// +kubebuilder:printcolumn:name="READY_CP_WKR",type=string,JSONPath=`.status.readyCPWorkers`
+// +kubebuilder:printcolumn:name="CP",type=string,JSONPath=`.status.cp`
+// +kubebuilder:printcolumn:name="WKR",type=string,JSONPath=`.status.wkr`
 // +kubebuilder:printcolumn:name="K3s",type=string,JSONPath=`.status.k3sVersion`
 // +kubebuilder:printcolumn:name="Kubeconfig",type=string,JSONPath=`.status.kubeconfigSecretRef.name`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
