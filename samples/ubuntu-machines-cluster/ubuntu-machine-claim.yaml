@@ -1,0 +1,9 @@
+apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+kind: UbuntuMachineClaim
+metadata:
+  name: ubuntu-machine-claim-test
+spec:
+  externalAddressRequired: true       # only machines with a non-empty externalAddress qualify
+  required:
+    cpu: 2
+    memory: 2Gi
