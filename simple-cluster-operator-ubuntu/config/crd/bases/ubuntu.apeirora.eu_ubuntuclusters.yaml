@@ -11,8 +11,6 @@ spec:
     kind: UbuntuCluster
     listKind: UbuntuClusterList
     plural: ubuntuclusters
-    shortNames:
-    - ubuc
     singular: ubuntucluster
   scope: Namespaced
   versions:
@@ -20,12 +18,12 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.readyHosts
-      name: Ready
-      type: integer
-    - jsonPath: .status.hosts
-      name: Hosts
-      type: integer
+    - jsonPath: .status.cpWorkers
+      name: CP_WKR
+      type: string
+    - jsonPath: .status.readyCPWorkers
+      name: READY_CP_WKR
+      type: string
     - jsonPath: .status.k3sVersion
       name: K3s
       type: string
@@ -96,6 +94,8 @@ spec:
                         address:
                           minLength: 1
                           type: string
+                        externalAddress:
+                          type: string
                       required:
                       - address
                       - name
@@ -117,6 +117,8 @@ spec:
                           type: string
                         address:
                           minLength: 1
+                          type: string
+                        externalAddress:
                           type: string
                       required:
                       - address
@@ -168,6 +170,10 @@ spec:
               hosts:
                 format: int32
                 type: integer
+              cpWorkers:
+                type: string
+              readyCPWorkers:
+                type: string
               hostStatuses:
                 items:
                   properties:

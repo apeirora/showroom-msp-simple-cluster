@@ -127,11 +127,20 @@ type Host struct {
 	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name"`
 
-	// Address is the IP or DNS name the operator dials over SSH. For
-	// CP hosts this is also where peers/agents call the API server
-	// when ControlPlaneEndpoint is empty.
+	// Address is the host's internal IP/DNS name — the address other
+	// cluster members use for k3s peer/agent traffic. Operator dials
+	// here too unless ExternalAddress is set or the host sits behind
+	// the bootstrap CP (bastion routing).
 	// +kubebuilder:validation:MinLength=1
 	Address string `json:"address"`
+
+	// ExternalAddress is the host's public IP/DNS name when one exists.
+	// The bootstrap control-plane MUST have one — operator SSHes there
+	// directly and uses it for the kubeconfig and TLS-SAN. Workers and
+	// additional CPs typically omit it: operator reaches them via the
+	// bootstrap CP as a ProxyJump bastion.
+	// +optional
+	ExternalAddress string `json:"externalAddress,omitempty"`
 }
 
 // UbuntuClusterStatus is the observed state.
@@ -162,6 +171,17 @@ type UbuntuClusterStatus struct {
 	ReadyHosts int32 `json:"readyHosts,omitempty"`
 	// +optional
 	Hosts int32 `json:"hosts,omitempty"`
+
+	// CPWorkers is "<controlPlanes>/<workers>" — declared counts from
+	// the spec, surfaced as the CP_WKR printer column.
+	// +optional
+	CPWorkers string `json:"cpWorkers,omitempty"`
+
+	// ReadyCPWorkers is "<readyControlPlanes>/<readyWorkers>" — counts
+	// of hosts the operator has driven to Ready, surfaced as the
+	// READY_CP_WKR printer column.
+	// +optional
+	ReadyCPWorkers string `json:"readyCPWorkers,omitempty"`
 
 	// HostStatuses lists per-host install state, keyed by name.
 	// +listType=map
@@ -201,10 +221,9 @@ type HostStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=ubuc
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyHosts`
-// +kubebuilder:printcolumn:name="Hosts",type=integer,JSONPath=`.status.hosts`
+// +kubebuilder:printcolumn:name="CP_WKR",type=string,JSONPath=`.status.cpWorkers`
+// +kubebuilder:printcolumn:name="READY_CP_WKR",type=string,JSONPath=`.status.readyCPWorkers`
 // +kubebuilder:printcolumn:name="K3s",type=string,JSONPath=`.status.k3sVersion`
 // +kubebuilder:printcolumn:name="Kubeconfig",type=string,JSONPath=`.status.kubeconfigSecretRef.name`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

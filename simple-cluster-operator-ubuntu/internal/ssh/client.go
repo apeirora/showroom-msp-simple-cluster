@@ -80,6 +80,59 @@ func Dial(ctx context.Context, host string, port int, user string, privateKeyPEM
 	}
 }
 
+// DialVia opens an SSH connection to host:port routed through an
+// existing bastion connection (ProxyJump pattern). The caller MUST
+// call Close. The bastion is reused — its lifetime must outlive the
+// returned Client.
+func DialVia(ctx context.Context, bastion *Client, host string, port int, user string, privateKeyPEM []byte) (*Client, error) {
+	if bastion == nil || bastion.conn == nil {
+		return nil, fmt.Errorf("ssh DialVia: bastion is nil")
+	}
+	if port == 0 {
+		port = DefaultPort
+	}
+	signer, err := cryptossh.ParsePrivateKey(privateKeyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("parse ssh private key: %w", err)
+	}
+	cfg := &cryptossh.ClientConfig{
+		User:            user,
+		Auth:            []cryptossh.AuthMethod{cryptossh.PublicKeys(signer)},
+		HostKeyCallback: cryptossh.InsecureIgnoreHostKey(),
+		Timeout:         dialTimeout,
+	}
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+
+	type dialResult struct {
+		c   *cryptossh.Client
+		err error
+	}
+	ch := make(chan dialResult, 1)
+	go func() {
+		netConn, err := bastion.conn.Dial("tcp", addr)
+		if err != nil {
+			ch <- dialResult{nil, fmt.Errorf("bastion tcp dial %s: %w", addr, err)}
+			return
+		}
+		sshConn, chans, reqs, err := cryptossh.NewClientConn(netConn, addr, cfg)
+		if err != nil {
+			_ = netConn.Close()
+			ch <- dialResult{nil, fmt.Errorf("ssh handshake via bastion %s@%s: %w", user, addr, err)}
+			return
+		}
+		ch <- dialResult{cryptossh.NewClient(sshConn, chans, reqs), nil}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-ch:
+		if r.err != nil {
+			return nil, r.err
+		}
+		return &Client{conn: r.c}, nil
+	}
+}
+
 // Close shuts down the underlying SSH connection.
 func (c *Client) Close() error {
 	if c == nil || c.conn == nil {
