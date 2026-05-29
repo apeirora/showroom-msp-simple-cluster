@@ -1,5 +1,0 @@
-## simple-cluster-operator + kind-cluster-operator: SC → KindCluster → real kind cluster on host docker.
-resources:
-  - permissions.yaml
-  - showroom_v1alpha1_simpleclusterproviderconfig_kind-on-host.yaml
-  - showroom_v1alpha1_simplecluster.yaml
