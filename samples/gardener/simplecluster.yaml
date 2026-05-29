@@ -3,7 +3,7 @@ kind: SimpleCluster
 metadata:
   # Keep the SC name short: Gardener enforces a 21-char cap on
   # <project>-<shoot> across project+namePrefix+SC.name.
-  name: simple-cluster-gardener-sample
+  name: gardener-sample
 spec:
   controlPlane:
     nodes: 1
@@ -12,7 +12,6 @@ spec:
       memory: 16Gi
   workers:
     nodes: 1
-    maxNodes: 4
     requested:
       cpu: 4
       memory: 8Gi
