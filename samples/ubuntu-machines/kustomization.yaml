@@ -1,0 +1,4 @@
+resources:
+  - sshkey-sample-prv-key.yaml
+  - ubuntu-machines.yaml
+#  - ubuntu-machine-claim.yaml

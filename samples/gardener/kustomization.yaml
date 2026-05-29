@@ -1,6 +1,6 @@
 ## Gardener-targeted SCPCs (create Shoots on remote Gardener clusters).
 resources:
-  - showroom_v1alpha1_simpleclusterproviderconfig_dati-openstack.yaml
-  - showroom_v1alpha1_simpleclusterproviderconfig_sap-openstack.yaml
-  - showroom_v1alpha1_simpleclusterproviderconfig_sap-ironcore.yaml
-  - showroom_v1alpha1_simplecluster.yaml
+  - scpc-gardener-dati-openstack.yaml
+  - scpc-gardener-sap-openstack.yaml
+  - scpc-gardener-sap-ironcore.yaml
+  - simplecluster.yaml
