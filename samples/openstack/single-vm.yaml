@@ -1,0 +1,18 @@
+# Standalone OpenStackVM example
+apiVersion: openstack.apeirora.eu/v1alpha1
+kind: OpenStackVM
+metadata:
+  name: single-vm-sample
+spec:
+  credentialsRef:
+    name: openstack-creds
+  network: cloud_080745_1
+  floatingIPPool: external
+  securityGroups:
+    - default
+  resources:
+    cpu: 4
+    memory: 4Gi
+    flavorPattern: '^eo[12]a\.'
+  image: "Ubuntu 24.04 LTS"
+  floatingIP: true
