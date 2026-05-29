@@ -195,6 +195,17 @@ type SimpleClusterStatus struct {
 	// +optional
 	KubeconfigExpiresAt *metav1.Time `json:"kubeconfigExpiresAt,omitempty"`
 
+	// CP is "<readyControlPlanes>/<declaredControlPlanes>" — surfaced
+	// as the CP printer column (e.g. "1/3"). "-/-" when the SCPC owns
+	// the control plane (spec.controlPlane is omitted).
+	// +optional
+	CP string `json:"cp,omitempty"`
+
+	// WKR is "<readyWorkers>/<declaredWorkers>" — surfaced as the
+	// WKR printer column (e.g. "0/2").
+	// +optional
+	WKR string `json:"wkr,omitempty"`
+
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
@@ -208,7 +219,8 @@ type SimpleClusterStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=simc
 // +kubebuilder:printcolumn:name="SCPC",type=string,JSONPath=`.status.providerConfigRef.name`
-// +kubebuilder:printcolumn:name="Workers",type=integer,JSONPath=`.spec.workers.nodes`
+// +kubebuilder:printcolumn:name="CP",type=string,JSONPath=`.status.cp`
+// +kubebuilder:printcolumn:name="WKR",type=string,JSONPath=`.status.wkr`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Kubeconfig",type=string,JSONPath=`.status.kubeconfigSecretRef.name`
 // +kubebuilder:printcolumn:name="Kubeconfig Expires",type=string,JSONPath=`.status.kubeconfigExpiresAt`
