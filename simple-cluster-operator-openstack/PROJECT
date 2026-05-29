@@ -15,7 +15,7 @@ resources:
   controller: true
   domain: apeirora.eu
   group: openstack
-  kind: OpenStackVMSet
+  kind: OpenStackVM
   path: github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1
   version: v1alpha1
 version: "3"

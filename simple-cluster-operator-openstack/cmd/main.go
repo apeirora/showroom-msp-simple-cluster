@@ -55,19 +55,19 @@ func main() {
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "openstackvmset.apeirora.eu",
+		LeaderElectionID:       "openstackvm.apeirora.eu",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err := (&controller.OpenStackVMSetReconciler{
+	if err := (&controller.OpenStackVMReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("openstackvmset"),
+		Recorder: mgr.GetEventRecorderFor("openstackvm"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpenStackVMSet")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenStackVM")
 		os.Exit(1)
 	}
 

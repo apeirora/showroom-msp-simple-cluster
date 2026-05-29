@@ -1,2 +1,2 @@
 resources:
-  - bases/openstack.apeirora.eu_openstackvmsets.yaml
+  - bases/openstack.apeirora.eu_openstackvms.yaml
