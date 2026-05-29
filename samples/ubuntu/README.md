@@ -37,8 +37,8 @@ kubectl describe ubuntucluster.spec ubuntu-cluster-sample
 ### Verify
 
 ```sh
-kubectl get secret demo-kubeconfig -o jsonpath='{.data.kubeconfig}' | base64 -d > /tmp/k3s.yaml
-KUBECONFIG=/tmp/k3s.yaml kubectl get nodes
+kubectl get secret ubuntu-cluster-sample-kubeconfig -o jsonpath='{.data.kubeconfig}' | base64 -d > /tmp/ubuntu-cluster-sample-kubeconfig.yaml
+kubectl --kubeconfig /tmp/ubuntu-cluster-sample-kubeconfig.yaml get nodes
 ```
 
 ## Cleanup

@@ -105,15 +105,35 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	bootstrap := cps[0]
+	// endpoint = external (kubeconfig URL, TLS SAN). Falls back to
+	// bootstrap.ExternalAddress, then bootstrap.Address.
 	endpoint := cluster.Spec.ControlPlaneEndpoint
+	if endpoint == "" {
+		endpoint = bootstrap.ExternalAddress
+	}
 	if endpoint == "" {
 		endpoint = bootstrap.Address
 	}
-	endpointURL := apiURLFromEndpoint(endpoint)
+	// internalEndpoint = internal (k3s server-join + agent URL). Always
+	// the bootstrap CP's internal Address.
+	internalEndpoint := bootstrap.Address
+	internalEndpointURL := apiURLFromEndpoint(internalEndpoint)
 
 	hostStatuses := make([]ubuntuv1alpha1.HostStatus, 0, len(cps)+len(cluster.Spec.Workers.Hosts))
 	ready := int32(0)
 	allReady := true
+
+	// Leave Init as soon as credentials + spec validate, so users see
+	// CP_WKR / Phase=Provisioning while the (slow) install runs.
+	if cluster.Status.Phase == ubuntuv1alpha1.PhaseInit {
+		patch := client.MergeFrom(cluster.DeepCopy())
+		cluster.Status.Phase = ubuntuv1alpha1.PhaseProvisioning
+		setRoleCounts(&cluster, hostStatuses)
+		if err := r.Status().Patch(ctx, &cluster, patch); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	failHost := func(name, role, address, msg string) {
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
 			Name: name, Role: role, Address: address,
@@ -125,7 +145,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// ----- bootstrap control-plane -----
 	r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 		"control-plane bootstrap on %s (%s)", bootstrap.Name, bootstrap.Address)
-	bootstrapClient, err := r.dial(ctx, &cluster, bootstrap, privateKey)
+	bootstrapClient, err := r.dialBootstrap(ctx, &cluster, bootstrap, privateKey)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
 		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
@@ -177,17 +197,32 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	})
 	ready++
 
+	// Bootstrap CP is up — flush K3s, kubeconfig ref and CP_WKR counts
+	// to status so they don't stay empty while workers install.
+	{
+		patch := client.MergeFrom(cluster.DeepCopy())
+		cluster.Status.ControlPlaneEndpoint = endpoint
+		cluster.Status.K3sVersion = k3sVersion
+		cluster.Status.KubeconfigSecretRef = &corev1.LocalObjectReference{Name: secretName}
+		cluster.Status.HostStatuses = hostStatuses
+		cluster.Status.ReadyHosts = ready
+		cluster.Status.Hosts = int32(len(hostStatuses))
+		setRoleCounts(&cluster, hostStatuses)
+		if err := r.Status().Patch(ctx, &cluster, patch); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// ----- additional control-plane nodes -----
-	bootstrapURL := apiURLFromEndpoint(bootstrap.Address)
 	for _, h := range cps[1:] {
 		r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 			"control-plane join %s (%s)", h.Name, h.Address)
-		ok, ver, msg := r.installRole(ctx, &cluster, h, privateKey, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
+		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, privateKey, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
 			return k3s.InstallServerJoin(ctx, c, k3s.InstallOptions{
 				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sServerArgs,
 				TLSSAN:    hostOnly(endpoint),
-			}, bootstrapURL, token)
+			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
 			Name: h.Name, Role: ubuntuv1alpha1.RoleControlPlane, Address: h.Address,
@@ -204,11 +239,11 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	for _, h := range cluster.Spec.Workers.Hosts {
 		r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 			"worker join %s (%s)", h.Name, h.Address)
-		ok, ver, msg := r.installRole(ctx, &cluster, h, privateKey, ubuntuv1alpha1.RoleWorker, func(c *sshpkg.Client) error {
+		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, privateKey, ubuntuv1alpha1.RoleWorker, func(c *sshpkg.Client) error {
 			return k3s.InstallAgent(ctx, c, k3s.InstallOptions{
 				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sAgentArgs,
-			}, endpointURL, token)
+			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
 			Name: h.Name, Role: ubuntuv1alpha1.RoleWorker, Address: h.Address,
@@ -222,6 +257,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// ----- terminal status patch -----
+	prevPhase := cluster.Status.Phase
 	patch := client.MergeFrom(cluster.DeepCopy())
 	cluster.Status.ControlPlaneEndpoint = endpoint
 	cluster.Status.K3sVersion = k3sVersion
@@ -229,6 +265,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	cluster.Status.HostStatuses = hostStatuses
 	cluster.Status.ReadyHosts = ready
 	cluster.Status.Hosts = int32(len(hostStatuses))
+	setRoleCounts(&cluster, hostStatuses)
 	cluster.Status.ObservedGeneration = cluster.Generation
 	if allReady {
 		cluster.Status.Phase = ubuntuv1alpha1.PhaseReady
@@ -252,15 +289,49 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
+	if allReady && prevPhase != ubuntuv1alpha1.PhaseReady {
+		r.eventf(&cluster, corev1.EventTypeNormal, "InstallationCompleted",
+			"k3s installed on all %d hosts (CP_WKR %s)", len(hostStatuses), cluster.Status.CPWorkers)
+	}
+
 	if allReady {
 		return ctrl.Result{RequeueAfter: requeueReady}, nil
 	}
 	return ctrl.Result{RequeueAfter: requeueWorking}, nil
 }
 
-// dial wraps sshpkg.Dial with the cluster's SSH user + port.
-func (r *UbuntuClusterReconciler) dial(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, privateKey []byte) (*sshpkg.Client, error) {
-	return sshpkg.Dial(ctx, h.Address, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, privateKey)
+// dialBootstrap dials the bootstrap CP directly using its external
+// address (falling back to Address if no external is set). Emits
+// success/failure events so operators can spot auth or network issues
+// from `kubectl describe`.
+func (r *UbuntuClusterReconciler) dialBootstrap(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, privateKey []byte) (*sshpkg.Client, error) {
+	target := h.ExternalAddress
+	if target == "" {
+		target = h.Address
+	}
+	c, err := sshpkg.Dial(ctx, target, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, privateKey)
+	if err != nil {
+		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
+			"ssh %s@%s: %s", cluster.Spec.SSH.User, target, err.Error())
+		return nil, err
+	}
+	r.eventf(cluster, corev1.EventTypeNormal, "SSHLoginSucceeded",
+		"ssh %s@%s ok (host %s)", cluster.Spec.SSH.User, target, h.Name)
+	return c, nil
+}
+
+// dialVia dials a non-bootstrap host through the bootstrap CP as a
+// ProxyJump bastion — uses the host's internal Address.
+func (r *UbuntuClusterReconciler) dialVia(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, bastion *sshpkg.Client, h ubuntuv1alpha1.Host, privateKey []byte) (*sshpkg.Client, error) {
+	c, err := sshpkg.DialVia(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, privateKey)
+	if err != nil {
+		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
+			"ssh %s@%s via bastion: %s", cluster.Spec.SSH.User, h.Address, err.Error())
+		return nil, err
+	}
+	r.eventf(cluster, corev1.EventTypeNormal, "SSHLoginSucceeded",
+		"ssh %s@%s ok via bastion (host %s)", cluster.Spec.SSH.User, h.Address, h.Name)
+	return c, nil
 }
 
 // partial writes whatever status we have so far (used when one host
@@ -278,6 +349,7 @@ func (r *UbuntuClusterReconciler) partial(
 	cluster.Status.HostStatuses = hostStatuses
 	cluster.Status.ReadyHosts = ready
 	cluster.Status.Hosts = int32(len(hostStatuses))
+	setRoleCounts(cluster, hostStatuses)
 	cluster.Status.Phase = ubuntuv1alpha1.PhaseProvisioning
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:    ubuntuv1alpha1.ConditionReady,
@@ -303,25 +375,50 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
 	}
 
+	cps := cluster.Spec.ControlPlane.Hosts
+	if len(cps) == 0 {
+		// Nothing to talk to — let finalizer fall off.
+		patch := client.MergeFrom(cluster.DeepCopy())
+		controllerutil.RemoveFinalizer(cluster, ubuntuv1alpha1.FinalizerName)
+		return ctrl.Result{}, r.Patch(ctx, cluster, patch)
+	}
+	bootstrap := cps[0]
+
+	// Open bastion to bootstrap CP; workers + extra CPs go via it.
+	bastion, err := r.dialBootstrap(ctx, cluster, bootstrap, privateKey)
+	if err != nil {
+		log.Error(err, "delete: bastion dial failed; will retry")
+		return ctrl.Result{RequeueAfter: requeueWorking}, nil
+	}
+	defer bastion.Close()
+
 	// Best effort: agents first (so workers stop calling the CP),
-	// then servers. Failures are logged but do not block finalizer
-	// removal forever — the next reconcile retries.
+	// then non-bootstrap servers, then bootstrap last. Failures are
+	// logged but do not block finalizer removal forever — the next
+	// reconcile retries.
 	allOK := true
 	for _, h := range cluster.Spec.Workers.Hosts {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"agent uninstall on %s", h.Name)
-		if err := r.uninstallHost(ctx, cluster, h, privateKey, false); err != nil {
+		if err := r.uninstallVia(ctx, cluster, bastion, h, privateKey, false); err != nil {
 			log.Error(err, "uninstall agent failed", "host", h.Name)
 			allOK = false
 		}
 	}
-	for _, h := range cluster.Spec.ControlPlane.Hosts {
+	for _, h := range cps[1:] {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"server uninstall on %s", h.Name)
-		if err := r.uninstallHost(ctx, cluster, h, privateKey, true); err != nil {
+		if err := r.uninstallVia(ctx, cluster, bastion, h, privateKey, true); err != nil {
 			log.Error(err, "uninstall server failed", "host", h.Name)
 			allOK = false
 		}
+	}
+	// Bootstrap last — its bastion session is dropped right after.
+	r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
+		"server uninstall on %s", bootstrap.Name)
+	if err := k3s.UninstallServer(ctx, bastion); err != nil {
+		log.Error(err, "uninstall bootstrap server failed", "host", bootstrap.Name)
+		allOK = false
 	}
 
 	if !allOK {
@@ -336,14 +433,15 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	return ctrl.Result{}, nil
 }
 
-func (r *UbuntuClusterReconciler) uninstallHost(
+func (r *UbuntuClusterReconciler) uninstallVia(
 	ctx context.Context,
 	cluster *ubuntuv1alpha1.UbuntuCluster,
+	bastion *sshpkg.Client,
 	h ubuntuv1alpha1.Host,
 	privateKey []byte,
 	server bool,
 ) error {
-	c, err := r.dial(ctx, cluster, h, privateKey)
+	c, err := r.dialVia(ctx, cluster, bastion, h, privateKey)
 	if err != nil {
 		return err
 	}
@@ -459,19 +557,20 @@ func (r *UbuntuClusterReconciler) eventf(cluster *ubuntuv1alpha1.UbuntuCluster, 
 	r.Recorder.Eventf(cluster, eventType, reason, format, args...)
 }
 
-// installRole drives one secondary host (additional CP or worker): dial,
-// probe for an existing k3s install, install if missing, return current
-// reported version. apply receives an open SSH client and runs the
-// installer (server-join or agent).
+// installRole drives one secondary host (additional CP or worker): dial
+// via the bootstrap bastion, probe for an existing k3s install, install
+// if missing, return current reported version. apply receives an open
+// SSH client and runs the installer (server-join or agent).
 func (r *UbuntuClusterReconciler) installRole(
 	ctx context.Context,
 	cluster *ubuntuv1alpha1.UbuntuCluster,
+	bastion *sshpkg.Client,
 	h ubuntuv1alpha1.Host,
 	privateKey []byte,
 	role string,
 	apply func(*sshpkg.Client) error,
 ) (ok bool, version, message string) {
-	c, err := r.dial(ctx, cluster, h, privateKey)
+	c, err := r.dialVia(ctx, cluster, bastion, h, privateKey)
 	if err != nil {
 		return false, "", err.Error()
 	}
@@ -490,6 +589,27 @@ func (r *UbuntuClusterReconciler) installRole(
 	}
 	ver, _ := k3s.ReportedVersion(ctx, c)
 	return true, ver, ""
+}
+
+// setRoleCounts populates the CP_WKR / READY_CP_WKR printer columns —
+// declared counts from spec, ready counts from observed hostStatuses.
+func setRoleCounts(cluster *ubuntuv1alpha1.UbuntuCluster, hostStatuses []ubuntuv1alpha1.HostStatus) {
+	cpDeclared := len(cluster.Spec.ControlPlane.Hosts)
+	wkrDeclared := len(cluster.Spec.Workers.Hosts)
+	var cpReady, wkrReady int
+	for _, h := range hostStatuses {
+		if h.Phase != hostPhaseReady {
+			continue
+		}
+		switch h.Role {
+		case ubuntuv1alpha1.RoleControlPlane:
+			cpReady++
+		case ubuntuv1alpha1.RoleWorker:
+			wkrReady++
+		}
+	}
+	cluster.Status.CPWorkers = fmt.Sprintf("%d/%d", cpDeclared, wkrDeclared)
+	cluster.Status.ReadyCPWorkers = fmt.Sprintf("%d/%d", cpReady, wkrReady)
 }
 
 func phaseFromOK(ok bool) string {
