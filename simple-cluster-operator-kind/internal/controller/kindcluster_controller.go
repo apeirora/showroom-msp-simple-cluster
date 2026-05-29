@@ -118,6 +118,7 @@ func (r *KindClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	kc.Status.ClusterName = clusterName
 	kc.Status.KubeconfigSecretRef = &corev1.LocalObjectReference{Name: secretName}
 	kc.Status.ObservedGeneration = kc.Generation
+	setRoleCounts(&kc)
 	apimeta.SetStatusCondition(&kc.Status.Conditions, metav1.Condition{
 		Type:    kindv1alpha1.ConditionReady,
 		Status:  metav1.ConditionTrue,
@@ -211,6 +212,7 @@ func (r *KindClusterReconciler) setPhase(ctx context.Context, kc *kindv1alpha1.K
 	}
 	patch := client.MergeFrom(kc.DeepCopy())
 	kc.Status.Phase = phase
+	setRoleCounts(kc)
 	apimeta.SetStatusCondition(&kc.Status.Conditions, metav1.Condition{
 		Type:    kindv1alpha1.ConditionReady,
 		Status:  metav1.ConditionFalse,
@@ -223,6 +225,7 @@ func (r *KindClusterReconciler) setPhase(ctx context.Context, kc *kindv1alpha1.K
 func (r *KindClusterReconciler) fail(ctx context.Context, kc *kindv1alpha1.KindCluster, reason, msg string) (ctrl.Result, error) {
 	patch := client.MergeFrom(kc.DeepCopy())
 	kc.Status.Phase = kindv1alpha1.PhaseFailed
+	setRoleCounts(kc)
 	apimeta.SetStatusCondition(&kc.Status.Conditions, metav1.Condition{
 		Type:    kindv1alpha1.ConditionError,
 		Status:  metav1.ConditionTrue,
@@ -233,6 +236,19 @@ func (r *KindClusterReconciler) fail(ctx context.Context, kc *kindv1alpha1.KindC
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: requeueWorking}, nil
+}
+
+// setRoleCounts fills the CP / WKR printer columns. kind is hardcoded
+// to 1 control-plane plus spec.Workers worker nodes; ready counts track
+// the coarse Phase (Ready ⇒ full, otherwise 0).
+func setRoleCounts(kc *kindv1alpha1.KindCluster) {
+	wkrDeclared := int(kc.Spec.Workers)
+	cpReady, wkrReady := 0, 0
+	if kc.Status.Phase == kindv1alpha1.PhaseReady {
+		cpReady, wkrReady = 1, wkrDeclared
+	}
+	kc.Status.CP = fmt.Sprintf("%d/%d", cpReady, 1)
+	kc.Status.WKR = fmt.Sprintf("%d/%d", wkrReady, wkrDeclared)
 }
 
 func effectiveClusterName(kc *kindv1alpha1.KindCluster) string {
