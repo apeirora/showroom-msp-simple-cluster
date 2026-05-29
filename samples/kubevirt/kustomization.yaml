@@ -1,5 +1,0 @@
-## KubeVirt-targeted SCPC (k3s cluster on KubeVirt VMs in this management cluster).
-resources:
-  - permissions.yaml
-  - showroom_v1alpha1_simpleclusterproviderconfig_k3s-kubevirt.yaml
-  - showroom_v1alpha1_simplecluster.yaml
