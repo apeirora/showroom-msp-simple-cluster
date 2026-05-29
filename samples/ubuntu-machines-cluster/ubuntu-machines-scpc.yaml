@@ -1,0 +1,85 @@
+# SCPC for the "claim pre-registered Ubuntu machines" path.
+
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: ubuntu-machines
+spec:
+  inputs:
+    - { name: k3sVersion,   type: string, default: "",        allowEmpty: true, description: "Optional INSTALL_K3S_VERSION pin. Empty = installer default." }
+
+  resources:
+    - name: cp
+      apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+      kind: UbuntuMachineClaim
+      readiness:
+        phasePath: status.phase
+        phaseReadyValue: Bound
+      template: |
+        apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+        kind: UbuntuMachineClaim
+        spec:
+          count: {{ .SC.controlPlane.nodes }}
+          externalAddressRequired: true
+          required:
+            cpu: {{ .SC.controlPlane.requested.cpu }}
+            memory: {{ .SC.controlPlane.requested.memory }}
+
+    - name: workers
+      apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+      kind: UbuntuMachineClaim
+      readiness:
+        phasePath: status.phase
+        phaseReadyValue: Bound
+      template: |
+        apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+        kind: UbuntuMachineClaim
+        spec:
+          count: {{ .SC.workers.nodes }}
+          externalAddressRequired: false
+          required:
+            cpu: {{ .SC.workers.requested.cpu }}
+            memory: {{ .SC.workers.requested.memory }}
+          selector:
+            matchLabels:
+              role: worker
+              site: {{ .Inputs.site | quote }}
+
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn: [cp, workers]
+      readiness:
+        phasePath: status.phase
+        phaseReadyValue: Ready
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          {{- if .Inputs.k3sVersion }}
+          version: {{ .Inputs.k3sVersion | quote }}
+          {{- end }}
+          ssh:
+            user: {{ (index .Resources.cp.status.machines 0).ssh.user | quote }}
+            privateKeySecretRef:
+              name: {{ (index .Resources.cp.status.machines 0).ssh.privateKeySecretRef.name | quote }}
+          controlPlane:
+            hosts:
+            {{- range .Resources.cp.status.machines }}
+              - name: {{ .name | quote }}
+                address: {{ .address | quote }}
+                {{- if .externalAddress }}
+                externalAddress: {{ .externalAddress | quote }}
+                {{- end }}
+            {{- end }}
+          workers:
+            hosts:
+            {{- range .Resources.workers.status.machines }}
+              - name: {{ .name | quote }}
+                address: {{ .address | quote }}
+            {{- end }}
+
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"
