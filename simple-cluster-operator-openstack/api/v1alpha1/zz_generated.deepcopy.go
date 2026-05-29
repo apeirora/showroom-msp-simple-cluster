@@ -20,20 +20,6 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
-func (in *VMGroup) DeepCopyInto(out *VMGroup) {
-	*out = *in
-	in.Resources.DeepCopyInto(&out.Resources)
-}
-
-func (in *VMGroup) DeepCopy() *VMGroup {
-	if in == nil {
-		return nil
-	}
-	out := new(VMGroup)
-	in.DeepCopyInto(out)
-	return out
-}
-
 func (in *NodeResources) DeepCopyInto(out *NodeResources) {
 	*out = *in
 	out.CPU = in.CPU.DeepCopy()
@@ -49,52 +35,20 @@ func (in *NodeResources) DeepCopy() *NodeResources {
 	return out
 }
 
-func (in *HostStatus) DeepCopyInto(out *HostStatus) {
+func (in *ResolvedFlavor) DeepCopyInto(out *ResolvedFlavor) {
 	*out = *in
 }
 
-func (in *HostStatus) DeepCopy() *HostStatus {
+func (in *ResolvedFlavor) DeepCopy() *ResolvedFlavor {
 	if in == nil {
 		return nil
 	}
-	out := new(HostStatus)
+	out := new(ResolvedFlavor)
 	in.DeepCopyInto(out)
 	return out
 }
 
-func (in *GroupStatus) DeepCopyInto(out *GroupStatus) {
-	*out = *in
-	out.Spec = in.Spec
-	if in.Hosts != nil {
-		in, out := &in.Hosts, &out.Hosts
-		*out = make([]HostStatus, len(*in))
-		copy(*out, *in)
-	}
-}
-
-func (in *GroupStatus) DeepCopy() *GroupStatus {
-	if in == nil {
-		return nil
-	}
-	out := new(GroupStatus)
-	in.DeepCopyInto(out)
-	return out
-}
-
-func (in *ResolvedGroupSpec) DeepCopyInto(out *ResolvedGroupSpec) {
-	*out = *in
-}
-
-func (in *ResolvedGroupSpec) DeepCopy() *ResolvedGroupSpec {
-	if in == nil {
-		return nil
-	}
-	out := new(ResolvedGroupSpec)
-	in.DeepCopyInto(out)
-	return out
-}
-
-func (in *OpenStackVMSetSpec) DeepCopyInto(out *OpenStackVMSetSpec) {
+func (in *OpenStackVMSpec) DeepCopyInto(out *OpenStackVMSpec) {
 	*out = *in
 	out.CredentialsRef = in.CredentialsRef
 	if in.SecurityGroups != nil {
@@ -102,38 +56,26 @@ func (in *OpenStackVMSetSpec) DeepCopyInto(out *OpenStackVMSetSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.Groups != nil {
-		in, out := &in.Groups, &out.Groups
-		*out = make([]VMGroup, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
+	in.Resources.DeepCopyInto(&out.Resources)
 }
 
-func (in *OpenStackVMSetSpec) DeepCopy() *OpenStackVMSetSpec {
+func (in *OpenStackVMSpec) DeepCopy() *OpenStackVMSpec {
 	if in == nil {
 		return nil
 	}
-	out := new(OpenStackVMSetSpec)
+	out := new(OpenStackVMSpec)
 	in.DeepCopyInto(out)
 	return out
 }
 
-func (in *OpenStackVMSetStatus) DeepCopyInto(out *OpenStackVMSetStatus) {
+func (in *OpenStackVMStatus) DeepCopyInto(out *OpenStackVMStatus) {
 	*out = *in
 	if in.SSHSecretRef != nil {
 		in, out := &in.SSHSecretRef, &out.SSHSecretRef
 		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
-	if in.Groups != nil {
-		in, out := &in.Groups, &out.Groups
-		*out = make([]GroupStatus, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
+	out.ResolvedFlavor = in.ResolvedFlavor
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))
@@ -143,16 +85,16 @@ func (in *OpenStackVMSetStatus) DeepCopyInto(out *OpenStackVMSetStatus) {
 	}
 }
 
-func (in *OpenStackVMSetStatus) DeepCopy() *OpenStackVMSetStatus {
+func (in *OpenStackVMStatus) DeepCopy() *OpenStackVMStatus {
 	if in == nil {
 		return nil
 	}
-	out := new(OpenStackVMSetStatus)
+	out := new(OpenStackVMStatus)
 	in.DeepCopyInto(out)
 	return out
 }
 
-func (in *OpenStackVMSet) DeepCopyInto(out *OpenStackVMSet) {
+func (in *OpenStackVM) DeepCopyInto(out *OpenStackVM) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
@@ -160,45 +102,45 @@ func (in *OpenStackVMSet) DeepCopyInto(out *OpenStackVMSet) {
 	in.Status.DeepCopyInto(&out.Status)
 }
 
-func (in *OpenStackVMSet) DeepCopy() *OpenStackVMSet {
+func (in *OpenStackVM) DeepCopy() *OpenStackVM {
 	if in == nil {
 		return nil
 	}
-	out := new(OpenStackVMSet)
+	out := new(OpenStackVM)
 	in.DeepCopyInto(out)
 	return out
 }
 
-func (in *OpenStackVMSet) DeepCopyObject() runtime.Object {
+func (in *OpenStackVM) DeepCopyObject() runtime.Object {
 	if c := in.DeepCopy(); c != nil {
 		return c
 	}
 	return nil
 }
 
-func (in *OpenStackVMSetList) DeepCopyInto(out *OpenStackVMSetList) {
+func (in *OpenStackVMList) DeepCopyInto(out *OpenStackVMList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
-		*out = make([]OpenStackVMSet, len(*in))
+		*out = make([]OpenStackVM, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 }
 
-func (in *OpenStackVMSetList) DeepCopy() *OpenStackVMSetList {
+func (in *OpenStackVMList) DeepCopy() *OpenStackVMList {
 	if in == nil {
 		return nil
 	}
-	out := new(OpenStackVMSetList)
+	out := new(OpenStackVMList)
 	in.DeepCopyInto(out)
 	return out
 }
 
-func (in *OpenStackVMSetList) DeepCopyObject() runtime.Object {
+func (in *OpenStackVMList) DeepCopyObject() runtime.Object {
 	if c := in.DeepCopy(); c != nil {
 		return c
 	}
