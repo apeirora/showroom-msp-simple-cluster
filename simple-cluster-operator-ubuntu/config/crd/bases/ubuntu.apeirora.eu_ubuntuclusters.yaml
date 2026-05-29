@@ -18,11 +18,11 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.cpWorkers
-      name: CP_WKR
+    - jsonPath: .status.cp
+      name: CP
       type: string
-    - jsonPath: .status.readyCPWorkers
-      name: READY_CP_WKR
+    - jsonPath: .status.wkr
+      name: WKR
       type: string
     - jsonPath: .status.k3sVersion
       name: K3s
@@ -170,9 +170,9 @@ spec:
               hosts:
                 format: int32
                 type: integer
-              cpWorkers:
+              cp:
                 type: string
-              readyCPWorkers:
+              wkr:
                 type: string
               hostStatuses:
                 items:
