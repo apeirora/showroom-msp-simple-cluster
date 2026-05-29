@@ -1,7 +1,7 @@
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
-  name: dati-openstack
+  name: gardener-dati-openstack
   labels:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
