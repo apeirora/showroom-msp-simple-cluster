@@ -1,0 +1,3 @@
+resources:
+  - bases/ubuntumachines.apeirora.eu_ubuntumachines.yaml
+  - bases/ubuntumachines.apeirora.eu_ubuntumachineclaims.yaml
