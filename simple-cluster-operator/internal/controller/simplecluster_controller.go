@@ -113,12 +113,12 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	statuses := make(map[string]*showroomv1alpha1.ResourceStatus, len(order))
-	live := make(map[string]*unstructured.Unstructured, len(order))
+	live := make(map[string][]*unstructured.Unstructured, len(order))
 
 	for _, name := range order {
 		rs := resourceByName[name]
 
-		predecessors := make(map[string]*unstructured.Unstructured, len(rs.DependsOn))
+		predecessors := make(map[string]rendertpl.Predecessor, len(rs.DependsOn))
 		var waitingOn []string
 		for _, dep := range rs.DependsOn {
 			depStatus := statuses[dep]
@@ -126,7 +126,11 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				waitingOn = append(waitingOn, dep)
 				continue
 			}
-			predecessors[dep] = live[dep]
+			depRS := resourceByName[dep]
+			predecessors[dep] = rendertpl.Predecessor{
+				Repeated: depRS != nil && depRS.Repeat != "",
+				Objects:  live[dep],
+			}
 		}
 		if len(waitingOn) > 0 {
 			statuses[name] = &showroomv1alpha1.ResourceStatus{
@@ -138,51 +142,67 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			continue
 		}
 
-		desired, rerr := rendertpl.Render(&scpc, &sc, rs, predecessors)
+		rendered, rerr := rendertpl.Render(&scpc, &sc, rs, predecessors)
 		if rerr != nil {
 			return r.failSC(ctx, &sc, "RenderError",
 				fmt.Sprintf("resource %q: %v", name, rerr))
 		}
-
-		gvk := desired.GroupVersionKind()
-		mapping, mperr := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if mperr != nil {
-			return r.failSC(ctx, &sc, "GVKNotFound",
-				fmt.Sprintf("resource %q: RESTMapping %s: %v", name, gvk, mperr))
-		}
-		ri := tc.ResourceFor(mapping, desired.GetNamespace())
-
-		existing, gerr := ri.Get(ctx, desired.GetName(), metav1.GetOptions{})
-		switch {
-		case apierrors.IsNotFound(gerr):
-			created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
-			if cerr != nil {
-				return r.failSC(ctx, &sc, "CreateError",
-					fmt.Sprintf("resource %q: %v", name, cerr))
+		repeated := rs.Repeat != ""
+		if len(rendered) == 0 {
+			statuses[name] = &showroomv1alpha1.ResourceStatus{
+				Name:    name,
+				Phase:   showroomv1alpha1.PhaseReady,
+				Reason:  showroomv1alpha1.ReasonReady,
+				Message: "repeat=0; nothing to create",
 			}
-			log.Info("created target resource", "resource", name, "gvk", gvk.String(),
-				"name", created.GetName(), "namespace", created.GetNamespace())
-			existing = created
-		case gerr != nil:
-			return r.failSC(ctx, &sc, "GetTargetError",
-				fmt.Sprintf("resource %q: %v", name, gerr))
+			continue
 		}
-		// v0.x: do not patch existing R. Drift requires user to delete R.
 
-		phase, lastOp, lastErr := extractPhase(rs.Readiness, existing)
-		reason, msg := reasonFor(phase, lastOp, lastErr)
-		statuses[name] = &showroomv1alpha1.ResourceStatus{
-			Name:            name,
-			GVK:             gvk.String(),
-			TargetName:      existing.GetName(),
-			TargetNamespace: existing.GetNamespace(),
-			Phase:           phase,
-			Reason:          reason,
-			Message:         msg,
-			LastOperation:   lastOp,
-			LastError:       lastErr,
+		instances := make([]showroomv1alpha1.InstanceStatus, 0, len(rendered))
+		instanceLive := make([]*unstructured.Unstructured, 0, len(rendered))
+		var gvkStr string
+
+		for idx, desired := range rendered {
+			gvk := desired.GroupVersionKind()
+			gvkStr = gvk.String()
+			mapping, mperr := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+			if mperr != nil {
+				return r.failSC(ctx, &sc, "GVKNotFound",
+					fmt.Sprintf("resource %q[%d]: RESTMapping %s: %v", name, idx, gvk, mperr))
+			}
+			ri := tc.ResourceFor(mapping, desired.GetNamespace())
+
+			existing, gerr := ri.Get(ctx, desired.GetName(), metav1.GetOptions{})
+			switch {
+			case apierrors.IsNotFound(gerr):
+				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
+				if cerr != nil {
+					return r.failSC(ctx, &sc, "CreateError",
+						fmt.Sprintf("resource %q[%d]: %v", name, idx, cerr))
+				}
+				log.Info("created target resource", "resource", name, "index", idx,
+					"gvk", gvk.String(), "name", created.GetName(), "namespace", created.GetNamespace())
+				existing = created
+			case gerr != nil:
+				return r.failSC(ctx, &sc, "GetTargetError",
+					fmt.Sprintf("resource %q[%d]: %v", name, idx, gerr))
+			}
+			// v0.x: do not patch existing R. Drift requires user to delete R.
+
+			phase, lastOp, lastErr := extractPhase(rs.Readiness, existing)
+			instances = append(instances, showroomv1alpha1.InstanceStatus{
+				Index:           int32(idx),
+				TargetName:      existing.GetName(),
+				TargetNamespace: existing.GetNamespace(),
+				Phase:           phase,
+				LastOperation:   lastOp,
+				LastError:       lastErr,
+			})
+			instanceLive = append(instanceLive, existing)
 		}
-		live[name] = existing
+
+		statuses[name] = aggregateResource(name, gvkStr, repeated, instances)
+		live[name] = instanceLive
 	}
 
 	aggregate := aggregatePhase(order, statuses)
@@ -217,10 +237,10 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// For SubResource the renewal-before window gates re-issuance so we
 	// don't request a fresh credential every reconcile.
 	kcName := scpc.Spec.KubeconfigSource.ResourceName
-	if kcLive, ok := live[kcName]; ok {
+	if kcLive, ok := live[kcName]; ok && len(kcLive) > 0 {
 		if kcStatus := statuses[kcName]; kcStatus != nil && kcStatus.Phase == showroomv1alpha1.PhaseReady {
 			if kubeconfig.NeedsRefresh(&sc, &scpc) {
-				r.syncKubeconfig(ctx, &sc, &scpc, resourceByName[kcName], kcLive, tc)
+				r.syncKubeconfig(ctx, &sc, &scpc, resourceByName[kcName], kcLive[0], tc)
 			}
 		}
 	}
@@ -397,42 +417,62 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			return fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
-		// Prefer the actual name/namespace recorded in SC.Status, fall back
-		// to the computed values when status is missing.
-		var targetName, targetNamespace string
-		if s := statusByName[name]; s != nil {
-			targetName = s.TargetName
-			targetNamespace = s.TargetNamespace
-		}
-		if targetName == "" {
-			targetName = rendertpl.SanitiseTargetName(rs.NamePrefix, sc.Name+"-"+name)
-		}
-		if targetNamespace == "" {
-			targetNamespace = rs.Namespace
-			if targetNamespace == "" {
-				targetNamespace = scpc.Spec.Target.Namespace
-			}
-		}
-		ri := tc.ResourceFor(mapping, targetNamespace)
-
-		if len(rs.DeletionAnnotations) > 0 {
-			patchBytes, perr := json.Marshal(map[string]any{
-				"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
-			})
-			if perr != nil {
-				return fmt.Errorf("resource %q: marshal deletionAnnotations: %w", name, perr)
-			}
-			_, perr = ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{})
-			if perr != nil && !apierrors.IsNotFound(perr) {
-				return fmt.Errorf("resource %q: patch deletionAnnotations: %w", name, perr)
-			}
+		defaultNs := rs.Namespace
+		if defaultNs == "" {
+			defaultNs = scpc.Spec.Target.Namespace
 		}
 
-		if err := ri.Delete(ctx, targetName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("resource %q: delete %s: %w", name, targetName, err)
+		// Enumerate the (name, namespace) pairs to delete. For repeated
+		// specs, Instances carries one entry per index. For non-repeated,
+		// the top-level TargetName is the single name. Fall back to the
+		// computed base name when status is missing entirely.
+		type nsName struct{ name, namespace string }
+		var targets []nsName
+		s := statusByName[name]
+		switch {
+		case s != nil && len(s.Instances) > 0:
+			for _, inst := range s.Instances {
+				ns := inst.TargetNamespace
+				if ns == "" {
+					ns = defaultNs
+				}
+				targets = append(targets, nsName{inst.TargetName, ns})
+			}
+		case s != nil && s.TargetName != "":
+			ns := s.TargetNamespace
+			if ns == "" {
+				ns = defaultNs
+			}
+			targets = []nsName{{s.TargetName, ns}}
+		default:
+			targets = []nsName{{
+				rendertpl.SanitiseTargetName(rs.NamePrefix, sc.Name+"-"+name),
+				defaultNs,
+			}}
 		}
-		log.Info("target resource delete requested",
-			"resource", name, "name", targetName, "gvk", gvk.String())
+
+		for _, t := range targets {
+			ri := tc.ResourceFor(mapping, t.namespace)
+
+			if len(rs.DeletionAnnotations) > 0 {
+				patchBytes, perr := json.Marshal(map[string]any{
+					"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
+				})
+				if perr != nil {
+					return fmt.Errorf("resource %q: marshal deletionAnnotations: %w", name, perr)
+				}
+				_, perr = ri.Patch(ctx, t.name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
+				if perr != nil && !apierrors.IsNotFound(perr) {
+					return fmt.Errorf("resource %q: patch deletionAnnotations: %w", name, perr)
+				}
+			}
+
+			if err := ri.Delete(ctx, t.name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("resource %q: delete %s: %w", name, t.name, err)
+			}
+			log.Info("target resource delete requested",
+				"resource", name, "name", t.name, "gvk", gvk.String())
+		}
 	}
 	return nil
 }
@@ -586,6 +626,61 @@ func validateAndTopoSort(scpc *showroomv1alpha1.SimpleClusterProviderConfig) ([]
 	return order, nil
 }
 
+// aggregateResource folds N InstanceStatus entries into one ResourceStatus.
+// For non-repeated specs (single instance), the top-level TargetName/
+// TargetNamespace mirror the single instance's fields and Instances is
+// left nil. For repeated specs, the top-level Phase is aggregated across
+// all instances and Instances carries the per-index detail.
+func aggregateResource(name, gvk string, repeated bool, instances []showroomv1alpha1.InstanceStatus) *showroomv1alpha1.ResourceStatus {
+	out := &showroomv1alpha1.ResourceStatus{Name: name, GVK: gvk}
+	if !repeated {
+		i := instances[0]
+		out.TargetName = i.TargetName
+		out.TargetNamespace = i.TargetNamespace
+		out.Phase = i.Phase
+		out.LastOperation = i.LastOperation
+		out.LastError = i.LastError
+		out.Reason, out.Message = reasonFor(i.Phase, i.LastOperation, i.LastError)
+		return out
+	}
+
+	anyFailed, anyPending, anyProvisioning, ready := false, false, false, 0
+	var firstErr string
+	for _, i := range instances {
+		switch i.Phase {
+		case showroomv1alpha1.PhaseReady:
+			ready++
+		case showroomv1alpha1.PhaseFailed:
+			anyFailed = true
+			if firstErr == "" {
+				firstErr = i.LastError
+			}
+		case showroomv1alpha1.PhasePending:
+			anyPending = true
+		default:
+			anyProvisioning = true
+		}
+	}
+	total := len(instances)
+	switch {
+	case anyFailed:
+		out.Phase = showroomv1alpha1.PhaseFailed
+		out.LastError = firstErr
+	case ready == total:
+		out.Phase = showroomv1alpha1.PhaseReady
+	case anyProvisioning:
+		out.Phase = showroomv1alpha1.PhaseProvisioning
+	case anyPending:
+		out.Phase = showroomv1alpha1.PhasePending
+	default:
+		out.Phase = showroomv1alpha1.PhaseProvisioning
+	}
+	out.LastOperation = fmt.Sprintf("%d/%d instances Ready", ready, total)
+	out.Reason, out.Message = reasonFor(out.Phase, out.LastOperation, out.LastError)
+	out.Instances = instances
+	return out
+}
+
 func aggregatePhase(order []string, statuses map[string]*showroomv1alpha1.ResourceStatus) showroomv1alpha1.Phase {
 	anyFailed := false
 	allReady := true
@@ -692,34 +787,17 @@ func extractPhase(rc *showroomv1alpha1.ReadinessCheck, obj *unstructured.Unstruc
 		return showroomv1alpha1.PhaseProvisioning, lastOp, ""
 	}
 
-	conds, _, _ := unstructured.NestedSlice(obj.Object, "status", "conditions")
-	for _, c := range conds {
-		cm, ok := c.(map[string]any)
-		if !ok || cm["type"] != "Ready" {
-			continue
-		}
-		status, _ := cm["status"].(string)
-		msg, _ := cm["message"].(string)
-		switch status {
-		case "True":
-			return showroomv1alpha1.PhaseReady, msg, ""
-		case "False":
-			reason, _ := cm["reason"].(string)
-			if isTerminalReason(reason) {
-				return showroomv1alpha1.PhaseFailed, msg, msg
-			}
-			return showroomv1alpha1.PhaseProvisioning, msg, ""
-		}
+	phase, _, _ := unstructured.NestedString(obj.Object, "status", "phase")
+	msg, _, _ := unstructured.NestedString(obj.Object, "status", "message")
+	switch phase {
+	case "":
+		return showroomv1alpha1.PhasePending, msg, ""
+	case "Ready":
+		return showroomv1alpha1.PhaseReady, msg, ""
+	case "Failed", "Error":
+		return showroomv1alpha1.PhaseFailed, msg, msg
 	}
-	return showroomv1alpha1.PhasePending, "", ""
-}
-
-func isTerminalReason(reason string) bool {
-	switch reason {
-	case "Failed", "Error", "InvalidConfiguration":
-		return true
-	}
-	return false
+	return showroomv1alpha1.PhaseProvisioning, msg, ""
 }
 
 func stringIn(s string, list []string) bool {

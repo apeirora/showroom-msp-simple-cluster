@@ -249,8 +249,9 @@ spec:
                     readiness:
                       description: |-
                         Readiness projects R's status into the universal Phase enum.
-                        Optional - when omitted, the operator walks
-                        R.status.conditions[type=Ready].
+                        Optional - when omitted, the operator reads R.status.phase and treats
+                        "Ready" as Ready, "Failed"/"Error" as Failed, empty/missing as
+                        Pending, and any other value as Provisioning.
                       properties:
                         lastErrorPath:
                           description: LastErrorPath optionally provides a human-readable
@@ -280,6 +281,18 @@ spec:
                       - phasePath
                       - phaseReadyValue
                       type: object
+                    repeat:
+                      description: |-
+                        Repeat, when set, fans this ResourceSpec out to N target resources.
+                        The value is a Go template (same engine as Template, with .SC /
+                        .Inputs / .Resources in scope but NOT .Index / .Prev) that MUST
+                        render to a non-negative integer. Target names get suffixed with
+                        "-<index>" (0-based). Inside Template, .Index is the current
+                        iteration and .Prev is the list of objects rendered so far for this
+                        ResourceSpec. From sibling ResourceSpecs' Templates, .Resources.<name>
+                        is exposed as a list (rather than a single object) when <name> had
+                        Repeat set.
+                      type: string
                     template:
                       description: |-
                         Template is the YAML body of R rendered through the Helm-style
