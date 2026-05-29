@@ -1,9 +1,11 @@
 # samples/ubuntu
 
-Standalone smoke test for `simple-cluster-operator-ubuntu`. Installs k3s
+Standalone test for `simple-cluster-operator-ubuntu`. Installs k3s
 on a list of already-running Ubuntu hosts you reach over SSH, materialises
 the cluster's kubeconfig as a Secret, and reports per-host progress in
 status.
+
+This example does not define `SimpleClusterProviderConfig`!
 
 ## Files
 
