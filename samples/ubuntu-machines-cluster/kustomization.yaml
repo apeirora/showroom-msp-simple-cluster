@@ -1,0 +1,15 @@
+## End-to-end: SimpleCluster -> UbuntuMachineClaim (x2) -> UbuntuCluster.
+##
+## Before `kubectl apply -k samples/ubuntu-byo/`:
+##   1. Edit ubuntu-machines.yaml to point at hosts you actually own.
+##   2. Replace sshkey-sample-prv-key.yaml with a Secret whose private key
+##      has authorized_keys access on those hosts.
+##   3. Make sure the three operators are deployed:
+##        - simple-cluster-operator
+##        - simple-cluster-operator-ubuntu
+##        - ubuntu-machines
+resources:
+  - sshkey-sample-prv-key.yaml
+  - ubuntu-machines.yaml
+  - ubuntu-machines-scpc.yaml
+

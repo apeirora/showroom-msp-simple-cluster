@@ -1,0 +1,51 @@
+# Four pre-registered hosts an admin has stood up in the lab. Replace
+# the addresses with whatever you actually have. Two have public IPs
+# (eligible for claims with externalAddressRequired=true), two do not.
+#
+# Claims no longer carry a selector — differentiation is by
+# externalAddressRequired + required.cpu/memory only. The binder picks
+# the first eligible machine sorted by name.
+---
+apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+kind: UbuntuMachine
+metadata:
+  name: um-0
+spec:
+  address: 10.128.0.10
+  externalAddress: 34.58.121.214
+  ssh:
+    user: ubuntu-cluster
+    privateKeySecretRef:
+      name: ubuntu-machines-ssh
+  capacity:
+    cpu: "2"
+    memory: 4Gi
+---
+apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+kind: UbuntuMachine
+metadata:
+  name: um-1
+spec:
+  address: 10.128.0.11
+  externalAddress: 34.58.121.215
+  ssh:
+    user: ubuntu-cluster
+    privateKeySecretRef:
+      name: ubuntu-machines-ssh
+  capacity:
+    cpu: "2"
+    memory: 4Gi
+---
+apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+kind: UbuntuMachine
+metadata:
+  name: um-2
+spec:
+  address: 10.128.0.20
+  ssh:
+    user: ubuntu-cluster
+    privateKeySecretRef:
+      name: ubuntu-machines-ssh
+  capacity:
+    cpu: "4"
+    memory: 8Gi
