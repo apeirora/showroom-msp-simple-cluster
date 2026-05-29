@@ -49,6 +49,11 @@ type UbuntuClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
+
+	// DefaultK3sVersion is the operator-wide fallback k3s release tag
+	// used when UbuntuCluster.spec.version is empty. Empty falls back
+	// to the get.k3s.io installer default.
+	DefaultK3sVersion string
 }
 
 // +kubebuilder:rbac:groups=ubuntu.apeirora.eu,resources=ubuntuclusters,verbs=get;list;watch;create;update;patch;delete
@@ -94,6 +99,11 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.fail(ctx, &cluster, "InvalidSpec", "spec.controlPlane.hosts must not be empty")
 	}
 
+	k3sVer := cluster.Spec.Version
+	if k3sVer == "" {
+		k3sVer = r.DefaultK3sVersion
+	}
+
 	bootstrap := cps[0]
 	endpoint := cluster.Spec.ControlPlaneEndpoint
 	if endpoint == "" {
@@ -132,7 +142,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"installing k3s server (bootstrap) on %s", bootstrap.Name)
 		log.Info("installing k3s server (bootstrap)", "host", bootstrap.Name)
 		if err := k3s.InstallServerBootstrap(ctx, bootstrapClient, k3s.InstallOptions{
-			Version:   cluster.Spec.Version,
+			Version:   k3sVer,
 			ExtraArgs: cluster.Spec.K3sServerArgs,
 			TLSSAN:    hostOnly(endpoint),
 		}); err != nil {
@@ -174,7 +184,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"control-plane join %s (%s)", h.Name, h.Address)
 		ok, ver, msg := r.installRole(ctx, &cluster, h, privateKey, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
 			return k3s.InstallServerJoin(ctx, c, k3s.InstallOptions{
-				Version:   cluster.Spec.Version,
+				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sServerArgs,
 				TLSSAN:    hostOnly(endpoint),
 			}, bootstrapURL, token)
@@ -196,7 +206,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"worker join %s (%s)", h.Name, h.Address)
 		ok, ver, msg := r.installRole(ctx, &cluster, h, privateKey, ubuntuv1alpha1.RoleWorker, func(c *sshpkg.Client) error {
 			return k3s.InstallAgent(ctx, c, k3s.InstallOptions{
-				Version:   cluster.Spec.Version,
+				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sAgentArgs,
 			}, endpointURL, token)
 		})
