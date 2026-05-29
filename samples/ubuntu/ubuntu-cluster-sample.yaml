@@ -1,0 +1,20 @@
+apiVersion: ubuntu.apeirora.eu/v1alpha1
+kind: UbuntuCluster
+metadata:
+  name: ubuntu-cluster-sample
+spec:
+  version: "v1.31.4+k3s1" # # Optional. Empty = operator's default .
+  ssh:
+    user: root
+    privateKeySecretRef:
+      name: ubuntu-ssh
+  controlPlane:
+    hosts:
+      - name: cp-0
+        address: ubuntu0.host
+  workers:
+    hosts:
+      - name: worker-0
+        address: ubuntu-worker0.host
+      - name: worker-1
+        address: ubuntu-worker1.host
