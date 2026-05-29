@@ -14,8 +14,8 @@ spec:
   controlPlane:
     hosts:
       - name: cp-0
-        address: 10.128.0.10          # internal IP — for k3s peer/agent
-        externalAddress: 10.128.0.10  # public IP
+        address: 10.128.0.10            # internal IP — for k3s peer/agent
+        externalAddress: 34.58.121.214  # public IP
   workers:
     hosts:
       - name: worker-0
