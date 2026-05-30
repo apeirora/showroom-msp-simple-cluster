@@ -1,9 +1,12 @@
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleCluster
 metadata:
-  name: simple-cluster-via-kind
+  name: kind-simple
 spec:
   workers:
     nodes: 2
+    requested:
+      cpu: 1
+      memory: 1Gi
   providerConfigRefs:
     - kind

@@ -1,3 +1,4 @@
+# SSH Key used for presentation only, can be commited to repo.
 apiVersion: v1
 kind: Secret
 metadata:
