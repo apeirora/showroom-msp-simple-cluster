@@ -41,6 +41,12 @@ import (
 const (
 	scRequeueReady   = 1 * time.Minute
 	scRequeueWorking = 30 * time.Second
+
+	// forceCleanupGrace is how long the operator waits after a target
+	// resource enters Terminating before forcibly stripping its
+	// finalizers. Only honoured when ResourceSpec.ForceCleanupOnCascade
+	// is set.
+	forceCleanupGrace = 30 * time.Second
 )
 
 // SimpleClusterReconciler walks the SCPC's DAG of ResourceSpecs and
@@ -362,8 +368,18 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 	}
 
 	if scpcRef != nil && scpcRef.Name != "" {
-		if err := r.deleteTargetResources(ctx, sc, scpcRef.Name); err != nil {
+		done, err := r.deleteTargetResources(ctx, sc, scpcRef.Name)
+		if err != nil {
 			log.Error(err, "delete target resources failed; will retry")
+			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+		}
+		if !done {
+			// At least one resource at the current reverse-topo level is
+			// still terminating. Requeue without removing the finalizer so
+			// downstream operators have time to finish their teardown
+			// before we delete the predecessors they depend on
+			// (e.g. UbuntuCluster's k3s uninstall must complete before
+			// the OpenStackVMs it SSHes into are torn down).
 			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
 		}
 	}
@@ -377,17 +393,24 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 }
 
 // deleteTargetResources walks the DAG in reverse topological order and
-// deletes each resource. NotFound is treated as success.
-func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName string) error {
+// drives the cascade. Each call processes one DAG level: it fires Delete on
+// every target at that level (idempotent — only patches deletionAnnotations
+// and calls Delete on first sight), then returns done=false if any target
+// at that level still exists. Predecessors are only touched once the
+// current level is fully gone. This barrier lets downstream operators
+// finish their own cleanup (e.g. UbuntuCluster SSHing into a VM to
+// uninstall k3s) BEFORE the resources they depend on disappear.
+// Returns (true, nil) once all levels are clear.
+func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName string) (bool, error) {
 	log := logf.FromContext(ctx)
 
 	var scpc showroomv1alpha1.SimpleClusterProviderConfig
 	if err := r.Get(ctx, types.NamespacedName{Name: scpcName}, &scpc); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("SCPC no longer present; skipping remote delete", "scpc", scpcName)
-			return nil
+			return true, nil
 		}
-		return fmt.Errorf("get SCPC %s: %w", scpcName, err)
+		return false, fmt.Errorf("get SCPC %s: %w", scpcName, err)
 	}
 
 	order, err := validateAndTopoSort(&scpc)
@@ -399,7 +422,7 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 
 	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef)
 	if err != nil {
-		return fmt.Errorf("build target client: %w", err)
+		return false, fmt.Errorf("build target client: %w", err)
 	}
 
 	resourceByName := make(map[string]*showroomv1alpha1.ResourceSpec, len(scpc.Spec.Resources))
@@ -421,12 +444,12 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		}
 		gv, gerr := schema.ParseGroupVersion(rs.APIVersion)
 		if gerr != nil {
-			return fmt.Errorf("resource %q: parse apiVersion: %w", name, gerr)
+			return false, fmt.Errorf("resource %q: parse apiVersion: %w", name, gerr)
 		}
 		gvk := gv.WithKind(rs.Kind)
 		mapping, mperr := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 		if mperr != nil {
-			return fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
+			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
 		defaultNs := rs.Namespace
@@ -463,30 +486,73 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			}}
 		}
 
+		levelDone := true
 		for _, t := range targets {
 			ri := tc.ResourceFor(mapping, t.namespace)
 
-			if len(rs.DeletionAnnotations) > 0 {
-				patchBytes, perr := json.Marshal(map[string]any{
-					"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
-				})
-				if perr != nil {
-					return fmt.Errorf("resource %q: marshal deletionAnnotations: %w", name, perr)
-				}
-				_, perr = ri.Patch(ctx, t.name, types.MergePatchType, patchBytes, metav1.PatchOptions{})
-				if perr != nil && !apierrors.IsNotFound(perr) {
-					return fmt.Errorf("resource %q: patch deletionAnnotations: %w", name, perr)
-				}
+			existing, gerr := ri.Get(ctx, t.name, metav1.GetOptions{})
+			if apierrors.IsNotFound(gerr) {
+				continue
+			}
+			if gerr != nil {
+				return false, fmt.Errorf("resource %q: get %s: %w", name, t.name, gerr)
 			}
 
-			if err := ri.Delete(ctx, t.name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-				return fmt.Errorf("resource %q: delete %s: %w", name, t.name, err)
+			levelDone = false
+
+			// First time we see this target after SC was marked for
+			// deletion: patch deletionAnnotations (Gardener-style opt-in)
+			// and issue Delete. Subsequent reconciles skip the work — the
+			// presence of a non-zero deletionTimestamp means our prior
+			// Delete already landed.
+			if existing.GetDeletionTimestamp().IsZero() {
+				if len(rs.DeletionAnnotations) > 0 {
+					patchBytes, perr := json.Marshal(map[string]any{
+						"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
+					})
+					if perr != nil {
+						return false, fmt.Errorf("resource %q: marshal deletionAnnotations: %w", name, perr)
+					}
+					if _, perr := ri.Patch(ctx, t.name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
+						return false, fmt.Errorf("resource %q: patch deletionAnnotations: %w", name, perr)
+					}
+				}
+				if derr := ri.Delete(ctx, t.name, metav1.DeleteOptions{}); derr != nil && !apierrors.IsNotFound(derr) {
+					return false, fmt.Errorf("resource %q: delete %s: %w", name, t.name, derr)
+				}
+				log.Info("target resource delete requested",
+					"resource", name, "name", t.name, "gvk", gvk.String())
+				continue
 			}
-			log.Info("target resource delete requested",
-				"resource", name, "name", t.name, "gvk", gvk.String())
+
+			// Force-cleanup escape hatch: R is opted in via SCPC and has
+			// been Terminating long enough that we no longer expect the
+			// downstream controller to make progress on its own (typically
+			// because the infrastructure it relied on is also gone). Strip
+			// all finalizers so K8s GC removes R immediately.
+			if rs.ForceCleanupOnCascade && len(existing.GetFinalizers()) > 0 &&
+				time.Since(existing.GetDeletionTimestamp().Time) >= forceCleanupGrace {
+				patchBytes, perr := json.Marshal(map[string]any{
+					"metadata": map[string]any{"finalizers": []string{}},
+				})
+				if perr != nil {
+					return false, fmt.Errorf("resource %q: marshal finalizer strip: %w", name, perr)
+				}
+				if _, perr := ri.Patch(ctx, t.name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
+					return false, fmt.Errorf("resource %q: force-strip finalizers: %w", name, perr)
+				}
+				log.Info("force-stripped finalizers after grace window",
+					"resource", name, "name", t.name, "gvk", gvk.String(),
+					"grace", forceCleanupGrace)
+			}
+		}
+		if !levelDone {
+			log.Info("waiting for level to terminate before deleting predecessors",
+				"resource", name)
+			return false, nil
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // selectProvider picks an SCPC name from the SC's candidate list. v0.x
