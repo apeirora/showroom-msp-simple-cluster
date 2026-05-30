@@ -19,6 +19,20 @@ import (
 const (
 	FinalizerName = "openstackvm.apeirora.eu/finalizer"
 
+	// KeypairFinalizerName is set on every SSH-key Secret the operator
+	// manages. On Secret deletion the operator deletes the matching
+	// Nova keypair, then removes the finalizer so K8s GC completes.
+	KeypairFinalizerName = "openstack.apeirora.eu/keypair-cleanup"
+
+	// SSHSecretCredentialsNameAnno + SSHSecretCredentialsNamespaceAnno
+	// record where the OpenStack credentials live, so the Secret
+	// reconciler can authenticate to delete the keypair without a VM CR.
+	SSHSecretCredentialsNameAnno      = "openstack.apeirora.eu/credentials-name"
+	SSHSecretCredentialsNamespaceAnno = "openstack.apeirora.eu/credentials-namespace"
+	// SSHSecretKeypairNameAnno records the Nova keypair name the Secret
+	// is bound to, so cleanup can target it after the source VM is gone.
+	SSHSecretKeypairNameAnno = "openstack.apeirora.eu/keypair-name"
+
 	ConditionReady = "Ready"
 	ConditionError = "Error"
 
@@ -98,6 +112,17 @@ type OpenStackVMSpec struct {
 	// text — the operator base64-encodes it before calling Nova).
 	// +optional
 	UserData string `json:"userData,omitempty"`
+
+	// SSHKeySecretRef opts the VM into a shared SSH keypair. When set the
+	// operator looks up the named Secret (Namespace defaults to the VM's
+	// namespace) and uses its `ssh-publickey` to register a single Nova
+	// keypair derived from the Secret's name; multiple VMs pointing at
+	// the same Secret share that Nova keypair. If the Secret does not
+	// exist the operator generates a fresh ed25519 keypair into it. When
+	// unset the operator falls back to the per-VM Secret `<vm-name>-ssh`
+	// in the VM's namespace.
+	// +optional
+	SSHKeySecretRef *corev1.SecretReference `json:"sshKeySecretRef,omitempty"`
 }
 
 // NodeResources is the per-VM CPU/memory request. The operator picks the

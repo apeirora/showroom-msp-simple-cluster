@@ -86,14 +86,15 @@ func (r *OpenStackVMReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.fail(ctx, &vm, "AuthError", err.Error())
 	}
 
-	sshSecretName, publicKey, err := r.ensureSSHKeypair(ctx, &vm)
+	sshSecretRef, publicKey, err := r.ensureSSHKeypair(ctx, &vm)
 	if err != nil {
 		return r.fail(ctx, &vm, "SSHKeyError", err.Error())
 	}
-	keypairName := vm.Name
+	keypairName := keypairNameFor(sshSecretRef)
 	if err := openstack.EnsureKeypair(ctx, clients.Compute, keypairName, publicKey); err != nil {
 		return r.fail(ctx, &vm, "KeypairError", err.Error())
 	}
+	sshSecretName := sshSecretRef.Name
 
 	networkID, err := openstack.ResolveNetwork(ctx, clients.Network, vm.Spec.Network)
 	if err != nil {
@@ -250,10 +251,10 @@ func (r *OpenStackVMReconciler) reconcileDelete(ctx context.Context, vm *opensta
 		}
 	}
 
-	if err := openstack.DeleteKeypair(ctx, clients.Compute, vm.Name); err != nil {
-		log.Error(err, "delete keypair during delete; retrying")
-		return ctrl.Result{RequeueAfter: requeueWorking}, nil
-	}
+	// Note: Nova keypair cleanup happens on Secret deletion via the
+	// SSH-Secret reconciler. Per-VM Secrets have an ownerRef back to the
+	// VM so they enter Terminating when the VM is gone; shared Secrets
+	// are admin-managed and stay until explicitly deleted.
 
 	patch := client.MergeFrom(vm.DeepCopy())
 	controllerutil.RemoveFinalizer(vm, openstackv1alpha1.FinalizerName)
@@ -284,37 +285,73 @@ func (r *OpenStackVMReconciler) openstackClients(ctx context.Context, vm *openst
 	return openstack.NewClientsFromSecret(ctx, &creds)
 }
 
-// ensureSSHKeypair generates an ed25519 keypair on first reconcile and
-// stores it in a Secret owned by the CR; subsequent calls return the
-// existing values.
-func (r *OpenStackVMReconciler) ensureSSHKeypair(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (string, string, error) {
-	name := vm.Name + sshSecretSuffix
-	key := types.NamespacedName{Name: name, Namespace: vm.Namespace}
+// effectiveSSHKeyRef computes which Secret carries this VM's keypair.
+// When spec.sshKeySecretRef is set we use that (with namespace defaulted
+// to the VM's namespace); otherwise we fall back to the per-VM Secret
+// `<vm-name>-ssh` in vm.Namespace.
+func effectiveSSHKeyRef(vm *openstackv1alpha1.OpenStackVM) types.NamespacedName {
+	if vm.Spec.SSHKeySecretRef != nil && vm.Spec.SSHKeySecretRef.Name != "" {
+		ns := vm.Spec.SSHKeySecretRef.Namespace
+		if ns == "" {
+			ns = vm.Namespace
+		}
+		return types.NamespacedName{Name: vm.Spec.SSHKeySecretRef.Name, Namespace: ns}
+	}
+	return types.NamespacedName{Name: vm.Name + sshSecretSuffix, Namespace: vm.Namespace}
+}
+
+// keypairNameFor derives a Nova keypair name from a Secret reference so
+// multiple VMs sharing the same Secret target the same Nova keypair.
+func keypairNameFor(ref types.NamespacedName) string {
+	return ref.Namespace + "-" + ref.Name
+}
+
+// ensureSSHKeypair resolves the SSH-key Secret for this VM:
+//   - if spec.sshKeySecretRef is set and the Secret exists → reuse it;
+//   - if spec.sshKeySecretRef is set and the Secret does not exist →
+//     generate the keypair into that ref;
+//   - if spec.sshKeySecretRef is unset → use/create `<vm-name>-ssh` in
+//     vm.Namespace (per-VM mode, with ownerRef back to the VM).
+//
+// On every reconcile the Secret is patched to carry the keypair-cleanup
+// finalizer and three annotations (credentials-name, credentials-namespace,
+// keypair-name) so the SSH-Secret reconciler can authenticate to delete
+// the Nova keypair when the Secret is later deleted, even after the VM
+// CR is gone.
+func (r *OpenStackVMReconciler) ensureSSHKeypair(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (types.NamespacedName, string, error) {
+	ref := effectiveSSHKeyRef(vm)
+	shared := vm.Spec.SSHKeySecretRef != nil && vm.Spec.SSHKeySecretRef.Name != ""
 
 	var existing corev1.Secret
-	err := r.Get(ctx, key, &existing)
-	if err == nil {
+	err := r.Get(ctx, ref, &existing)
+	switch {
+	case err == nil:
 		pub := existing.Data[openstackv1alpha1.SSHSecretPublicKeyKey]
 		if len(pub) == 0 {
-			return "", "", fmt.Errorf("Secret %s missing %q", key.String(), openstackv1alpha1.SSHSecretPublicKeyKey)
+			return ref, "", fmt.Errorf("Secret %s missing %q", ref.String(), openstackv1alpha1.SSHSecretPublicKeyKey)
 		}
-		return name, string(pub), nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return "", "", fmt.Errorf("get Secret %s: %w", key.String(), err)
+		if err := r.ensureSecretBookkeeping(ctx, &existing, vm, ref, !shared); err != nil {
+			return ref, "", err
+		}
+		return ref, string(pub), nil
+	case !apierrors.IsNotFound(err):
+		return ref, "", fmt.Errorf("get Secret %s: %w", ref.String(), err)
 	}
 
 	priv, pub, err := openstack.GenerateEd25519Keypair(vm.Namespace + "/" + vm.Name)
 	if err != nil {
-		return "", "", err
+		return ref, "", err
 	}
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: vm.Namespace,
-			Labels: map[string]string{
-				"osvm.apeirora.eu/vm": vm.Name,
+			Name:      ref.Name,
+			Namespace: ref.Namespace,
+			Annotations: map[string]string{
+				openstackv1alpha1.SSHSecretCredentialsNameAnno:      vm.Spec.CredentialsRef.Name,
+				openstackv1alpha1.SSHSecretCredentialsNamespaceAnno: vm.Namespace,
+				openstackv1alpha1.SSHSecretKeypairNameAnno:          keypairNameFor(ref),
 			},
+			Finalizers: []string{openstackv1alpha1.KeypairFinalizerName},
 		},
 		Type: corev1.SecretTypeSSHAuth,
 		Data: map[string][]byte{
@@ -322,13 +359,72 @@ func (r *OpenStackVMReconciler) ensureSSHKeypair(ctx context.Context, vm *openst
 			openstackv1alpha1.SSHSecretPublicKeyKey:  pub,
 		},
 	}
-	if err := controllerutil.SetControllerReference(vm, secret, r.Scheme); err != nil {
-		return "", "", fmt.Errorf("set owner ref on SSH Secret: %w", err)
+	if !shared {
+		if err := controllerutil.SetControllerReference(vm, secret, r.Scheme); err != nil {
+			return ref, "", fmt.Errorf("set owner ref on SSH Secret: %w", err)
+		}
 	}
 	if err := r.Create(ctx, secret); err != nil {
-		return "", "", fmt.Errorf("create SSH Secret %s: %w", key.String(), err)
+		return ref, "", fmt.Errorf("create SSH Secret %s: %w", ref.String(), err)
 	}
-	return name, string(pub), nil
+	return ref, string(pub), nil
+}
+
+// ensureSecretBookkeeping makes sure an already-existing SSH Secret has
+// the keypair-cleanup finalizer and the credentials/keypair annotations
+// that the SSH-Secret reconciler needs to clean up Nova when the Secret
+// is later deleted. For per-VM Secrets it also adds the VM ownerRef so
+// K8s GC tears the Secret down when the VM is deleted.
+func (r *OpenStackVMReconciler) ensureSecretBookkeeping(
+	ctx context.Context,
+	secret *corev1.Secret,
+	vm *openstackv1alpha1.OpenStackVM,
+	ref types.NamespacedName,
+	wantOwnerRef bool,
+) error {
+	orig := secret.DeepCopy()
+	changed := false
+
+	if !controllerutil.ContainsFinalizer(secret, openstackv1alpha1.KeypairFinalizerName) {
+		controllerutil.AddFinalizer(secret, openstackv1alpha1.KeypairFinalizerName)
+		changed = true
+	}
+	if secret.Annotations == nil {
+		secret.Annotations = map[string]string{}
+	}
+	want := map[string]string{
+		openstackv1alpha1.SSHSecretCredentialsNameAnno:      vm.Spec.CredentialsRef.Name,
+		openstackv1alpha1.SSHSecretCredentialsNamespaceAnno: vm.Namespace,
+		openstackv1alpha1.SSHSecretKeypairNameAnno:          keypairNameFor(ref),
+	}
+	for k, v := range want {
+		if secret.Annotations[k] != v {
+			secret.Annotations[k] = v
+			changed = true
+		}
+	}
+	if wantOwnerRef && !hasOwner(secret, vm) {
+		if err := controllerutil.SetControllerReference(vm, secret, r.Scheme); err != nil {
+			return fmt.Errorf("set owner ref on SSH Secret: %w", err)
+		}
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := r.Patch(ctx, secret, client.MergeFrom(orig)); err != nil {
+		return fmt.Errorf("patch SSH Secret bookkeeping: %w", err)
+	}
+	return nil
+}
+
+func hasOwner(secret *corev1.Secret, vm *openstackv1alpha1.OpenStackVM) bool {
+	for _, o := range secret.GetOwnerReferences() {
+		if o.UID == vm.UID {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *OpenStackVMReconciler) setPhase(ctx context.Context, vm *openstackv1alpha1.OpenStackVM, phase openstackv1alpha1.Phase, reason, msg string) error {
