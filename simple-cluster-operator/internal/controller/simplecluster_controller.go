@@ -57,6 +57,18 @@ type SimpleClusterReconciler struct {
 // +kubebuilder:rbac:groups=showroom.apeirora.eu,resources=simpleclusterproviderconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;create;update;patch;delete
 
+// Templated target resources rendered from SCPC.spec.resources[].template
+// may belong to any of the in-tree downstream operators. Grant CRUD across
+// each known group so the controller can Get/Create/Patch/Delete the
+// rendered objects (no narrower carve-out is possible because the SCPC
+// chooses the GVK at runtime).
+// +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ubuntu.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kind.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=authentication.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
+
 // nolint:gocyclo // straight-line orchestration; extracting fragments hurts readability more than it helps
 func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -282,7 +294,7 @@ func (r *SimpleClusterReconciler) syncKubeconfig(
 		return
 	}
 
-	res, eerr := kubeconfig.EnsureSecret(ctx, r.Client, r.Scheme, sc, data, sourceExpiry)
+	res, eerr := kubeconfig.EnsureSecret(ctx, r.Client, r.Scheme, sc, scpc, data, sourceExpiry)
 	if eerr != nil {
 		apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
 			Type:    showroomv1alpha1.ConditionKubeconfigValid,

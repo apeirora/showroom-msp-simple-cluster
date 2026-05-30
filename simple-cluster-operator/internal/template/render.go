@@ -28,11 +28,10 @@ import (
 )
 
 const (
-	AnnoSCName       = "simplecluster.apeirora.eu/sc-name"
-	AnnoSCNamespace  = "simplecluster.apeirora.eu/sc-namespace"
-	AnnoSCPC         = "simplecluster.apeirora.eu/scpc"
-	AnnoResourceName = "simplecluster.apeirora.eu/resource-name"
-	AnnoResourceIdx  = "simplecluster.apeirora.eu/resource-index"
+	// AnnoSimpleCluster names the owning SimpleCluster as "<ns>/<name>".
+	AnnoSimpleCluster = "simple-cluster-name"
+	// AnnoSimpleClusterProvider names the SCPC whose template produced R.
+	AnnoSimpleClusterProvider = "simple-cluster-provider"
 )
 
 // Predecessor is a sibling ResourceSpec's rendered output, plumbed to a
@@ -116,13 +115,8 @@ func renderOne(
 	if annos == nil {
 		annos = map[string]string{}
 	}
-	annos[AnnoSCName] = sc.Name
-	annos[AnnoSCNamespace] = sc.Namespace
-	annos[AnnoSCPC] = scpc.Name
-	annos[AnnoResourceName] = resource.Name
-	if repeated {
-		annos[AnnoResourceIdx] = strconv.Itoa(index)
-	}
+	annos[AnnoSimpleCluster] = sc.Namespace + "/" + sc.Name
+	annos[AnnoSimpleClusterProvider] = scpc.Name
 	obj.SetAnnotations(annos)
 	return obj, nil
 }
@@ -212,11 +206,17 @@ func buildContext(
 		"name":      sc.Name,
 		"namespace": sc.Namespace,
 		"uid":       string(sc.UID),
-		"workers":   workersContext(sc.Spec.Workers),
-		"labels":    sc.Labels,
+		"workers": map[string]any{
+			"nodes":     sc.Spec.Workers.Nodes,
+			"requested": nodeResourcesContext(sc.Spec.Workers.Requested),
+		},
+		"labels": sc.Labels,
 	}
 	if sc.Spec.ControlPlane != nil {
-		scCtx["controlPlane"] = controlPlaneContext(*sc.Spec.ControlPlane)
+		scCtx["controlPlane"] = map[string]any{
+			"nodes":     sc.Spec.ControlPlane.Nodes,
+			"requested": nodeResourcesContext(sc.Spec.ControlPlane.Requested),
+		}
 	}
 
 	prevAny := make([]any, 0, len(prev))
@@ -238,48 +238,13 @@ func buildContext(
 	}, nil
 }
 
-// workersContext flattens WorkersSpec into the .SC.workers template map.
-// Requested quantities are stringified so templates emit canonical values
-// (e.g. "16", "32Gi").
-func workersContext(w showroomv1alpha1.WorkersSpec) map[string]any {
-	out := map[string]any{
-		"nodes": w.Nodes,
+// nodeResourcesContext stringifies CPU/Memory quantities into the
+// .SC.{controlPlane,workers}.requested template map.
+func nodeResourcesContext(r showroomv1alpha1.NodeResources) map[string]any {
+	return map[string]any{
+		"cpu":    r.CPU.String(),
+		"memory": r.Memory.String(),
 	}
-	if r := nodeResourcesContext(w.Requested); r != nil {
-		out["requested"] = r
-	}
-	return out
-}
-
-// controlPlaneContext flattens ControlPlaneSpec into the .SC.controlPlane
-// template map.
-func controlPlaneContext(cp showroomv1alpha1.ControlPlaneSpec) map[string]any {
-	out := map[string]any{
-		"nodes": cp.Nodes,
-	}
-	if r := nodeResourcesContext(cp.Requested); r != nil {
-		out["requested"] = r
-	}
-	return out
-}
-
-// nodeResourcesContext stringifies CPU/Memory quantities. Returns nil when
-// no fields are set so templates can `{{ if .SC.workers.requested }}`.
-func nodeResourcesContext(r *showroomv1alpha1.NodeResources) map[string]any {
-	if r == nil {
-		return nil
-	}
-	req := map[string]any{}
-	if !r.CPU.IsZero() {
-		req["cpu"] = r.CPU.String()
-	}
-	if !r.Memory.IsZero() {
-		req["memory"] = r.Memory.String()
-	}
-	if len(req) == 0 {
-		return nil
-	}
-	return req
 }
 
 // RenderString renders an arbitrary template body against an arbitrary

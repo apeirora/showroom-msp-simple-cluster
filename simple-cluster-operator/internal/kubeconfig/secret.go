@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
+	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
 
 // SecretSuffix is appended to SC.Name to form the kubeconfig Secret name.
@@ -55,6 +56,7 @@ func EnsureSecret(
 	c client.Client,
 	scheme *runtime.Scheme,
 	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 	kubeconfigBytes []byte,
 	sourceExpiry *time.Time,
 ) (*SecretResult, error) {
@@ -78,8 +80,9 @@ func EnsureSecret(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: sc.Namespace,
-			Labels: map[string]string{
-				"simplecluster.apeirora.eu/sc-name": sc.Name,
+			Annotations: map[string]string{
+				rendertpl.AnnoSimpleCluster:         sc.Namespace + "/" + sc.Name,
+				rendertpl.AnnoSimpleClusterProvider: scpc.Name,
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
