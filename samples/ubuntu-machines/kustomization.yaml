@@ -1,3 +1,5 @@
 resources:
   - ubuntu-machines.yaml
+  - scpc-ubuntu-machines.yaml
 #  - ubuntu-machine-claim.yaml
+#  - simplecluster.yaml
