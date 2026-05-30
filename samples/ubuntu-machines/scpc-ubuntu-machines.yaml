@@ -1,0 +1,85 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: ubuntu-machines-sample
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  target:
+    namespace: default
+
+  resources:
+    # One UbuntuMachineClaim per control-plane node. Pinned to machines
+    # with a floating IP so UbuntuCluster can SSH the bootstrap CP
+    # directly. CPU/memory floor comes from SC.controlPlane.requested.
+    - name: cp
+      apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+      kind: UbuntuMachineClaim
+      repeat: "{{ .SC.controlPlane.nodes }}"
+      template: |
+        apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+        kind: UbuntuMachineClaim
+        spec:
+          externalAddressRequired: true
+          required:
+            cpu: "{{ .SC.controlPlane.requested.cpu }}"
+            memory: "{{ .SC.controlPlane.requested.memory }}"
+
+    # One claim per worker. dependsOn forces CP to bind first so it
+    # gets first pick of the floating-IP machines; workers fall back
+    # to whatever is left. No FIP requirement on workers — they're
+    # reached via the bootstrap CP as a bastion.
+    - name: worker
+      apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+      kind: UbuntuMachineClaim
+      repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - cp
+      template: |
+        apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+        kind: UbuntuMachineClaim
+        spec:
+          externalAddressRequired: false
+          required:
+            cpu: "{{ .SC.workers.requested.cpu }}"
+            memory: "{{ .SC.workers.requested.memory }}"
+
+    # Single UbuntuCluster collecting bound machines from the claims
+    # above. ssh.user / ssh.privateKeySecretRef are taken from the first
+    # CP claim — assumes the pool is homogeneous w.r.t. SSH credentials
+    # (true for our openstack-backed pool: every UbuntuMachine in
+    # samples/ubuntu-machines/ubuntu-machines.yaml points at the shared
+    # `openstack-vm-instances-ssh` Secret).
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn:
+        - cp
+        - worker
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          ssh:
+            user: {{ (index .Resources.cp 0).status.machine.ssh.user }}
+            privateKeySecretRef:
+              name: {{ (index .Resources.cp 0).status.machine.ssh.privateKeySecretRef.name }}
+          controlPlane:
+            hosts:
+              {{- range $i, $cl := .Resources.cp }}
+              - name: cp-{{ $i }}
+                address: {{ $cl.status.machine.address }}
+                externalAddress: {{ $cl.status.machine.externalAddress }}
+              {{- end }}
+          workers:
+            hosts:
+              {{- range $i, $cl := .Resources.worker }}
+              - name: worker-{{ $i }}
+                address: {{ $cl.status.machine.address }}
+              {{- end }}
+
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"

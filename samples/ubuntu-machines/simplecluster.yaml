@@ -1,0 +1,22 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: um-sample
+spec:
+  # Pool composition (samples/ubuntu-machines/ubuntu-machines.yaml):
+  #   um-0  4 CPU / 8 GiB  external IP   ← matches cp claim
+  #   um-1  2 CPU / 2 GiB  external IP
+  #   um-2  2 CPU / 2 GiB  -             ← matches worker claim
+  #   um-3  4 CPU / 8 GiB  -             ← matches worker claim
+  controlPlane:
+    nodes: 1
+    requested:
+      cpu: 4
+      memory: 8Gi
+  workers:
+    nodes: 2
+    requested:
+      cpu: 2
+      memory: 2Gi
+  providerConfigRefs:
+    - ubuntu-machines-sample
