@@ -1,51 +1,61 @@
-# Four pre-registered hosts an admin has stood up in the lab. Replace
-# the addresses with whatever you actually have. Two have public IPs
-# (eligible for claims with externalAddressRequired=true), two do not.
-#
-# Claims no longer carry a selector — differentiation is by
-# externalAddressRequired + required.cpu/memory only. The binder picks
-# the first eligible machine sorted by name.
+# Four predefined Ubuntu machines with SSH access and sudo without password.
 ---
 apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-0
 spec:
-  address: 10.128.0.10
-  externalAddress: 34.58.121.214
+  address: 192.168.168.229
+  externalAddress: 45.130.30.74
   ssh:
-    user: ubuntu-cluster
+    user: eouser
     privateKeySecretRef:
-      name: ubuntu-machines-ssh
+      name: single-vm-sample-1-ssh
   capacity:
-    cpu: "2"
-    memory: 4Gi
+    cpu: "4"
+    memory: 8Gi
 ---
 apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-1
 spec:
-  address: 10.128.0.11
-  externalAddress: 34.58.121.215
+  address: 192.168.168.202
+  externalAddress: 45.130.29.12
   ssh:
-    user: ubuntu-cluster
+    user: eouser
     privateKeySecretRef:
-      name: ubuntu-machines-ssh
+      name: single-vm-sample-2-ssh
   capacity:
     cpu: "2"
-    memory: 4Gi
+    memory: 2Gi
 ---
 apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-2
 spec:
-  address: 10.128.0.20
+  address: 192.168.168.62
+  externalAddress: 46.60.23.143
   ssh:
-    user: ubuntu-cluster
+    user: eouser
     privateKeySecretRef:
-      name: ubuntu-machines-ssh
+      name: single-vm-sample-3-ssh
+  capacity:
+    cpu: "2"
+    memory: 2Gi
+---
+apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+kind: UbuntuMachine
+metadata:
+  name: um-3
+spec:
+  address: 192.168.168.193
+  externalAddress: 45.130.30.157
+  ssh:
+    user: eouser
+    privateKeySecretRef:
+      name: single-vm-sample-4-ssh
   capacity:
     cpu: "4"
     memory: 8Gi
