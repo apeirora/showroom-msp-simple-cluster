@@ -1,16 +1,24 @@
-# Four predefined Ubuntu machines with SSH access and sudo without password.
+# Pool of four UbuntuMachines backed by the OpenStackVMs declared in
+# samples/openstack/vm-instances.yaml. All four share the
+# `openstack-vm-instances-ssh` Secret that the openstack operator
+# generated on first reconcile, so every UbuntuMachine references the
+# same `privateKeySecretRef.name`.
+#
+# Two large (4 vCPU / 8 GiB) and two small (2 vCPU / 2 GiB); only um-0
+# and um-1 carry a floating IP so claims with externalAddressRequired=true
+# can only bind to those.
 ---
 apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-0
 spec:
-  address: 192.168.168.229
-  externalAddress: 45.130.30.74
+  address: 192.168.168.150
+  externalAddress: 46.60.23.143
   ssh:
     user: eouser
     privateKeySecretRef:
-      name: single-vm-sample-1-ssh
+      name: openstack-vm-instances-ssh
   capacity:
     cpu: "4"
     memory: 8Gi
@@ -20,12 +28,12 @@ kind: UbuntuMachine
 metadata:
   name: um-1
 spec:
-  address: 192.168.168.202
-  externalAddress: 45.130.29.12
+  address: 192.168.168.225
+  externalAddress: 46.60.23.242
   ssh:
     user: eouser
     privateKeySecretRef:
-      name: single-vm-sample-2-ssh
+      name: openstack-vm-instances-ssh
   capacity:
     cpu: "2"
     memory: 2Gi
@@ -35,12 +43,11 @@ kind: UbuntuMachine
 metadata:
   name: um-2
 spec:
-  address: 192.168.168.62
-  externalAddress: 46.60.23.143
+  address: 192.168.168.58
   ssh:
     user: eouser
     privateKeySecretRef:
-      name: single-vm-sample-3-ssh
+      name: openstack-vm-instances-ssh
   capacity:
     cpu: "2"
     memory: 2Gi
@@ -50,12 +57,11 @@ kind: UbuntuMachine
 metadata:
   name: um-3
 spec:
-  address: 192.168.168.193
-  externalAddress: 45.130.30.157
+  address: 192.168.168.253
   ssh:
     user: eouser
     privateKeySecretRef:
-      name: single-vm-sample-4-ssh
+      name: openstack-vm-instances-ssh
   capacity:
     cpu: "4"
     memory: 8Gi

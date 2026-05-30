@@ -1,0 +1,85 @@
+# Standalone OpenStackVM example.
+#
+# All four VMs share one SSH keypair Secret (`openstack-vm-instances-ssh`)
+# via spec.sshKeySecretRef. simple-cluster-operator-openstack generates
+# the keypair into that Secret on first reconcile and registers a single
+# Nova keypair `default-openstack-vm-instances-ssh` (name derived from
+# the Secret's <ns>-<name>).
+apiVersion: openstack.apeirora.eu/v1alpha1
+kind: OpenStackVM
+metadata:
+  name: instance-1
+spec:
+  credentialsRef:
+    name: openstack-creds
+  sshKeySecretRef:
+    name: openstack-vm-instances-ssh
+  network: cloud_080745_1
+  floatingIPPool: external
+  securityGroups:
+    - default
+  resources:
+    cpu: 4
+    memory: 4Gi
+    flavorPattern: '^eo[12]a\.'
+  image: "Ubuntu 24.04 LTS"
+  floatingIP: true
+
+---
+apiVersion: openstack.apeirora.eu/v1alpha1
+kind: OpenStackVM
+metadata:
+  name: instance-2
+spec:
+  credentialsRef:
+    name: openstack-creds
+  sshKeySecretRef:
+    name: openstack-vm-instances-ssh
+  network: cloud_080745_1
+  floatingIPPool: external
+  securityGroups:
+    - default
+  resources:
+    cpu: 2
+    memory: 2Gi
+    flavorPattern: '^eo[12]a\.'
+  image: "Ubuntu 24.04 LTS"
+  floatingIP: true
+
+---
+apiVersion: openstack.apeirora.eu/v1alpha1
+kind: OpenStackVM
+metadata:
+  name: instance-3
+spec:
+  credentialsRef:
+    name: openstack-creds
+  sshKeySecretRef:
+    name: openstack-vm-instances-ssh
+  network: cloud_080745_1
+  securityGroups:
+    - default
+  resources:
+    cpu: 2
+    memory: 2Gi
+    flavorPattern: '^eo[12]a\.'
+  image: "Ubuntu 24.04 LTS"
+
+---
+apiVersion: openstack.apeirora.eu/v1alpha1
+kind: OpenStackVM
+metadata:
+  name: instance-4
+spec:
+  credentialsRef:
+    name: openstack-creds
+  sshKeySecretRef:
+    name: openstack-vm-instances-ssh
+  network: cloud_080745_1
+  securityGroups:
+    - default
+  resources:
+    cpu: 4
+    memory: 4Gi
+    flavorPattern: '^eo[12]a\.'
+  image: "Ubuntu 24.04 LTS"
