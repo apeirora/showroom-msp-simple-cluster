@@ -64,10 +64,9 @@ type ControlPlaneSpec struct {
 	// +kubebuilder:validation:Maximum=10
 	Nodes int32 `json:"nodes"`
 
-	// Requested is the per-node resource ask. Templates may translate this
-	// to a machine type / VM size.
-	// +optional
-	Requested *NodeResources `json:"requested,omitempty"`
+	// Requested is the per-node resource ask. Templates translate this to
+	// a machine type / VM size / flavor.
+	Requested NodeResources `json:"requested"`
 }
 
 // WorkersSpec describes the worker pool size and per-worker resource ask.
@@ -79,19 +78,16 @@ type WorkersSpec struct {
 
 	// Requested is the per-worker resource ask. Templates surface these as
 	// the worker machine type / VM size / replica resources.
-	// +optional
-	Requested *NodeResources `json:"requested,omitempty"`
+	Requested NodeResources `json:"requested"`
 }
 
 // NodeResources is the per-node resource ask, shared by ControlPlaneSpec and
 // WorkersSpec.
 type NodeResources struct {
 	// CPU is the requested CPU per node (e.g. "16", "500m").
-	// +optional
-	CPU resource.Quantity `json:"cpu,omitempty"`
+	CPU resource.Quantity `json:"cpu"`
 	// Memory is the requested memory per node (e.g. "32Gi", "32GB").
-	// +optional
-	Memory resource.Quantity `json:"memory,omitempty"`
+	Memory resource.Quantity `json:"memory"`
 }
 
 // ResourceReason narrows why a ResourceStatus has its current Phase. It is
