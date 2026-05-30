@@ -155,6 +155,19 @@ type ResourceSpec struct {
 	// (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
 	// +optional
 	DeletionAnnotations map[string]string `json:"deletionAnnotations,omitempty"`
+
+	// ForceCleanupOnCascade, when true, tells the operator that R has no
+	// external state worth tearing down gracefully in the context of a
+	// SimpleCluster delete cascade: after issuing Delete the operator
+	// will give R a short grace window and then strip all finalizers,
+	// letting K8s GC it immediately. Use for layers whose graceful
+	// teardown depends on infrastructure that is itself being deleted
+	// in the same cascade (e.g. UbuntuCluster's SSH-based k3s uninstall
+	// on VMs that are about to disappear). Do NOT set on resources that
+	// own external state which must be reclaimed by their controller
+	// (Gardener Shoot, OpenStackVM, …) — they will leak.
+	// +optional
+	ForceCleanupOnCascade bool `json:"forceCleanupOnCascade,omitempty"`
 }
 
 // ReadinessCheck (formerly StatusMap) projects a target resource's status
