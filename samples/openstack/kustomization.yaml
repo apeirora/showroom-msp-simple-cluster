@@ -4,5 +4,5 @@ resources:
   - openstack-creds-secret.yaml
   - openstack-sample-ssh-secret.yaml
   - scpc-openstack.yaml
-#  - single-vm.yaml
+#  - vm-instances.yaml
 #  - simplecluster.yaml
