@@ -55,5 +55,5 @@ on its own to exercise just `simple-cluster-operator-openstack`:
 
 ```sh
 kubectl apply -f samples/openstack/openstack-creds-secret.yaml
-kubectl apply -f samples/openstack/single-vm.yaml
+kubectl apply -f samples/openstack/vm-instances.yaml
 ```
