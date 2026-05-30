@@ -8,13 +8,9 @@ metadata:
 spec:
   target:
     namespace: garden-pm-cc-d2
-    # NOTE: on msp03 the original Gardener CR pointed at
-    # default/gardener-sap-kubeconfig which does not exist. Pointing at the
-    # same simple-shoot/gardener-sap-kubeconfig used by sap-openstack since
-    # both target garden-pm-cc-d2 on the same Gardener API.
     kubeconfigSecretRef:
       name: gardener-sap-kubeconfig
-      namespace: simple-shoot
+      namespace: default
   inputs:
     - { name: cloudProfile, type: string,   default: ironcore,                    description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: wdf4,                        description: "Cloud region" }

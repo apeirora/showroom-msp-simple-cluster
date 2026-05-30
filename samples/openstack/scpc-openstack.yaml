@@ -1,0 +1,98 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: openstack-sample
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+spec:
+  target:
+    namespace: default
+
+  inputs:
+    - { name: network,        type: string, default: cloud_080745_1,     description: "Neutron network" }
+    - { name: floatingIPPool, type: string, default: external,           description: "External network providing FIPs for control-plane VMs" }
+    - { name: image,          type: string, default: "Ubuntu 24.04 LTS", description: "Glance image" }
+    - { name: flavorPattern,  type: string, default: '^eo[12]a\.',       description: "Regex narrowing Nova flavor candidates" }
+
+  resources:
+    - name: vmcp
+      apiVersion: openstack.apeirora.eu/v1alpha1
+      kind: OpenStackVM
+      repeat: "{{ .SC.controlPlane.nodes }}"
+      template: |
+        apiVersion: openstack.apeirora.eu/v1alpha1
+        kind: OpenStackVM
+        spec:
+          credentialsRef:
+            name: openstack-creds
+          network: {{ .Inputs.network }}
+          floatingIPPool: {{ .Inputs.floatingIPPool }}
+          floatingIP: true
+          securityGroups:
+            - default
+          resources:
+            cpu: "{{ .SC.controlPlane.requested.cpu }}"
+            memory: "{{ .SC.controlPlane.requested.memory }}"
+            flavorPattern: '{{ .Inputs.flavorPattern }}'
+          image: "{{ .Inputs.image }}"
+          userData: |
+            #cloud-config
+            ssh_authorized_keys:
+              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYRfmGXcSdAxBZ5pcdONfiHkR9f3Ed9yvgQM3Fe9kV2 openstack-sample-ssh@sample"
+
+    - name: vmworker
+      apiVersion: openstack.apeirora.eu/v1alpha1
+      kind: OpenStackVM
+      repeat: "{{ .SC.workers.nodes }}"
+      template: |
+        apiVersion: openstack.apeirora.eu/v1alpha1
+        kind: OpenStackVM
+        spec:
+          credentialsRef:
+            name: openstack-creds
+          network: {{ .Inputs.network }}
+          floatingIP: false
+          securityGroups:
+            - default
+          resources:
+            cpu: "{{ .SC.workers.requested.cpu }}"
+            memory: "{{ .SC.workers.requested.memory }}"
+            flavorPattern: '{{ .Inputs.flavorPattern }}'
+          image: "{{ .Inputs.image }}"
+          userData: |
+            #cloud-config
+            ssh_authorized_keys:
+              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYRfmGXcSdAxBZ5pcdONfiHkR9f3Ed9yvgQM3Fe9kV2 openstack-sample-ssh@sample"
+
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn:
+        - vmcp
+        - vmworker
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          ssh:
+            user: eouser
+            privateKeySecretRef:
+              name: openstack-sample-ssh
+          controlPlane:
+            hosts:
+              {{- range $i, $vm := .Resources.vmcp }}
+              - name: cp-{{ $i }}
+                address: {{ $vm.status.internalAddress }}
+                externalAddress: {{ $vm.status.externalAddress }}
+              {{- end }}
+          workers:
+            hosts:
+              {{- range $i, $vm := .Resources.vmworker }}
+              - name: worker-{{ $i }}
+                address: {{ $vm.status.internalAddress }}
+              {{- end }}
+
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"

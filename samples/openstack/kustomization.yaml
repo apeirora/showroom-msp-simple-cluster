@@ -1,5 +1,8 @@
-## simple-cluster-operator-openstack: standalone vm.
+## openstack SCPC + sample SimpleCluster.
+
 resources:
   - openstack-creds-secret.yaml
-  - single-vm.yaml
-
+  - openstack-sample-ssh-secret.yaml
+  - scpc-openstack.yaml
+#  - single-vm.yaml
+#  - simplecluster.yaml
