@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ubuntu-machines-ssh
-type: kubernetes.io/ssh-auth
-stringData:
-  ssh-privatekey: |
-    <REDACTED: demo SSH private key removed before open-sourcing>
