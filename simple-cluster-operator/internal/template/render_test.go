@@ -77,8 +77,8 @@ data:
 		t.Errorf("namespace not enforced: got %q", obj.GetNamespace())
 	}
 	annos := obj.GetAnnotations()
-	if annos[AnnoSCName] != "foo" || annos[AnnoResourceName] != "config" {
-		t.Errorf("tracking annotations missing: %+v", annos)
+	if annos[AnnoSimpleCluster] != "users/foo" {
+		t.Errorf("%s = %q want users/foo", AnnoSimpleCluster, annos[AnnoSimpleCluster])
 	}
 	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
 	if data["workers"] != "3" {
@@ -302,9 +302,6 @@ data:
 		wantName := "foo-vm-" + strconv.Itoa(i)
 		if obj.GetName() != wantName {
 			t.Errorf("obj %d: name=%q want %q", i, obj.GetName(), wantName)
-		}
-		if obj.GetAnnotations()[AnnoResourceIdx] != strconv.Itoa(i) {
-			t.Errorf("obj %d: index anno = %q", i, obj.GetAnnotations()[AnnoResourceIdx])
 		}
 		data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
 		if data["idx"] != strconv.Itoa(i) {
