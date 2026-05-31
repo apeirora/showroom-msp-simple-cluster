@@ -1,0 +1,34 @@
+apiVersion: apis.kcp.io/v1alpha2
+kind: APIExport
+metadata:
+  name: simpleclusters.showroom.apeirora.eu
+  labels:
+    # Marketplace/ContentConfigurations virtual-workspace filters on content-for
+    # = APIExport name. Must match `simpleclusters.showroom.apeirora.eu` verbatim.
+    ui.platform-mesh.io/content-for: simpleclusters.showroom.apeirora.eu
+spec:
+  resources:
+    - group: showroom.apeirora.eu
+      name: simpleclusters
+      schema: v1alpha1.simpleclusters.showroom.apeirora.eu
+      storage:
+        crd: {}
+  permissionClaims:
+    # Each claim sets `all: true` (APIExport v1alpha2 requires either `all` or
+    # `resourceSelector`); the api-syncagent mirrors namespaces and Events
+    # between KCP and the MSP cluster.
+    - group: ""
+      resource: namespaces
+      verbs: ["*"]
+      all: true
+    - group: ""
+      resource: events
+      verbs: ["*"]
+      all: true
+    # Kubeconfig sync-back path: the operator writes a Secret referenced by
+    # SimpleCluster.status.kubeconfigSecretRef; the syncagent mirrors it back
+    # into the consuming account workspace so the UI can download it.
+    - group: ""
+      resource: secrets
+      verbs: ["*"]
+      all: true
