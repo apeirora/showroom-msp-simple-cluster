@@ -1,0 +1,6 @@
+apiVersion: v2
+name: simple-cluster-ui
+description: Serve the SimpleCluster Platform Mesh portal bundle (nginx + ingress) on the MSP cluster.
+type: application
+version: 0.1.0
+appVersion: 0.1.0

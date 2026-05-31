@@ -1,0 +1,27 @@
+{{- if .Values.publishedResources.enabled }}
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: publish-simpleclusters
+  namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: simple-cluster-sync-agent
+    app.kubernetes.io/component: portal-integration
+spec:
+  resource:
+    kind: SimpleCluster
+    apiGroup: showroom.apeirora.eu
+    version: v1alpha1
+  naming:
+    namespace: "{{`{{ .ClusterName }}`}}"
+    name: "{{`{{ .Object.metadata.name }}`}}"
+  related:
+    # Mirror the kubeconfig Secret written by the operator back into the
+    # consuming account workspace so the portal can download it.
+    - identifier: kubeconfig-secret
+      origin: service
+      kind: Secret
+      object:
+        reference:
+          path: status.kubeconfigSecretRef.name
+{{- end }}
