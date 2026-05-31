@@ -28,24 +28,36 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  build:
-    name: Build and publish
+  publish-images:
+    name: Publish image (${{ matrix.image }})
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: simple-cluster-operator
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # simple-cluster-operator's Dockerfile honours TARGETARCH, so it
+          # builds multi-arch. The companion operators hard-code GOARCH=amd64,
+          # so they are published amd64-only until their Dockerfiles change.
+          - context: simple-cluster-operator
+            image: simple-cluster-operator
+            platforms: linux/amd64,linux/arm64
+          - context: simple-cluster-operator-kind
+            image: kind-cluster-operator
+            platforms: linux/amd64
+          - context: simple-cluster-operator-openstack
+            image: simple-cluster-operator-openstack
+            platforms: linux/amd64
+          - context: simple-cluster-operator-ubuntu
+            image: simple-cluster-operator-ubuntu
+            platforms: linux/amd64
+          - context: ubuntu-machines
+            image: ubuntu-machines
+            platforms: linux/amd64
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: simple-cluster-operator/go.mod
-          cache: true
-          cache-dependency-path: simple-cluster-operator/go.sum
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -57,20 +69,55 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Publish Docker image
-        env:
-          VERSION: ${{ needs.release-please.outputs.version }}
-        run: |
-          echo "Releasing $VERSION"
-          make docker-publish VERSION=$VERSION
-
-      - name: Generate install manifest
-        env:
-          VERSION: ${{ needs.release-please.outputs.version }}
-        run: make build-installer IMG=ghcr.io/apeirora/simple-cluster-operator:$VERSION
-
-      - name: Upload install manifest
-        uses: actions/upload-artifact@v4
+      - name: Build and push
+        uses: docker/build-push-action@v6
         with:
-          name: install-manifest
-          path: simple-cluster-operator/dist/install.yaml
+          context: ${{ matrix.context }}
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: |
+            ghcr.io/apeirora/${{ matrix.image }}:${{ needs.release-please.outputs.version }}
+            ghcr.io/apeirora/${{ matrix.image }}:latest
+
+  publish-charts:
+    name: Package and publish Helm charts
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.release-please.outputs.version }}
+      OCI_REPO: oci://ghcr.io/apeirora/charts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GitHub Container Registry
+        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package and push charts
+        run: |
+          set -euo pipefail
+          CHARTS=(
+            simple-cluster-system
+            ubuntu-machines-operator
+            simple-cluster-pm-integration
+            simple-cluster-ui
+            simple-cluster-sync-agent
+          )
+          mkdir -p .cr-release-packages
+          for c in "${CHARTS[@]}"; do
+            echo ">>> $c"
+            # Resolve external dependencies (e.g. api-syncagent); umbrella
+            # sub-charts are vendored so this is a no-op for them.
+            helm dependency build "charts/$c" || true
+            helm package "charts/$c" \
+              --version "$VERSION" --app-version "$VERSION" \
+              --destination .cr-release-packages
+          done
+          for pkg in .cr-release-packages/*.tgz; do
+            echo ">>> push $pkg"
+            helm push "$pkg" "$OCI_REPO"
+          done
