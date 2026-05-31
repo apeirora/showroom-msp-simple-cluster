@@ -1,4 +1,4 @@
-namespace: simple-cluster-operator-openstack-system
+namespace: simple-cluster-system
 namePrefix: simple-cluster-operator-openstack-
 
 labels:

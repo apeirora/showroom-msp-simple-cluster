@@ -6,6 +6,8 @@ cliVersion: 4.9.0
 domain: apeirora.eu
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
 projectName: ubuntu-machines
 repo: github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines
 resources:

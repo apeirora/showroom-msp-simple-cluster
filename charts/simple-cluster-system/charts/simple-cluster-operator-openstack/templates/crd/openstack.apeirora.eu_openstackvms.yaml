@@ -1,0 +1,335 @@
+{{- if .Values.crd.enable }}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.crd.keep }}
+    "helm.sh/resource-policy": keep
+    {{- end }}
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openstackvms.openstack.apeirora.eu
+spec:
+  group: openstack.apeirora.eu
+  names:
+    kind: OpenStackVM
+    listKind: OpenStackVMList
+    plural: openstackvms
+    shortNames:
+    - osvm
+    singular: openstackvm
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.resolvedFlavor.flavor
+      name: Flavor
+      type: string
+    - jsonPath: .status.internalAddress
+      name: Internal
+      type: string
+    - jsonPath: .status.externalAddress
+      name: External
+      type: string
+    - jsonPath: .status.sshSecretRef.name
+      name: SSH
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OpenStackVM requests one Nova server on the OpenStack cloud whose
+          credentials live in CredentialsRef. The operator generates a per-VM
+          ed25519 SSH keypair and publishes both the public key to Nova and the
+          keypair to a Secret named `<vm-name>-ssh`.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OpenStackVMSpec describes one Nova server. The CR is self-contained:
+              every spec field is what Nova actually needs (no shared parent CR).
+            properties:
+              credentialsRef:
+                description: |-
+                  CredentialsRef is a Secret in the same namespace carrying Keystone
+                  v3 application credentials. Required keys:
+                  OS_AUTH_URL, OS_REGION_NAME, OS_APPLICATION_CREDENTIAL_ID,
+                  OS_APPLICATION_CREDENTIAL_SECRET.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              floatingIP:
+                description: |-
+                  FloatingIP, when true, allocates one FIP from spec.floatingIPPool
+                  and attaches it to the server's port.
+                type: boolean
+              floatingIPPool:
+                description: |-
+                  FloatingIPPool is the name (or UUID) of the external network from
+                  which a floating IP is allocated when FloatingIP is true.
+                type: string
+              image:
+                description: Image is the Glance image name (e.g. "Ubuntu 24.04 LTS").
+                minLength: 1
+                type: string
+              network:
+                description: |-
+                  Network is the name (or UUID) of the Neutron network this server's
+                  port lives on.
+                minLength: 1
+                type: string
+              resources:
+                description: |-
+                  Resources is the per-VM CPU/memory floor. The operator picks the
+                  smallest Nova flavor that meets both requirements and records the
+                  choice in status.resolvedFlavor.
+                properties:
+                  cpu:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: |-
+                      CPU is the minimum vCPU count. Parsed as resource.Quantity so both
+                      integer ("2") and millicore ("1500m") forms work; millicores are
+                      rounded up since Nova flavors are integer-vCPU.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  flavorPattern:
+                    description: |-
+                      FlavorPattern, when set, narrows the picker to Nova flavors whose
+                      name matches this Go regex. Use it to exclude specialised
+                      hardware: e.g. `^eo[12]a\.` keeps only CloudFerro general-purpose
+                      flavors and rules out gpu.* / vm.l40s.* which otherwise win the
+                      "smallest fit" comparison.
+                    type: string
+                  memory:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: |-
+                      Memory is the minimum RAM (e.g. "4Gi", "32GB"). Rounded up to MiB
+                      to compare with Nova's flavor RAM field.
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                required:
+                - cpu
+                - memory
+                type: object
+              securityGroups:
+                description: |-
+                  SecurityGroups is the list of Neutron security-group names attached
+                  to the server's port. If empty the project default is used.
+                items:
+                  type: string
+                type: array
+              sshKeySecretRef:
+                description: |-
+                  SSHKeySecretRef opts the VM into a shared SSH keypair. When set the
+                  operator looks up the named Secret (Namespace defaults to the VM's
+                  namespace) and uses its `ssh-publickey` to register a single Nova
+                  keypair derived from the Secret's name; multiple VMs pointing at
+                  the same Secret share that Nova keypair. If the Secret does not
+                  exist the operator generates a fresh ed25519 keypair into it. When
+                  unset the operator falls back to the per-VM Secret `<vm-name>-ssh`
+                  in the VM's namespace.
+                properties:
+                  name:
+                    description: name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: namespace defines the space within which the secret
+                      name must be unique.
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              userData:
+                description: |-
+                  UserData is cloud-init payload injected verbatim (already plain
+                  text — the operator base64-encodes it before calling Nova).
+                type: string
+            required:
+            - credentialsRef
+            - image
+            - network
+            - resources
+            type: object
+          status:
+            description: OpenStackVMStatus is the observed state of one Nova server.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              externalAddress:
+                description: ExternalAddress is the allocated floating address, if
+                  any.
+                type: string
+              internalAddress:
+                description: InternalAddress is the first fixed IP on spec.network.
+                type: string
+              keypairName:
+                description: KeypairName is the name registered in Nova (equals the
+                  CR name).
+                type: string
+              novaStatus:
+                description: |-
+                  NovaStatus mirrors Nova's `status` field (e.g. "ACTIVE", "BUILD",
+                  "ERROR"). Empty until the server exists.
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              phase:
+                description: Phase is the coarse state.
+                enum:
+                - Init
+                - Provisioning
+                - Ready
+                - Failed
+                - Deleting
+                type: string
+              resolvedFlavor:
+                description: |-
+                  ResolvedFlavor is the operator's plan: the Nova flavor it picked
+                  to satisfy Resources, plus a one-line summary.
+                properties:
+                  cpu:
+                    description: CPU is the picked flavor's vCPU count.
+                    format: int32
+                    type: integer
+                  flavor:
+                    description: Flavor is the Nova flavor name picked (e.g. "eo1a.medium").
+                    type: string
+                  flavorDescription:
+                    description: |-
+                      FlavorDescription is a one-line summary of the picked flavor's
+                      specs (vCPU / RAM / disk).
+                    type: string
+                  image:
+                    description: Image mirrors spec.Image — the Glance image name
+                      handed to Nova.
+                    type: string
+                  memory:
+                    description: |-
+                      Memory is the picked flavor's RAM as a human-readable size
+                      (e.g. "4 GiB", "512 MiB").
+                    type: string
+                type: object
+              serverID:
+                description: ServerID is the Nova server UUID once Nova accepts the
+                  create call.
+                type: string
+              sshSecretRef:
+                description: |-
+                  SSHSecretRef references the Secret in this namespace holding the
+                  ed25519 keypair the operator generated for this VM. Key names:
+                  ssh-privatekey, ssh-publickey.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+{{- end -}}

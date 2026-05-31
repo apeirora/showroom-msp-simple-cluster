@@ -1,0 +1,48 @@
+{{- if .Values.rbac.enable }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: kind-cluster-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kind.apeirora.eu
+  resources:
+  - kindclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kind.apeirora.eu
+  resources:
+  - kindclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kind.apeirora.eu
+  resources:
+  - kindclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+{{- end -}}

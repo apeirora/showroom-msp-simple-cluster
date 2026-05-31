@@ -45,7 +45,7 @@ type InputEnumValue struct {
 // InputDeclaration is a single SC input slot: name, type, default, and metadata
 // to make the SCPC self-documenting (kubectl explain / UI rendering).
 type InputDeclaration struct {
-	// Name as referenced from the template (e.g. region -> {{ .Inputs.region }}).
+	// Name as referenced from the template (e.g. region -> .Inputs.region).
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_]*$`
 	Name string `json:"name"`
