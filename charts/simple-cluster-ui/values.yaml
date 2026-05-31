@@ -1,0 +1,57 @@
+# Hostname under which the UI (and pm-content.json) is served. Must match the
+# PUBLIC_HOST/PUBLIC_SCHEME of the simple-cluster-pm-integration chart so the
+# portal's ContentConfiguration.remoteConfiguration.url resolves here.
+PUBLIC_HOST: "localhost"
+PUBLIC_SCHEME: "http"
+
+tls:
+  secretName: ""
+
+ingress:
+  extraAnnotations: {}
+
+traefik:
+  ingressClass:
+    name: ""
+
+imagePullSecrets: []
+
+ui:
+  enabled: true
+  contentPath: "/pm-content.json"
+  image:
+    repository: nginx
+    tag: "1.27"
+    pullPolicy: IfNotPresent
+  resources: {}
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    annotations: {}
+
+branding:
+  sidebar:
+    title: "Simple Cluster"
+
+# Predefined CPU/memory choices surfaced in the create dialog. Editing these
+# tunes the dropdowns without rebuilding anything.
+clusterConfig:
+  controlPlaneNodes:
+    - "1"
+    - "3"
+  workerNodes:
+    - "1"
+    - "2"
+    - "3"
+    - "5"
+  cpu:
+    - "2"
+    - "4"
+    - "8"
+    - "16"
+  memory:
+    - "4Gi"
+    - "8Gi"
+    - "16Gi"
+    - "32Gi"
