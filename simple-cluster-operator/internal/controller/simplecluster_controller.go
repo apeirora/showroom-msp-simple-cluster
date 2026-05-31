@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -489,61 +490,12 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		levelDone := true
 		for _, t := range targets {
 			ri := tc.ResourceFor(mapping, t.namespace)
-
-			existing, gerr := ri.Get(ctx, t.name, metav1.GetOptions{})
-			if apierrors.IsNotFound(gerr) {
-				continue
+			exists, derr := r.deleteOneTarget(ctx, ri, rs, gvk, name, t.name)
+			if derr != nil {
+				return false, derr
 			}
-			if gerr != nil {
-				return false, fmt.Errorf("resource %q: get %s: %w", name, t.name, gerr)
-			}
-
-			levelDone = false
-
-			// First time we see this target after SC was marked for
-			// deletion: patch deletionAnnotations (Gardener-style opt-in)
-			// and issue Delete. Subsequent reconciles skip the work — the
-			// presence of a non-zero deletionTimestamp means our prior
-			// Delete already landed.
-			if existing.GetDeletionTimestamp().IsZero() {
-				if len(rs.DeletionAnnotations) > 0 {
-					patchBytes, perr := json.Marshal(map[string]any{
-						"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
-					})
-					if perr != nil {
-						return false, fmt.Errorf("resource %q: marshal deletionAnnotations: %w", name, perr)
-					}
-					if _, perr := ri.Patch(ctx, t.name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
-						return false, fmt.Errorf("resource %q: patch deletionAnnotations: %w", name, perr)
-					}
-				}
-				if derr := ri.Delete(ctx, t.name, metav1.DeleteOptions{}); derr != nil && !apierrors.IsNotFound(derr) {
-					return false, fmt.Errorf("resource %q: delete %s: %w", name, t.name, derr)
-				}
-				log.Info("target resource delete requested",
-					"resource", name, "name", t.name, "gvk", gvk.String())
-				continue
-			}
-
-			// Force-cleanup escape hatch: R is opted in via SCPC and has
-			// been Terminating long enough that we no longer expect the
-			// downstream controller to make progress on its own (typically
-			// because the infrastructure it relied on is also gone). Strip
-			// all finalizers so K8s GC removes R immediately.
-			if rs.ForceCleanupOnCascade && len(existing.GetFinalizers()) > 0 &&
-				time.Since(existing.GetDeletionTimestamp().Time) >= forceCleanupGrace {
-				patchBytes, perr := json.Marshal(map[string]any{
-					"metadata": map[string]any{"finalizers": []string{}},
-				})
-				if perr != nil {
-					return false, fmt.Errorf("resource %q: marshal finalizer strip: %w", name, perr)
-				}
-				if _, perr := ri.Patch(ctx, t.name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
-					return false, fmt.Errorf("resource %q: force-strip finalizers: %w", name, perr)
-				}
-				log.Info("force-stripped finalizers after grace window",
-					"resource", name, "name", t.name, "gvk", gvk.String(),
-					"grace", forceCleanupGrace)
+			if exists {
+				levelDone = false
 			}
 		}
 		if !levelDone {
@@ -552,6 +504,75 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			return false, nil
 		}
 	}
+	return true, nil
+}
+
+// deleteOneTarget issues (or progresses) the deletion of a single target
+// object. It reports whether the object still exists — i.e. whether the caller
+// must keep waiting before deleting this level's predecessors. On error the
+// returned bool is meaningless; the caller bails out on err.
+func (r *SimpleClusterReconciler) deleteOneTarget(
+	ctx context.Context,
+	ri dynamic.ResourceInterface,
+	rs *showroomv1alpha1.ResourceSpec,
+	gvk schema.GroupVersionKind,
+	resourceName, targetName string,
+) (bool, error) {
+	log := logf.FromContext(ctx)
+
+	existing, err := ri.Get(ctx, targetName, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("resource %q: get %s: %w", resourceName, targetName, err)
+	}
+
+	// First time we see this target after SC was marked for deletion: patch
+	// deletionAnnotations (Gardener-style opt-in) and issue Delete. Subsequent
+	// reconciles skip the work — a non-zero deletionTimestamp means our prior
+	// Delete already landed.
+	if existing.GetDeletionTimestamp().IsZero() {
+		if len(rs.DeletionAnnotations) > 0 {
+			patchBytes, perr := json.Marshal(map[string]any{
+				"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
+			})
+			if perr != nil {
+				return true, fmt.Errorf("resource %q: marshal deletionAnnotations: %w", resourceName, perr)
+			}
+			if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
+				return true, fmt.Errorf("resource %q: patch deletionAnnotations: %w", resourceName, perr)
+			}
+		}
+		if derr := ri.Delete(ctx, targetName, metav1.DeleteOptions{}); derr != nil && !apierrors.IsNotFound(derr) {
+			return true, fmt.Errorf("resource %q: delete %s: %w", resourceName, targetName, derr)
+		}
+		log.Info("target resource delete requested",
+			"resource", resourceName, "name", targetName, "gvk", gvk.String())
+		return true, nil
+	}
+
+	// Force-cleanup escape hatch: R is opted in via SCPC and has been
+	// Terminating long enough that we no longer expect the downstream
+	// controller to make progress on its own (typically because the
+	// infrastructure it relied on is also gone). Strip all finalizers so K8s GC
+	// removes R immediately.
+	if rs.ForceCleanupOnCascade && len(existing.GetFinalizers()) > 0 &&
+		time.Since(existing.GetDeletionTimestamp().Time) >= forceCleanupGrace {
+		patchBytes, perr := json.Marshal(map[string]any{
+			"metadata": map[string]any{"finalizers": []string{}},
+		})
+		if perr != nil {
+			return true, fmt.Errorf("resource %q: marshal finalizer strip: %w", resourceName, perr)
+		}
+		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
+			return true, fmt.Errorf("resource %q: force-strip finalizers: %w", resourceName, perr)
+		}
+		log.Info("force-stripped finalizers after grace window",
+			"resource", resourceName, "name", targetName, "gvk", gvk.String(),
+			"grace", forceCleanupGrace)
+	}
+
 	return true, nil
 }
 
