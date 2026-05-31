@@ -1,0 +1,61 @@
+{{- if .Values.rbac.enable }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: ubuntu-machines-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachines
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachines/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachineclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachineclaims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachineclaims/status
+  verbs:
+  - get
+  - update
+  - patch
+{{- end -}}

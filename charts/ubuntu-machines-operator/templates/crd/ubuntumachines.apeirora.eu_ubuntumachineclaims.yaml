@@ -1,0 +1,151 @@
+{{- if .Values.crd.enable }}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: ubuntumachineclaims.ubuntumachines.apeirora.eu
+spec:
+  group: ubuntumachines.apeirora.eu
+  names:
+    kind: UbuntuMachineClaim
+    listKind: UbuntuMachineClaimList
+    plural: ubuntumachineclaims
+    singular: ubuntumachineclaim
+    shortNames:
+      - umc
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - jsonPath: .status.phase
+          name: Phase
+          type: string
+        - jsonPath: .status.machine.name
+          name: Machine
+          type: string
+        - jsonPath: .spec.externalAddressRequired
+          name: External
+          type: boolean
+        - jsonPath: .spec.required.cpu
+          name: CPU
+          type: string
+        - jsonPath: .spec.required.memory
+          name: Memory
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      schema:
+        openAPIV3Schema:
+          description: |-
+            UbuntuMachineClaim is the consumer-facing CR: "give me one machine".
+            Modeled after PersistentVolumeClaim — one claim binds one
+            UbuntuMachine. Bound machines can be used for anything reachable
+            over SSH.
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              properties:
+                externalAddressRequired:
+                  description: Restrict candidates to UbuntuMachines whose `spec.externalAddress` is non-empty.
+                  type: boolean
+                required:
+                  description: Per-machine resource floor. Zero / omitted = no constraint.
+                  type: object
+                  properties:
+                    cpu:
+                      anyOf:
+                        - type: integer
+                        - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    memory:
+                      anyOf:
+                        - type: integer
+                        - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Ready
+                machine:
+                  description: Embedded snapshot of the bound UbuntuMachine. Nil when Pending.
+                  type: object
+                  required:
+                    - name
+                    - address
+                    - ssh
+                  properties:
+                    name:
+                      type: string
+                    address:
+                      type: string
+                    externalAddress:
+                      type: string
+                    ssh:
+                      type: object
+                      required:
+                        - user
+                        - privateKeySecretRef
+                      properties:
+                        user:
+                          type: string
+                        port:
+                          type: integer
+                        privateKeySecretRef:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              default: ""
+                observedGeneration:
+                  type: integer
+                  format: int64
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      type:
+                        type: string
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+{{- end -}}
