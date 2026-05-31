@@ -1,0 +1,16 @@
+apiVersion: v2
+name: simple-cluster-sync-agent
+description: >-
+  Deploy the KCP Sync Agent plus published-resource wrappers for the
+  simple-cluster-operator. Bridges SimpleCluster CRs (and their kubeconfig
+  Secrets) between a user's KCP account workspace and the operators running on
+  the MSP service cluster.
+type: application
+version: 0.1.0
+appVersion: 0.1.0
+dependencies:
+  - name: api-syncagent
+    alias: syncAgentOperator
+    version: 0.4.2
+    repository: https://kcp-dev.github.io/helm-charts
+    condition: syncAgentOperator.enabled

@@ -1,0 +1,16 @@
+rbac:
+  enabled: false
+
+# Public host/scheme of the simple-cluster-ui that serves pm-content.json.
+# The portal fetches ContentConfiguration.remoteConfiguration.url from here.
+PUBLIC_HOST: "localhost"
+PUBLIC_SCHEME: "http"
+
+metadata:
+  enabled: true
+  contentPath: "/pm-content.json"
+
+branding:
+  marketplace:
+    title: "Simple Cluster"
+    description: "Self-service Kubernetes clusters via the SimpleCluster API (Gardener, OpenStack, Ubuntu/SSH, KinD)."
