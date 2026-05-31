@@ -1,0 +1,7 @@
+apiVersion: v2
+name: simple-cluster-operator-openstack
+description: A Helm chart to distribute the project simple-cluster-operator-openstack
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+icon: "https://example.com/icon.png"

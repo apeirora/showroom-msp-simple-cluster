@@ -1,0 +1,68 @@
+{{- if .Values.rbac.enable }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: simple-cluster-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authentication.gardener.cloud
+  - core.gardener.cloud
+  - kind.apeirora.eu
+  - openstack.apeirora.eu
+  - ubuntu.apeirora.eu
+  - ubuntumachines.apeirora.eu
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - showroom.apeirora.eu
+  resources:
+  - simpleclusterproviderconfigs
+  - simpleclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - showroom.apeirora.eu
+  resources:
+  - simpleclusterproviderconfigs/finalizers
+  - simpleclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - showroom.apeirora.eu
+  resources:
+  - simpleclusterproviderconfigs/status
+  - simpleclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+{{- end -}}

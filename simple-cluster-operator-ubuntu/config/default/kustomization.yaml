@@ -1,4 +1,4 @@
-namespace: simple-cluster-operator-ubuntu-system
+namespace: simple-cluster-system
 namePrefix: simple-cluster-operator-ubuntu-
 
 labels:

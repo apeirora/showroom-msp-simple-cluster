@@ -12,6 +12,6 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends docker.io ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /workspace/manager /usr/local/bin/manager
+COPY --from=builder /workspace/manager /manager
 USER 65532:65532
-ENTRYPOINT ["/usr/local/bin/manager"]
+ENTRYPOINT ["/manager"]
