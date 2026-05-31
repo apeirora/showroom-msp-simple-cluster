@@ -1,0 +1,26 @@
+## Sub-chart defaults. Override per-operator under each name key, e.g.:
+##   helm install ... \
+##     --set simple-cluster-operator.controllerManager.container.image.tag=v1.2.3
+##
+## See each sub-chart's values.yaml for the full surface.
+
+## The default metrics Service name is `<release>-<operator>-controller-
+## manager-metrics-service` which exceeds the K8s 63-char limit for
+## the long operator names. We don't use the metrics endpoint, so
+## metrics is disabled across all sub-charts here.
+
+simple-cluster-operator:
+  metrics:
+    enable: false
+
+kind-cluster-operator:
+  metrics:
+    enable: false
+
+simple-cluster-operator-openstack:
+  metrics:
+    enable: false
+
+simple-cluster-operator-ubuntu:
+  metrics:
+    enable: false

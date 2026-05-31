@@ -72,7 +72,7 @@ spec:
                       type: string
                     name:
                       description: Name as referenced from the template (e.g. region
-                        -> {{ .Inputs.region }}).
+                        -> .Inputs.region).
                       minLength: 1
                       pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
                       type: string
