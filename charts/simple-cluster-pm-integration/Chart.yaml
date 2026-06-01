@@ -2,9 +2,9 @@ apiVersion: v2
 name: simple-cluster-pm-integration
 description: >-
   Platform Mesh portal metadata
-  (APIExport/APIResourceSchema/ProviderMetadata/ContentConfiguration) for the
+  (APIExport/ProviderMetadata/ContentConfiguration) for the
   simple-cluster-operator (SimpleCluster) provider, applied in the KCP control
   plane (cc-d2).
 type: application
-version: 0.1.0
+version: 0.2.1
 appVersion: 0.1.0
