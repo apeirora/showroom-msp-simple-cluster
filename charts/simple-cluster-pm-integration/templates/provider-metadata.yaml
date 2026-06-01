@@ -3,9 +3,6 @@
 apiVersion: ui.platform-mesh.io/v1alpha1
 kind: ProviderMetadata
 metadata:
-  # Marketplace discovery matches ProviderMetadata.name against APIExports
-  # labeled with ui.platform-mesh.io/content-for=<provider-name>.
-  # Must match the APIExport's metadata.name verbatim.
   name: simpleclusters.showroom.apeirora.eu
 spec:
   displayName: {{ $marketplaceTitle | quote }}
