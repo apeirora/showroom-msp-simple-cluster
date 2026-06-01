@@ -6,7 +6,7 @@ description: Umbrella chart that deploys simple-cluster-operator and its
   each operator's `kubebuilder edit --plugins=helm/v1-alpha` output
   by `scripts/regen-helm-charts.sh`.
 type: application
-version: 0.2.0
+version: 0.2.1
 appVersion: "0.1.0"
 dependencies:
   - name: simple-cluster-operator
