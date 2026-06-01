@@ -79,45 +79,7 @@ jobs:
             ghcr.io/apeirora/${{ matrix.image }}:${{ needs.release-please.outputs.version }}
             ghcr.io/apeirora/${{ matrix.image }}:latest
 
-  publish-charts:
-    name: Package and publish Helm charts
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.release-please.outputs.version }}
-      OCI_REPO: oci://ghcr.io/apeirora/charts
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Log in to GitHub Container Registry
-        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Package and push charts
-        run: |
-          set -euo pipefail
-          CHARTS=(
-            simple-cluster-system
-            ubuntu-machines-operator
-            simple-cluster-pm-integration
-            simple-cluster-ui
-            simple-cluster-sync-agent
-          )
-          mkdir -p .cr-release-packages
-          for c in "${CHARTS[@]}"; do
-            echo ">>> $c"
-            # Resolve external dependencies (e.g. api-syncagent); umbrella
-            # sub-charts are vendored so this is a no-op for them.
-            helm dependency build "charts/$c" || true
-            helm package "charts/$c" \
-              --version "$VERSION" --app-version "$VERSION" \
-              --destination .cr-release-packages
-          done
-          for pkg in .cr-release-packages/*.tgz; do
-            echo ">>> push $pkg"
-            helm push "$pkg" "$OCI_REPO"
-          done
+  # NOTE: Helm charts are published by .github/workflows/publish-charts.yml
+  # (triggered on charts/** changes, at each chart's own Chart.yaml version),
+  # not here — release-please is scoped to the simple-cluster-operator/ Go
+  # package, so chart-only changes would never cut a release.
