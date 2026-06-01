@@ -1,3 +1,12 @@
+# Matches the working showroom providers (cncf-postgres, private-llm): a plain
+# v1alpha2 APIExport with permissionClaims only. We deliberately DO NOT set
+# `all` on the claims, nor a static `resources`/`latestResourceSchemas` block:
+#   - `all` is a v1alpha2 field this environment's APIExport schema/gateway does
+#     not expose; setting it breaks the HelmRelease drift dry-run and the
+#     marketplace "enable" flow (ApolloError: unknown ApisKcpIoV1alpha2APIBinding
+#     ...permissionClaimsInput).
+#   - the exported resource schema (simpleclusters) is published dynamically by
+#     the api-syncagent from its PublishedResource, so no static schema is needed.
 apiVersion: apis.kcp.io/v1alpha2
 kind: APIExport
 metadata:
@@ -7,28 +16,17 @@ metadata:
     # = APIExport name. Must match `simpleclusters.showroom.apeirora.eu` verbatim.
     ui.platform-mesh.io/content-for: simpleclusters.showroom.apeirora.eu
 spec:
-  resources:
-    - group: showroom.apeirora.eu
-      name: simpleclusters
-      schema: v1alpha1.simpleclusters.showroom.apeirora.eu
-      storage:
-        crd: {}
   permissionClaims:
-    # Each claim sets `all: true` (APIExport v1alpha2 requires either `all` or
-    # `resourceSelector`); the api-syncagent mirrors namespaces and Events
-    # between KCP and the MSP cluster.
+    # namespaces + events: mirrored by the api-syncagent between KCP and the MSP
+    # cluster. secrets: the kubeconfig sync-back path (the operator writes a
+    # Secret referenced by SimpleCluster.status.kubeconfigSecretRef, mirrored
+    # back into the consuming account workspace so the UI can download it).
     - group: ""
       resource: namespaces
       verbs: ["*"]
-      all: true
     - group: ""
       resource: events
       verbs: ["*"]
-      all: true
-    # Kubeconfig sync-back path: the operator writes a Secret referenced by
-    # SimpleCluster.status.kubeconfigSecretRef; the syncagent mirrors it back
-    # into the consuming account workspace so the UI can download it.
     - group: ""
       resource: secrets
       verbs: ["*"]
-      all: true
