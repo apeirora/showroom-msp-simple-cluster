@@ -46,20 +46,14 @@ clusterConfig:
     - gardener-sap-openstack
     - openstack-sample
     - ubuntu-machines-sample
-  controlPlaneNodes:
-    - "1"
-    - "3"
-  workerNodes:
-    - "1"
-    - "2"
-    - "3"
-    - "5"
   cpu:
+    - "1"
     - "2"
     - "4"
     - "8"
     - "16"
   memory:
+    - "2Gi"
     - "4Gi"
     - "8Gi"
     - "16Gi"
