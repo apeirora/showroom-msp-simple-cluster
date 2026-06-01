@@ -1,39 +1,26 @@
-# APIExport for the SimpleCluster provider.
-#
-# MUST be apis.kcp.io/v1alpha1 (per the platform-mesh-integration skill and this
-# environment's gateway): the marketplace "enable" flow builds an APIBinding
-# GraphQL mutation whose type is derived from the APIExport version. A v1alpha2
-# APIExport makes the portal request ApisKcpIoV1alpha2APIBinding…Input, which the
-# kubernetes-graphql-gateway here does not generate (it only has v1alpha1) →
-# ApolloError on enable. v1alpha1 → v1alpha1 APIBinding → works.
-#
-# v1alpha1 uses latestResourceSchemas (not v1alpha2's `resources`) and its
-# permissionClaims schema DOES declare `all`, so no drift dry-run error.
-apiVersion: apis.kcp.io/v1alpha1
+apiVersion: apis.kcp.io/v1alpha2
 kind: APIExport
 metadata:
   name: simpleclusters.showroom.apeirora.eu
   labels:
-    # Marketplace/ContentConfigurations virtual-workspace filters on content-for
-    # = APIExport name. Must match `simpleclusters.showroom.apeirora.eu` verbatim.
     ui.platform-mesh.io/content-for: simpleclusters.showroom.apeirora.eu
 spec:
-  latestResourceSchemas:
-    - v1alpha1.simpleclusters.showroom.apeirora.eu
+  resources:
+    - group: showroom.apeirora.eu
+      name: simpleclusters
+      schema: v1alpha1.simpleclusters.showroom.apeirora.eu
+      storage:
+        crd: {}
   permissionClaims:
-    # namespaces + events: mirrored by the api-syncagent between KCP and the MSP
-    # cluster. secrets: the kubeconfig sync-back path (the operator writes a
-    # Secret referenced by SimpleCluster.status.kubeconfigSecretRef, mirrored
-    # back into the consuming account workspace so the UI can download it).
     - group: ""
       resource: namespaces
+      verbs: ["*"]
       all: true
-      identityHash: ""
     - group: ""
       resource: events
+      verbs: ["*"]
       all: true
-      identityHash: ""
     - group: ""
       resource: secrets
+      verbs: ["*"]
       all: true
-      identityHash: ""
