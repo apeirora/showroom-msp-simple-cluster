@@ -3,15 +3,14 @@ syncAgentOperator:
   apiExportName: simpleclusters.showroom.apeirora.eu
   agentName: simple-cluster-agent
   kcpKubeconfig: pm-kubeconfig
+  replicas: 1
+  enableLeaderElection: false
   extraFlags: []
   crds:
     enabled: false
 
 publishedResources:
   enabled: true
-  # namespace and serviceAccountName default to the release namespace / name.
-  # namespace: api-syncagent
-  # serviceAccountName: simple-cluster-agent
-
+  namespace: simple-cluster-system
 rbac:
   enabled: true
