@@ -13,4 +13,4 @@ metadata:
 branding:
   marketplace:
     title: "Simple Cluster"
-    description: "Self-service Kubernetes clusters via the SimpleCluster API (Gardener, OpenStack, Ubuntu/SSH, KinD)."
+    description: "Self-service Kubernetes clusters via the SimpleCluster API (multiple providers available)."
