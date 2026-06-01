@@ -1,26 +1,36 @@
-## Sub-chart defaults. Override per-operator under each name key, e.g.:
-##   helm install ... \
-##     --set simple-cluster-operator.controllerManager.container.image.tag=v1.2.3
-##
-## See each sub-chart's values.yaml for the full surface.
-
-## The default metrics Service name is `<release>-<operator>-controller-
-## manager-metrics-service` which exceeds the K8s 63-char limit for
-## the long operator names. We don't use the metrics endpoint, so
-## metrics is disabled across all sub-charts here.
-
+# TODO auto update image versions when deploying
 simple-cluster-operator:
   metrics:
     enable: false
+  controllerManager:
+    container:
+      image:
+        repository: ghcr.io/apeirora/simple-cluster-operator
+        tag: "0.2.0"
 
 kind-cluster-operator:
   metrics:
     enable: false
+  controllerManager:
+    container:
+      image:
+        repository: ghcr.io/apeirora/kind-cluster-operator
+        tag: "0.2.0"
 
 simple-cluster-operator-openstack:
   metrics:
     enable: false
+  controllerManager:
+    container:
+      image:
+        repository: ghcr.io/apeirora/simple-cluster-operator-openstack
+        tag: "0.2.0"
 
 simple-cluster-operator-ubuntu:
   metrics:
     enable: false
+  controllerManager:
+    container:
+      image:
+        repository: ghcr.io/apeirora/simple-cluster-operator-ubuntu
+        tag: "0.2.0"
