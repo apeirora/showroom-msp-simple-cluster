@@ -33,7 +33,7 @@
                         "resourceDefinition": {
                             "group": "showroom.apeirora.eu",
                             "version": "v1alpha1",
-                            "plural": "simpleclusters",
+                            "plural": "SimpleClusters",
                             "singular": "simplecluster",
                             "kind": "SimpleCluster",
                             "scope": "Namespaced",
