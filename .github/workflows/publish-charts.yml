@@ -1,0 +1,55 @@
+name: Publish Charts
+
+# Charts are versioned independently of the operator release (release-please is
+# scoped to simple-cluster-operator/). This publishes each chart to the OCI
+# registry at its own Chart.yaml version whenever a chart changes on main, or
+# on demand. Bump a chart's `version` to ship a change.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-charts:
+    name: Package and publish Helm charts
+    runs-on: ubuntu-latest
+    env:
+      OCI_REPO: oci://ghcr.io/apeirora/charts
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GitHub Container Registry
+        run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package and push charts (at each chart's Chart.yaml version)
+        run: |
+          set -euo pipefail
+          CHARTS=(
+            simple-cluster-system
+            ubuntu-machines-operator
+            simple-cluster-pm-integration
+            simple-cluster-ui
+            simple-cluster-sync-agent
+          )
+          mkdir -p .cr-release-packages
+          for c in "${CHARTS[@]}"; do
+            echo ">>> $c"
+            # Resolve external deps (api-syncagent); umbrella sub-charts are vendored.
+            helm dependency build "charts/$c" || true
+            helm package "charts/$c" --destination .cr-release-packages
+          done
+          for pkg in .cr-release-packages/*.tgz; do
+            echo ">>> push $pkg"
+            helm push "$pkg" "$OCI_REPO"
+          done
