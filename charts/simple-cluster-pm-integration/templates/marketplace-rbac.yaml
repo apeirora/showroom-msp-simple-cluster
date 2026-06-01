@@ -1,7 +1,3 @@
-# Grants `bind` on this provider's APIExports to the identity the Platform
-# Mesh portal uses when minting an APIBinding from the marketplace.
-# Same shape as every other provider. Applied unconditionally — the portal
-# flow requires it to work.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
