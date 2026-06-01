@@ -1,26 +1,17 @@
-apiVersion: apis.kcp.io/v1alpha2
+apiVersion: apis.kcp.io/v1alpha1
 kind: APIExport
 metadata:
   name: simpleclusters.showroom.apeirora.eu
   labels:
     ui.platform-mesh.io/content-for: simpleclusters.showroom.apeirora.eu
 spec:
-  resources:
-    - group: showroom.apeirora.eu
-      name: simpleclusters
-      schema: v1alpha1.simpleclusters.showroom.apeirora.eu
-      storage:
-        crd: {}
   permissionClaims:
     - group: ""
       resource: namespaces
-      verbs: ["*"]
       all: true
     - group: ""
       resource: events
-      verbs: ["*"]
       all: true
     - group: ""
       resource: secrets
-      verbs: ["*"]
       all: true
