@@ -34,9 +34,18 @@ branding:
   sidebar:
     title: "Simple Cluster"
 
-# Predefined CPU/memory choices surfaced in the create dialog. Editing these
-# tunes the dropdowns without rebuilding anything.
+# Predefined choices surfaced in the create dialog. Editing these tunes the
+# dropdowns without rebuilding anything.
 clusterConfig:
+  # Available SimpleClusterProviderConfig (SCPC) names offered in the provider
+  # drop-down. SCPCs are admin-managed and not exported into consumer
+  # workspaces, so the list is curated here (override per env to match the
+  # SCPCs applied on the cluster).
+  providers:
+    - kind
+    - gardener-sap-openstack
+    - openstack-sample
+    - ubuntu-machines-sample
   controlPlaneNodes:
     - "1"
     - "3"
