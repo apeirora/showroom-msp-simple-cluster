@@ -2,6 +2,7 @@
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
 {{- $cpu := .Values.clusterConfig.cpu | toJson -}}
 {{- $memory := .Values.clusterConfig.memory | toJson -}}
+{{- $providers := .Values.clusterConfig.providers | toJson -}}
 {
     "name": "simple-cluster",
     "creationTimestamp": "2024-01-01T00:00:00Z",
@@ -119,12 +120,7 @@
                                             "jsonPathExpression": "$.spec.providerConfigRefs[0]",
                                             "required": true,
                                             "description": "SimpleClusterProviderConfig to provision from",
-                                            "dynamicValuesDefinition": {
-                                                "operation": "showroom_apeirora_eu.v1alpha1.SimpleClusterProviderConfigs.items",
-                                                "gqlQuery": "query { showroom_apeirora_eu { v1alpha1 { SimpleClusterProviderConfigs { items { metadata { name } } } } } }",
-                                                "value": "metadata.name",
-                                                "key": "metadata.name"
-                                            }
+                                            "values": {{ $providers }}
                                         },
                                         {
                                             "label": "Control Plane Nodes",
