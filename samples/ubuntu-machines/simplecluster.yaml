@@ -20,3 +20,22 @@ spec:
       memory: 2Gi
   providerConfigRefs:
     - ubuntu-machines-sample
+  # Manifests applied to the provisioned cluster once it is Ready (over the
+  # synced kubeconfig). Best-effort: each one's outcome shows up as a
+  # status condition "Resource-<name>"; a failure never blocks Phase=Ready.
+  resources:
+    - name: demo-namespace
+      content: |
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: demo
+    - name: demo-configmap
+      content: |
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: demo
+          namespace: demo
+        data:
+          hello: world
