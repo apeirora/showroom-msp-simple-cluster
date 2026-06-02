@@ -58,7 +58,9 @@ spec:
                   When empty, the first control-plane host's address is used.
                 type: string
               ssh:
-                description: SSH credential + login used to reach every host.
+                description: |-
+                  SSH credential + login used to reach every host. Exactly one of
+                  privateKeySecretRef or passwordSecretRef must be set.
                 properties:
                   user:
                     description: Sudo-capable login.
@@ -77,10 +79,20 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  passwordSecretRef:
+                    description: Secret in the same namespace holding `password`.
+                    properties:
+                      name:
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
                 required:
                 - user
-                - privateKeySecretRef
                 type: object
+                x-kubernetes-validations:
+                - message: exactly one of privateKeySecretRef or passwordSecretRef
+                    must be set
+                  rule: has(self.privateKeySecretRef) != has(self.passwordSecretRef)
               controlPlane:
                 description: Set of hosts that run `k3s server`.
                 properties:

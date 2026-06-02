@@ -22,7 +22,29 @@ import (
 
 func (in *SSHAuth) DeepCopyInto(out *SSHAuth) {
 	*out = *in
-	out.PrivateKeySecretRef = in.PrivateKeySecretRef
+	if in.PrivateKeySecretRef != nil {
+		in, out := &in.PrivateKeySecretRef, &out.PrivateKeySecretRef
+		*out = new(corev1.SecretReference)
+		**out = **in
+	}
+	if in.PasswordSecretRef != nil {
+		in, out := &in.PasswordSecretRef, &out.PasswordSecretRef
+		*out = new(corev1.SecretReference)
+		**out = **in
+	}
+}
+
+func (in *ClaimReference) DeepCopyInto(out *ClaimReference) {
+	*out = *in
+}
+
+func (in *ClaimReference) DeepCopy() *ClaimReference {
+	if in == nil {
+		return nil
+	}
+	out := new(ClaimReference)
+	in.DeepCopyInto(out)
+	return out
 }
 
 func (in *SSHAuth) DeepCopy() *SSHAuth {
@@ -82,7 +104,7 @@ func (in *UbuntuMachineStatus) DeepCopyInto(out *UbuntuMachineStatus) {
 	*out = *in
 	if in.BoundClaimRef != nil {
 		in, out := &in.BoundClaimRef, &out.BoundClaimRef
-		*out = new(corev1.LocalObjectReference)
+		*out = new(ClaimReference)
 		**out = **in
 	}
 	if in.Conditions != nil {
@@ -159,6 +181,13 @@ func (in *UbuntuMachineList) DeepCopyObject() runtime.Object {
 func (in *UbuntuMachineClaimSpec) DeepCopyInto(out *UbuntuMachineClaimSpec) {
 	*out = *in
 	in.Required.DeepCopyInto(&out.Required)
+	if in.Selector != nil {
+		in, out := &in.Selector, &out.Selector
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 }
 
 func (in *UbuntuMachineClaimSpec) DeepCopy() *UbuntuMachineClaimSpec {
