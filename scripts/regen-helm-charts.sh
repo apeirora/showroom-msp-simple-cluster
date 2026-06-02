@@ -44,8 +44,10 @@ for op in "${!REST_OPERATORS[@]}"; do
 done
 
 regenerate_one ubuntu-machines ubuntu-machines-operator
+regenerate_one simple-cluster-operator-arsys arsys-ubuntu-machine-operator
 
 echo
 echo "OK. Charts regenerated:"
 echo "  charts/simple-cluster-system   (umbrella for the 4 simple-cluster-system operators)"
 echo "  charts/ubuntu-machines-operator"
+echo "  charts/arsys-ubuntu-machine-operator"
