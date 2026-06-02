@@ -89,7 +89,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	privateKey, err := r.readSSHKey(ctx, &cluster)
+	cred, err := r.readSSHCredential(ctx, &cluster)
 	if err != nil {
 		return r.fail(ctx, &cluster, "SSHKeyError", err.Error())
 	}
@@ -145,7 +145,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// ----- bootstrap control-plane -----
 	r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 		"control-plane bootstrap on %s (%s)", bootstrap.Name, bootstrap.Address)
-	bootstrapClient, err := r.dialBootstrap(ctx, &cluster, bootstrap, privateKey)
+	bootstrapClient, err := r.dialBootstrap(ctx, &cluster, bootstrap, cred)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
 		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
@@ -218,7 +218,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	for _, h := range cps[1:] {
 		r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 			"control-plane join %s (%s)", h.Name, h.Address)
-		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, privateKey, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
+		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, cred, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
 			return k3s.InstallServerJoin(ctx, c, k3s.InstallOptions{
 				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sServerArgs,
@@ -241,7 +241,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	for _, h := range cluster.Spec.Workers.Hosts {
 		r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 			"worker join %s (%s)", h.Name, h.Address)
-		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, privateKey, ubuntuv1alpha1.RoleWorker, func(c *sshpkg.Client) error {
+		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, cred, ubuntuv1alpha1.RoleWorker, func(c *sshpkg.Client) error {
 			return k3s.InstallAgent(ctx, c, k3s.InstallOptions{
 				Version:   k3sVer,
 				ExtraArgs: cluster.Spec.K3sAgentArgs,
@@ -307,12 +307,12 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // address (falling back to Address if no external is set). Emits
 // success/failure events so operators can spot auth or network issues
 // from `kubectl describe`.
-func (r *UbuntuClusterReconciler) dialBootstrap(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, privateKey []byte) (*sshpkg.Client, error) {
+func (r *UbuntuClusterReconciler) dialBootstrap(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, cred sshpkg.Credential) (*sshpkg.Client, error) {
 	target := h.ExternalAddress
 	if target == "" {
 		target = h.Address
 	}
-	c, err := sshpkg.Dial(ctx, target, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, privateKey)
+	c, err := sshpkg.Dial(ctx, target, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, cred)
 	if err != nil {
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
 			"ssh %s@%s: %s", cluster.Spec.SSH.User, target, err.Error())
@@ -325,8 +325,8 @@ func (r *UbuntuClusterReconciler) dialBootstrap(ctx context.Context, cluster *ub
 
 // dialVia dials a non-bootstrap host through the bootstrap CP as a
 // ProxyJump bastion — uses the host's internal Address.
-func (r *UbuntuClusterReconciler) dialVia(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, bastion *sshpkg.Client, h ubuntuv1alpha1.Host, privateKey []byte) (*sshpkg.Client, error) {
-	c, err := sshpkg.DialVia(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, privateKey)
+func (r *UbuntuClusterReconciler) dialVia(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, bastion *sshpkg.Client, h ubuntuv1alpha1.Host, cred sshpkg.Credential) (*sshpkg.Client, error) {
+	c, err := sshpkg.DialVia(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, cred)
 	if err != nil {
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
 			"ssh %s@%s via bastion: %s", cluster.Spec.SSH.User, h.Address, err.Error())
@@ -372,7 +372,7 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 		return ctrl.Result{}, nil
 	}
 
-	privateKey, err := r.readSSHKey(ctx, cluster)
+	cred, err := r.readSSHCredential(ctx, cluster)
 	if err != nil {
 		log.Error(err, "delete: SSH key unreadable — finalizer kept; user may need to remove it manually")
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
@@ -388,7 +388,7 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	bootstrap := cps[0]
 
 	// Open bastion to bootstrap CP; workers + extra CPs go via it.
-	bastion, err := r.dialBootstrap(ctx, cluster, bootstrap, privateKey)
+	bastion, err := r.dialBootstrap(ctx, cluster, bootstrap, cred)
 	if err != nil {
 		log.Error(err, "delete: bastion dial failed; will retry")
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
@@ -403,7 +403,7 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	for _, h := range cluster.Spec.Workers.Hosts {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"agent uninstall on %s", h.Name)
-		if err := r.uninstallVia(ctx, cluster, bastion, h, privateKey, false); err != nil {
+		if err := r.uninstallVia(ctx, cluster, bastion, h, cred, false); err != nil {
 			log.Error(err, "uninstall agent failed", "host", h.Name)
 			allOK = false
 		}
@@ -411,7 +411,7 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	for _, h := range cps[1:] {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"server uninstall on %s", h.Name)
-		if err := r.uninstallVia(ctx, cluster, bastion, h, privateKey, true); err != nil {
+		if err := r.uninstallVia(ctx, cluster, bastion, h, cred, true); err != nil {
 			log.Error(err, "uninstall server failed", "host", h.Name)
 			allOK = false
 		}
@@ -441,10 +441,10 @@ func (r *UbuntuClusterReconciler) uninstallVia(
 	cluster *ubuntuv1alpha1.UbuntuCluster,
 	bastion *sshpkg.Client,
 	h ubuntuv1alpha1.Host,
-	privateKey []byte,
+	cred sshpkg.Credential,
 	server bool,
 ) error {
-	c, err := r.dialVia(ctx, cluster, bastion, h, privateKey)
+	c, err := r.dialVia(ctx, cluster, bastion, h, cred)
 	if err != nil {
 		return err
 	}
@@ -455,22 +455,45 @@ func (r *UbuntuClusterReconciler) uninstallVia(
 	return k3s.UninstallAgent(ctx, c)
 }
 
-// readSSHKey loads the user-supplied private key from the referenced
-// Secret. Standard `kubernetes.io/ssh-auth` shape is enforced.
-func (r *UbuntuClusterReconciler) readSSHKey(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) ([]byte, error) {
+// readSSHCredential loads the host login credential from the referenced
+// Secret: either an SSH private key (`kubernetes.io/ssh-auth`) or a
+// password (`kubernetes.io/basic-auth`), depending on which ref the spec
+// carries. The SSHAuth CEL guarantees exactly one ref is set.
+func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) (sshpkg.Credential, error) {
+	auth := cluster.Spec.SSH
+	switch {
+	case auth.PrivateKeySecretRef != nil:
+		data, err := r.readSecretKey(ctx, cluster.Namespace, auth.PrivateKeySecretRef.Name, ubuntuv1alpha1.SSHSecretPrivateKeyKey)
+		if err != nil {
+			return sshpkg.Credential{}, err
+		}
+		return sshpkg.Credential{PrivateKeyPEM: data}, nil
+	case auth.PasswordSecretRef != nil:
+		data, err := r.readSecretKey(ctx, cluster.Namespace, auth.PasswordSecretRef.Name, ubuntuv1alpha1.SSHSecretPasswordKey)
+		if err != nil {
+			return sshpkg.Credential{}, err
+		}
+		return sshpkg.Credential{Password: string(data)}, nil
+	default:
+		return sshpkg.Credential{}, fmt.Errorf("spec.ssh has neither privateKeySecretRef nor passwordSecretRef")
+	}
+}
+
+// readSecretKey fetches one data key out of a Secret in the given namespace.
+func (r *UbuntuClusterReconciler) readSecretKey(ctx context.Context, namespace, name, dataKey string) ([]byte, error) {
 	var secret corev1.Secret
-	key := types.NamespacedName{Name: cluster.Spec.SSH.PrivateKeySecretRef.Name, Namespace: cluster.Namespace}
+	key := types.NamespacedName{Name: name, Namespace: namespace}
 	if err := r.Get(ctx, key, &secret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("ssh key Secret %s not found", key.String())
+			return nil, fmt.Errorf("ssh Secret %s not found", key.String())
 		}
-		return nil, fmt.Errorf("get ssh key Secret %s: %w", key.String(), err)
+		return nil, fmt.Errorf("get ssh Secret %s: %w", key.String(), err)
 	}
-	priv, ok := secret.Data[ubuntuv1alpha1.SSHSecretPrivateKeyKey]
-	if !ok || len(priv) == 0 {
-		return nil, fmt.Errorf("Secret %s has no %q", key.String(), ubuntuv1alpha1.SSHSecretPrivateKeyKey)
+	v, ok := secret.Data[dataKey]
+	if !ok || len(v) == 0 {
+		return nil, fmt.Errorf("Secret %s has no %q", key.String(), dataKey)
 	}
-	return priv, nil
+	return v, nil
 }
 
 // ensureKubeconfigSecret writes the rendered kubeconfig into
@@ -569,11 +592,11 @@ func (r *UbuntuClusterReconciler) installRole(
 	cluster *ubuntuv1alpha1.UbuntuCluster,
 	bastion *sshpkg.Client,
 	h ubuntuv1alpha1.Host,
-	privateKey []byte,
+	cred sshpkg.Credential,
 	role string,
 	apply func(*sshpkg.Client) error,
 ) (ok bool, version, message string) {
-	c, err := r.dialVia(ctx, cluster, bastion, h, privateKey)
+	c, err := r.dialVia(ctx, cluster, bastion, h, cred)
 	if err != nil {
 		return false, "", err.Error()
 	}

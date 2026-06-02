@@ -2,16 +2,25 @@
 # samples/openstack/vm-instances.yaml. All four share the
 # `openstack-vm-instances-ssh` Secret that the openstack operator
 # generated on first reconcile, so every UbuntuMachine references the
-# same `privateKeySecretRef.name`.
+# same `privateKeySecretRef` (name + namespace).
+#
+# UbuntuMachine is cluster-scoped (the pool is global; UbuntuMachineClaims
+# are namespaced — PV/PVC pattern), so credential Secret refs MUST carry an
+# explicit namespace.
 #
 # Two large (4 vCPU / 8 GiB) and two small (2 vCPU / 2 GiB); only um-0
 # and um-1 carry a floating IP so claims with externalAddressRequired=true
 # can only bind to those.
+#
+# Labels let an UbuntuMachineClaim pin to a subset of the pool via
+# spec.selector (equality matchLabels). Here all four are `pool: showroom`.
 ---
 apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-0
+  labels:
+    pool: showroom
 spec:
   address: 192.168.168.150
   externalAddress: 46.60.23.143
@@ -19,6 +28,7 @@ spec:
     user: eouser
     privateKeySecretRef:
       name: openstack-vm-instances-ssh
+      namespace: default
   capacity:
     cpu: "4"
     memory: 8Gi
@@ -27,6 +37,8 @@ apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-1
+  labels:
+    pool: showroom
 spec:
   address: 192.168.168.225
   externalAddress: 46.60.23.242
@@ -34,6 +46,7 @@ spec:
     user: eouser
     privateKeySecretRef:
       name: openstack-vm-instances-ssh
+      namespace: default
   capacity:
     cpu: "2"
     memory: 2Gi
@@ -42,12 +55,15 @@ apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-2
+  labels:
+    pool: showroom
 spec:
   address: 192.168.168.58
   ssh:
     user: eouser
     privateKeySecretRef:
       name: openstack-vm-instances-ssh
+      namespace: default
   capacity:
     cpu: "2"
     memory: 2Gi
@@ -56,12 +72,31 @@ apiVersion: ubuntumachines.apeirora.eu/v1alpha1
 kind: UbuntuMachine
 metadata:
   name: um-3
+  labels:
+    pool: showroom
 spec:
   address: 192.168.168.253
   ssh:
     user: eouser
     privateKeySecretRef:
       name: openstack-vm-instances-ssh
+      namespace: default
   capacity:
     cpu: "4"
     memory: 8Gi
+# ---
+# Password login alternative (kubernetes.io/basic-auth Secret with a
+# `password` key). Exactly one of privateKeySecretRef / passwordSecretRef
+# may be set per machine.
+#
+# apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+# kind: UbuntuMachine
+# metadata:
+#   name: um-pw
+# spec:
+#   address: 192.168.168.99
+#   ssh:
+#     user: ubuntu
+#     passwordSecretRef:
+#       name: um-pw-login
+#       namespace: default

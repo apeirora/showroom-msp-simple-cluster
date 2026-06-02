@@ -43,6 +43,13 @@ type UbuntuMachineClaimSpec struct {
 	// Zero / omitted means no constraint on that dimension.
 	// +optional
 	Required NodeResources `json:"required,omitempty"`
+
+	// Selector restricts the candidate UbuntuMachines to those whose labels
+	// match all of these key/value pairs (equality-based matchLabels).
+	// Empty selects from the whole pool. Use this to pin a cluster to a
+	// subset of the machine pool (e.g. a rack, zone, or tenant).
+	// +optional
+	Selector map[string]string `json:"selector,omitempty"`
 }
 
 // BoundMachine is the embedded copy of a bound UbuntuMachine's spec
