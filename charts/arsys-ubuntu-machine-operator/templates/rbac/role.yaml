@@ -1,0 +1,60 @@
+{{- if .Values.rbac.enable }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: arsys-ubuntu-machine-operator-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - arsys.apeirora.eu
+  resources:
+  - arsysubuntumachines
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - arsys.apeirora.eu
+  resources:
+  - arsysubuntumachines/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - arsys.apeirora.eu
+  resources:
+  - arsysubuntumachines/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachines
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- end -}}

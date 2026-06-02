@@ -1,0 +1,20 @@
+apiVersion: arsys.apeirora.eu/v1alpha1
+kind: ArsysUbuntuMachine
+metadata:
+  name: aum-dedicated
+  labels:
+    pool: arsys-test
+spec:
+  tokenSecretRef:
+    name: arsys-token
+    namespace: simple-cluster-system
+  passwordSecretRef:
+    name: aum-dedicated-password
+    namespace: default
+  server:
+    type: dedicated
+    applianceID: "5D3BBD43E3AB7E8884753025F70DF294"        # Ubuntu 24.04, type=BAREMETAL:  curl -s -H "X-TOKEN: $TOKEN" "$BASE/server_appliances" | jq '.[] | select(.type=="BAREMETAL" and ((.os // .name)|test("Ubuntu";"i"))) | {id, name, available_datacenters}'
+    datacenterID: "9B94281B5B67A755F2B76165E25F6A65"       # curl -s -H "X-TOKEN: $TOKEN" "$BASE/datacenters" | jq '.[] | {id, country_code, location}'
+    baremetalModelID: "1A85528AA9484F62B00DD6A0A19BBEC9"   #  curl -s -H "X-TOKEN: $TOKEN" "$BASE/servers/baremetal_models" | jq '.[] | {id, name, hardware}'
+  ssh:
+    user: root
