@@ -32,6 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"sigs.k8s.io/yaml"
+
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/kubeconfig"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/pathwalk"
@@ -42,6 +44,10 @@ import (
 const (
 	scRequeueReady   = 1 * time.Minute
 	scRequeueWorking = 30 * time.Second
+
+	// fieldManager owns server-side applies the operator makes onto
+	// provisioned clusters for spec.resources.
+	fieldManager = "simple-cluster-operator"
 
 	// forceCleanupGrace is how long the operator waits after a target
 	// resource enters Terminating before forcibly stripping its
@@ -264,6 +270,11 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
+	// Post-creation add-ons: apply spec.resources onto the provisioned
+	// cluster over its synced kubeconfig. Best-effort — outcomes land in
+	// per-resource conditions and never affect Phase.
+	r.applyClusterResources(ctx, &sc)
+
 	if err := r.Status().Patch(ctx, &sc, patch); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -333,6 +344,81 @@ func (r *SimpleClusterReconciler) syncKubeconfig(
 	if res.Changed {
 		log.Info("kubeconfig secret updated", "secret", res.SecretName)
 	}
+}
+
+// applyClusterResources applies spec.resources onto the freshly-provisioned
+// cluster using its synced kubeconfig. Best-effort: every resource's outcome
+// is recorded in a "Resource-<name>" condition and a failure never changes
+// Phase. No-op until the kubeconfig Secret exists.
+func (r *SimpleClusterReconciler) applyClusterResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) {
+	if len(sc.Spec.Resources) == 0 || sc.Status.KubeconfigSecretRef == nil {
+		return
+	}
+	log := logf.FromContext(ctx)
+
+	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), &corev1.SecretReference{
+		Name:      sc.Status.KubeconfigSecretRef.Name,
+		Namespace: sc.Namespace,
+	})
+	if err != nil {
+		// Cluster not reachable yet — surface on every resource, retry next loop.
+		for i := range sc.Spec.Resources {
+			setResourceCondition(sc, sc.Spec.Resources[i].Name, metav1.ConditionFalse,
+				"ClusterUnreachable", err.Error())
+		}
+		log.Info("apply resources: cannot reach provisioned cluster", "error", err.Error())
+		return
+	}
+
+	for i := range sc.Spec.Resources {
+		res := sc.Spec.Resources[i]
+		if aerr := applyOneClusterResource(ctx, tc, res); aerr != nil {
+			setResourceCondition(sc, res.Name, metav1.ConditionFalse, "ApplyFailed", aerr.Error())
+			log.Info("apply resource failed", "resource", res.Name, "error", aerr.Error())
+			continue
+		}
+		setResourceCondition(sc, res.Name, metav1.ConditionTrue, "Applied",
+			fmt.Sprintf("resource %q applied to the provisioned cluster", res.Name))
+	}
+}
+
+// applyOneClusterResource server-side-applies one manifest to the target
+// (provisioned) cluster. Create-or-update, idempotent across reconciles.
+func applyOneClusterResource(ctx context.Context, tc *target.Client, res showroomv1alpha1.ClusterResource) error {
+	obj := &unstructured.Unstructured{}
+	if err := yaml.Unmarshal([]byte(res.Content), &obj.Object); err != nil {
+		return fmt.Errorf("parse yaml: %w", err)
+	}
+	gvk := obj.GroupVersionKind()
+	if gvk.Kind == "" || gvk.Version == "" || obj.GetName() == "" {
+		return fmt.Errorf("content must set apiVersion, kind and metadata.name")
+	}
+	mapping, err := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return fmt.Errorf("RESTMapping %s: %w", gvk, err)
+	}
+	data, err := obj.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	force := true
+	_, err = tc.ResourceFor(mapping, obj.GetNamespace()).Patch(
+		ctx, obj.GetName(), types.ApplyPatchType, data,
+		metav1.PatchOptions{FieldManager: fieldManager, Force: &force},
+	)
+	return err
+}
+
+// setResourceCondition records one ClusterResource's apply outcome as a
+// condition of type "Resource-<name>".
+func setResourceCondition(sc *showroomv1alpha1.SimpleCluster, name string, status metav1.ConditionStatus, reason, msg string) {
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:               showroomv1alpha1.ConditionResourcePrefix + name,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: sc.Generation,
+	})
 }
 
 // reconcileDelete cascades the SC deletion by walking the SCPC DAG in
