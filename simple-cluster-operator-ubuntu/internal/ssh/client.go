@@ -37,23 +37,45 @@ type Client struct {
 	conn *cryptossh.Client
 }
 
+// Credential carries the chosen SSH auth: either an SSH private key (PEM)
+// or a login password. Exactly one is expected to be set.
+type Credential struct {
+	PrivateKeyPEM []byte
+	Password      string
+}
+
+// authMethods turns the credential into crypto/ssh auth methods.
+func (c Credential) authMethods() ([]cryptossh.AuthMethod, error) {
+	if len(c.PrivateKeyPEM) > 0 {
+		signer, err := cryptossh.ParsePrivateKey(c.PrivateKeyPEM)
+		if err != nil {
+			return nil, fmt.Errorf("parse ssh private key: %w", err)
+		}
+		return []cryptossh.AuthMethod{cryptossh.PublicKeys(signer)}, nil
+	}
+	if c.Password != "" {
+		return []cryptossh.AuthMethod{cryptossh.Password(c.Password)}, nil
+	}
+	return nil, fmt.Errorf("ssh credential: neither private key nor password set")
+}
+
 // Dial opens an SSH connection. The caller MUST call Close.
 // Host accepts both "1.2.3.4" and "host.example.com". When port == 0
 // DefaultPort is used. The user is whatever sudo-capable login the
 // caller already chose. acceptAnyHostKey is intentional — at this
 // point in the lifecycle we have no way to pin host keys; production
 // callers should layer a HostKeyCallback that consults a Secret.
-func Dial(ctx context.Context, host string, port int, user string, privateKeyPEM []byte) (*Client, error) {
+func Dial(ctx context.Context, host string, port int, user string, cred Credential) (*Client, error) {
 	if port == 0 {
 		port = DefaultPort
 	}
-	signer, err := cryptossh.ParsePrivateKey(privateKeyPEM)
+	auth, err := cred.authMethods()
 	if err != nil {
-		return nil, fmt.Errorf("parse ssh private key: %w", err)
+		return nil, err
 	}
 	cfg := &cryptossh.ClientConfig{
 		User:            user,
-		Auth:            []cryptossh.AuthMethod{cryptossh.PublicKeys(signer)},
+		Auth:            auth,
 		HostKeyCallback: cryptossh.InsecureIgnoreHostKey(),
 		Timeout:         dialTimeout,
 	}
@@ -84,20 +106,20 @@ func Dial(ctx context.Context, host string, port int, user string, privateKeyPEM
 // existing bastion connection (ProxyJump pattern). The caller MUST
 // call Close. The bastion is reused — its lifetime must outlive the
 // returned Client.
-func DialVia(ctx context.Context, bastion *Client, host string, port int, user string, privateKeyPEM []byte) (*Client, error) {
+func DialVia(ctx context.Context, bastion *Client, host string, port int, user string, cred Credential) (*Client, error) {
 	if bastion == nil || bastion.conn == nil {
 		return nil, fmt.Errorf("ssh DialVia: bastion is nil")
 	}
 	if port == 0 {
 		port = DefaultPort
 	}
-	signer, err := cryptossh.ParsePrivateKey(privateKeyPEM)
+	auth, err := cred.authMethods()
 	if err != nil {
-		return nil, fmt.Errorf("parse ssh private key: %w", err)
+		return nil, err
 	}
 	cfg := &cryptossh.ClientConfig{
 		User:            user,
-		Auth:            []cryptossh.AuthMethod{cryptossh.PublicKeys(signer)},
+		Auth:            auth,
 		HostKeyCallback: cryptossh.InsecureIgnoreHostKey(),
 		Timeout:         dialTimeout,
 	}

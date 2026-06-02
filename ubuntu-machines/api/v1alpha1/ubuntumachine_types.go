@@ -25,6 +25,10 @@ const (
 	// convention so a single key Secret interops with downstream
 	// consumers (e.g. simple-cluster-operator-ubuntu).
 	SSHSecretPrivateKeyKey = "ssh-privatekey"
+
+	// SSHSecretPasswordKey matches the `kubernetes.io/basic-auth` Secret
+	// convention for password login.
+	SSHSecretPasswordKey = "password"
 )
 
 // +kubebuilder:validation:Enum=Available;Bound
@@ -64,7 +68,10 @@ type UbuntuMachineSpec struct {
 	Capacity NodeResources `json:"capacity,omitempty"`
 }
 
-// SSHAuth describes how a consumer should log in.
+// SSHAuth describes how a consumer should log in. Exactly one of
+// PrivateKeySecretRef (SSH key) or PasswordSecretRef (username/password)
+// must be set.
+// +kubebuilder:validation:XValidation:rule="has(self.privateKeySecretRef) != has(self.passwordSecretRef)",message="exactly one of privateKeySecretRef or passwordSecretRef must be set"
 type SSHAuth struct {
 	// User is the sudo-capable login (e.g. "ubuntu", "eouser", "root").
 	// +kubebuilder:validation:MinLength=1
@@ -76,10 +83,18 @@ type SSHAuth struct {
 	// +optional
 	Port int32 `json:"port,omitempty"`
 
-	// PrivateKeySecretRef points at a Secret in the same namespace as
-	// the UbuntuMachine carrying the SSH private key under the
-	// `ssh-privatekey` data key.
-	PrivateKeySecretRef corev1.LocalObjectReference `json:"privateKeySecretRef"`
+	// PrivateKeySecretRef points at a Secret carrying the SSH private key
+	// under the `ssh-privatekey` data key (the standard
+	// `kubernetes.io/ssh-auth` shape). The UbuntuMachine is cluster-scoped,
+	// so the Secret's namespace must be given explicitly.
+	// +optional
+	PrivateKeySecretRef *corev1.SecretReference `json:"privateKeySecretRef,omitempty"`
+
+	// PasswordSecretRef points at a Secret carrying the login password
+	// under the `password` data key (the standard `kubernetes.io/basic-auth`
+	// shape). Namespace must be given explicitly.
+	// +optional
+	PasswordSecretRef *corev1.SecretReference `json:"passwordSecretRef,omitempty"`
 }
 
 // NodeResources is the per-machine resource ad — mirrors the shape used
@@ -93,6 +108,16 @@ type NodeResources struct {
 	Memory resource.Quantity `json:"memory,omitempty"`
 }
 
+// ClaimReference identifies the UbuntuMachineClaim that owns a machine.
+// Namespaced because UbuntuMachine is cluster-scoped (PV/PVC pattern:
+// the pool is global, claims are per-namespace).
+type ClaimReference struct {
+	// Name is the claim's metadata.name.
+	Name string `json:"name"`
+	// Namespace is the claim's metadata.namespace.
+	Namespace string `json:"namespace"`
+}
+
 // UbuntuMachineStatus is the observed state.
 type UbuntuMachineStatus struct {
 	// Phase is Available when no claim owns this machine, Bound when one
@@ -101,9 +126,10 @@ type UbuntuMachineStatus struct {
 	Phase MachinePhase `json:"phase,omitempty"`
 
 	// BoundClaimRef points at the UbuntuMachineClaim that holds this
-	// machine. Cleared when the claim is deleted.
+	// machine. Cleared when the claim is deleted. Carries the namespace
+	// because the machine is cluster-scoped while claims are namespaced.
 	// +optional
-	BoundClaimRef *corev1.LocalObjectReference `json:"boundClaimRef,omitempty"`
+	BoundClaimRef *ClaimReference `json:"boundClaimRef,omitempty"`
 
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
@@ -116,7 +142,7 @@ type UbuntuMachineStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=um
+// +kubebuilder:resource:scope=Cluster,shortName=um
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Address",type=string,JSONPath=`.spec.address`
 // +kubebuilder:printcolumn:name="External",type=string,JSONPath=`.spec.externalAddress`

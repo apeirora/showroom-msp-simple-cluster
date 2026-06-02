@@ -78,6 +78,14 @@ spec:
                         - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
+                selector:
+                  description: |-
+                    Restrict candidate UbuntuMachines to those whose labels match
+                    all of these key/value pairs (equality-based matchLabels).
+                    Empty selects from the whole pool.
+                  type: object
+                  additionalProperties:
+                    type: string
             status:
               type: object
               properties:
@@ -104,7 +112,9 @@ spec:
                       type: object
                       required:
                         - user
-                        - privateKeySecretRef
+                      x-kubernetes-validations:
+                        - rule: has(self.privateKeySecretRef) != has(self.passwordSecretRef)
+                          message: exactly one of privateKeySecretRef or passwordSecretRef must be set
                       properties:
                         user:
                           type: string
@@ -115,7 +125,15 @@ spec:
                           properties:
                             name:
                               type: string
-                              default: ""
+                            namespace:
+                              type: string
+                        passwordSecretRef:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
                 observedGeneration:
                   type: integer
                   format: int64

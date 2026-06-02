@@ -9,8 +9,13 @@ spec:
   version: "v1.31.4+k3s1" # Optional. Empty = operator's default.
   ssh:
     user: ubuntu-cluster
+    # Exactly one of privateKeySecretRef / passwordSecretRef; the chosen
+    # method applies to every host. Secret is in this CR's namespace.
     privateKeySecretRef:
       name: ubuntu-cluster-sample-ssh
+    # Password alternative (kubernetes.io/basic-auth Secret, `password` key):
+    # passwordSecretRef:
+    #   name: ubuntu-cluster-sample-pw
   controlPlane:
     hosts:
       - name: cp-0
