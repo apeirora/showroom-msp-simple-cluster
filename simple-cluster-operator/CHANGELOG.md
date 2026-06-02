@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.2.0...v0.3.0) (2026-06-02)
+
+
+### Features
+
+* SimpleCluster spec.resources — post-creation manifests on the new cluster ([4edaf14](https://github.com/apeirora/showroom-simple-cluster/commit/4edaf14cef6d3e0cb3a433c30a23363b458c7d0c))
+
 ## [0.2.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.1.0...v0.2.0) (2026-05-31)
 
 
