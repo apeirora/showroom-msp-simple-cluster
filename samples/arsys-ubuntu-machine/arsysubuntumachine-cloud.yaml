@@ -1,0 +1,24 @@
+apiVersion: arsys.apeirora.eu/v1alpha1
+kind: ArsysUbuntuMachine
+metadata:
+  name: aum-cloud
+  labels:
+    pool: arsys-test
+spec:
+  tokenSecretRef:
+    name: arsys-token
+    namespace: simple-cluster-system
+  passwordSecretRef:
+    name: aum-cloud-password
+    namespace: default
+  server:
+    type: cloud
+    applianceID: "E994A2B0F5B5EE36281F16214D1185D8"        # curl -s -H "X-TOKEN: $TOKEN" "$BASE/server_appliances" | jq '.[] | select((.os // .name) | test("Ubuntu";"i")) | {id, name, os}'
+    datacenterID: "9B94281B5B67A755F2B76165E25F6A65"       # curl -s -H "X-TOKEN: $TOKEN" "$BASE/datacenters" | jq '.[] | {id, country_code, location}'
+    # see also curl -s -H "X-TOKEN: $TOKEN" "$BASE/servers/fixed_instance_sizes" | jq '.[] | {id, name, hardware}'
+    vcore: 4
+    coresPerProcessor: 2
+    ram: 8            # GiB
+    disk: 50          # GiB
+  ssh:
+    user: root

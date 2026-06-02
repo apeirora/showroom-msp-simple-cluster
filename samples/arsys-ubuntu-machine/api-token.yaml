@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: arsys-token
+  namespace: simple-cluster-system
+type: Opaque
+stringData:
+  token: "5439c048148bca5c0d48ed0c15b3a934"
