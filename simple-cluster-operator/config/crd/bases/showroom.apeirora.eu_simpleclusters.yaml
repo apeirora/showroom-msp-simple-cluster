@@ -132,6 +132,38 @@ spec:
                   type: string
                 minItems: 1
                 type: array
+              resources:
+                description: |-
+                  Resources are manifests applied to the provisioned cluster once it is
+                  Ready, using the synced kubeconfig. Best-effort add-ons: each one's
+                  outcome is reported in a status condition of type "Resource-<name>",
+                  and a failure to apply never blocks Phase=Ready.
+                items:
+                  description: |-
+                    ClusterResource is a raw manifest applied to the cluster a SimpleCluster
+                    provisions, after it becomes Ready.
+                  properties:
+                    content:
+                      description: |-
+                        Content is a single Kubernetes object manifest as YAML. apiVersion,
+                        kind and metadata.name are required.
+                      minLength: 1
+                      type: string
+                    name:
+                      description: |-
+                        Name identifies this resource and is used as the suffix of its apply
+                        condition ("Resource-<name>"). Must be DNS-label-safe.
+                      minLength: 1
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                  required:
+                  - content
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               workers:
                 description: |-
                   Workers describes the worker pool sizing and per-worker resources.

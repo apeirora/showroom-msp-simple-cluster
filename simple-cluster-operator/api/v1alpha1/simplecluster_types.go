@@ -54,6 +54,30 @@ type SimpleClusterSpec struct {
 	// KubeconfigRenewalBefore overrides SCPC.kubeconfigSource.renewalBefore for this SC.
 	// +optional
 	KubeconfigRenewalBefore *metav1.Duration `json:"kubeconfigRenewalBefore,omitempty"`
+
+	// Resources are manifests applied to the provisioned cluster once it is
+	// Ready, using the synced kubeconfig. Best-effort add-ons: each one's
+	// outcome is reported in a status condition of type "Resource-<name>",
+	// and a failure to apply never blocks Phase=Ready.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	Resources []ClusterResource `json:"resources,omitempty"`
+}
+
+// ClusterResource is a raw manifest applied to the cluster a SimpleCluster
+// provisions, after it becomes Ready.
+type ClusterResource struct {
+	// Name identifies this resource and is used as the suffix of its apply
+	// condition ("Resource-<name>"). Must be DNS-label-safe.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	Name string `json:"name"`
+
+	// Content is a single Kubernetes object manifest as YAML. apiVersion,
+	// kind and metadata.name are required.
+	// +kubebuilder:validation:MinLength=1
+	Content string `json:"content"`
 }
 
 // ControlPlaneSpec describes the control-plane node pool.
