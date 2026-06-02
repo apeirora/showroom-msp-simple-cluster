@@ -22,6 +22,10 @@ const (
 	ConditionError           = "Error"
 	ConditionKubeconfigValid = "KubeconfigValid"
 
+	// ConditionResourcePrefix is prepended to a ClusterResource.Name to form
+	// the per-resource apply condition type (e.g. "Resource-deployment-x").
+	ConditionResourcePrefix = "Resource-"
+
 	FinalizerName = "simplecluster.apeirora.eu/finalizer"
 )
 
