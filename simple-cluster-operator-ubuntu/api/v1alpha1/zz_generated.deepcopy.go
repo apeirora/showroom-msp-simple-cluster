@@ -66,7 +66,16 @@ func (in *HostStatus) DeepCopy() *HostStatus {
 
 func (in *SSHAuth) DeepCopyInto(out *SSHAuth) {
 	*out = *in
-	out.PrivateKeySecretRef = in.PrivateKeySecretRef
+	if in.PrivateKeySecretRef != nil {
+		in, out := &in.PrivateKeySecretRef, &out.PrivateKeySecretRef
+		*out = new(corev1.LocalObjectReference)
+		**out = **in
+	}
+	if in.PasswordSecretRef != nil {
+		in, out := &in.PasswordSecretRef, &out.PasswordSecretRef
+		*out = new(corev1.LocalObjectReference)
+		**out = **in
+	}
 }
 
 func (in *SSHAuth) DeepCopy() *SSHAuth {

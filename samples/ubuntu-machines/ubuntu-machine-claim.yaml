@@ -7,3 +7,5 @@ spec:
   required:
     cpu: 2
     memory: 2Gi
+  selector:                           # only bind machines carrying ALL these labels
+    pool: showroom

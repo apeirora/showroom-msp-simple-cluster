@@ -172,21 +172,30 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 	return ctrl.Result{}, nil
 }
 
-// ownedMachines lists UbuntuMachines in the claim's namespace that
-// already have boundClaimRef pointing at this claim. Used at the
-// start of every reconcile so partial-write leaks self-heal.
+// ownedBy reports whether machine m is currently bound to claim. Matches
+// on name + namespace because UbuntuMachine is cluster-scoped: two claims
+// in different namespaces may share a name.
+func ownedBy(m *umv1alpha1.UbuntuMachine, claim *umv1alpha1.UbuntuMachineClaim) bool {
+	ref := m.Status.BoundClaimRef
+	return ref != nil && ref.Name == claim.Name && ref.Namespace == claim.Namespace
+}
+
+// ownedMachines lists UbuntuMachines that already have boundClaimRef
+// pointing at this claim. Machines are cluster-scoped, so the list spans
+// all namespaces. Used at the start of every reconcile so partial-write
+// leaks self-heal.
 func (r *UbuntuMachineClaimReconciler) ownedMachines(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
 ) ([]umv1alpha1.UbuntuMachine, error) {
 	var all umv1alpha1.UbuntuMachineList
-	if err := r.List(ctx, &all, client.InNamespace(claim.Namespace)); err != nil {
+	if err := r.List(ctx, &all); err != nil {
 		return nil, err
 	}
 	out := make([]umv1alpha1.UbuntuMachine, 0)
-	for _, m := range all.Items {
-		if m.Status.BoundClaimRef != nil && m.Status.BoundClaimRef.Name == claim.Name {
-			out = append(out, m)
+	for i := range all.Items {
+		if ownedBy(&all.Items[i], claim) {
+			out = append(out, all.Items[i])
 		}
 	}
 	return out, nil
@@ -207,7 +216,7 @@ func (r *UbuntuMachineClaimReconciler) releaseOne(
 		}
 		return err
 	}
-	if fresh.Status.BoundClaimRef == nil || fresh.Status.BoundClaimRef.Name != claim.Name {
+	if !ownedBy(&fresh, claim) {
 		return nil
 	}
 	fresh.Status.Phase = umv1alpha1.MachineAvailable
@@ -228,15 +237,19 @@ func setReady(claim *umv1alpha1.UbuntuMachineClaim, status metav1.ConditionStatu
 	})
 }
 
-// eligibleMachines lists Available UbuntuMachines in the claim's namespace
-// that satisfy the externalAddressRequired flag and required.cpu/memory
-// floor. Returned slice is sorted by name (stable first-fit ordering).
+// eligibleMachines lists Available UbuntuMachines (cluster-wide, since the
+// pool is cluster-scoped) that match the claim's label selector and satisfy
+// the externalAddressRequired flag and required.cpu/memory floor. Returned
+// slice is sorted by name (stable first-fit ordering).
 func (r *UbuntuMachineClaimReconciler) eligibleMachines(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
 ) ([]umv1alpha1.UbuntuMachine, error) {
 	var all umv1alpha1.UbuntuMachineList
-	if err := r.List(ctx, &all, client.InNamespace(claim.Namespace)); err != nil {
+	// Selector is applied server-side; an empty selector matches the whole
+	// pool. Only eligibility is constrained — ownedMachines/releaseAll find
+	// already-bound machines by boundClaimRef regardless of their labels.
+	if err := r.List(ctx, &all, client.MatchingLabels(claim.Spec.Selector)); err != nil {
 		return nil, err
 	}
 	out := make([]umv1alpha1.UbuntuMachine, 0, len(all.Items))
@@ -283,7 +296,7 @@ func (r *UbuntuMachineClaimReconciler) bind(
 	m umv1alpha1.UbuntuMachine,
 ) (umv1alpha1.UbuntuMachine, error) {
 	m.Status.Phase = umv1alpha1.MachineBound
-	m.Status.BoundClaimRef = &corev1.LocalObjectReference{Name: claim.Name}
+	m.Status.BoundClaimRef = &umv1alpha1.ClaimReference{Name: claim.Name, Namespace: claim.Namespace}
 	m.Status.ObservedGeneration = m.Generation
 	if err := r.Status().Update(ctx, &m); err != nil {
 		return m, fmt.Errorf("bind %s: %w", m.Name, err)
@@ -299,12 +312,12 @@ func (r *UbuntuMachineClaimReconciler) releaseAll(
 	claim *umv1alpha1.UbuntuMachineClaim,
 ) error {
 	var all umv1alpha1.UbuntuMachineList
-	if err := r.List(ctx, &all, client.InNamespace(claim.Namespace)); err != nil {
+	if err := r.List(ctx, &all); err != nil {
 		return err
 	}
 	for i := range all.Items {
 		m := all.Items[i]
-		if m.Status.BoundClaimRef == nil || m.Status.BoundClaimRef.Name != claim.Name {
+		if !ownedBy(&m, claim) {
 			continue
 		}
 		var fresh umv1alpha1.UbuntuMachine
@@ -315,7 +328,7 @@ func (r *UbuntuMachineClaimReconciler) releaseAll(
 			}
 			return err
 		}
-		if fresh.Status.BoundClaimRef == nil || fresh.Status.BoundClaimRef.Name != claim.Name {
+		if !ownedBy(&fresh, claim) {
 			continue
 		}
 		fresh.Status.Phase = umv1alpha1.MachineAvailable
@@ -358,15 +371,16 @@ func (r *UbuntuMachineClaimReconciler) event(o client.Object, evType, reason, ms
 	r.Recorder.Event(o, evType, reason, msg)
 }
 
-// machineToPendingClaims wakes every Pending claim in the namespace of
-// the changed UbuntuMachine. Cheap (small N) and correct: any new
-// Available machine could unblock any of them.
+// machineToPendingClaims wakes every Pending claim cluster-wide when an
+// UbuntuMachine changes. The pool is cluster-scoped, so a newly Available
+// machine could unblock a claim in any namespace. Cheap (small N) and
+// correct.
 func (r *UbuntuMachineClaimReconciler) machineToPendingClaims(
 	ctx context.Context,
-	obj client.Object,
+	_ client.Object,
 ) []reconcile.Request {
 	var claims umv1alpha1.UbuntuMachineClaimList
-	if err := r.List(ctx, &claims, client.InNamespace(obj.GetNamespace())); err != nil {
+	if err := r.List(ctx, &claims); err != nil {
 		return nil
 	}
 	out := make([]reconcile.Request, 0)
