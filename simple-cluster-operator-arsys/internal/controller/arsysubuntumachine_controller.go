@@ -1,0 +1,366 @@
+/*
+Copyright 2026.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+*/
+
+package controller
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	arsysv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/arsys-ubuntu-machine-operator/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-simple-cluster/arsys-ubuntu-machine-operator/internal/arsys"
+	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
+)
+
+const (
+	requeueReady        = 5 * time.Minute
+	requeueProvisioning = 20 * time.Second
+	requeueWorking      = 20 * time.Second
+)
+
+// ArsysUbuntuMachineReconciler orders dedicated servers from Arsys
+// CloudBuilder and registers each as a cluster-scoped UbuntuMachine it owns.
+type ArsysUbuntuMachineReconciler struct {
+	client.Client
+	Scheme *runtime.Scheme
+}
+
+// +kubebuilder:rbac:groups=arsys.apeirora.eu,resources=arsysubuntumachines,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=arsys.apeirora.eu,resources=arsysubuntumachines/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=arsys.apeirora.eu,resources=arsysubuntumachines/finalizers,verbs=update
+// +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+
+func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	var aum arsysv1alpha1.ArsysUbuntuMachine
+	if err := r.Get(ctx, req.NamespacedName, &aum); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	cl, cerr := r.arsysClient(ctx, &aum)
+	if cerr != nil {
+		if !aum.DeletionTimestamp.IsZero() {
+			// Can't reach the API to delete the server — keep the finalizer
+			// and retry so we don't leak it.
+			log.Error(cerr, "delete: arsys token unreadable; retrying")
+			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		}
+		return r.fail(ctx, &aum, "TokenError", cerr.Error())
+	}
+
+	if !aum.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, &aum, cl)
+	}
+
+	if controllerutil.AddFinalizer(&aum, arsysv1alpha1.FinalizerName) {
+		if err := r.Update(ctx, &aum); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Order the server once, then poll it to readiness.
+	server, err := r.ensureServer(ctx, &aum, cl)
+	if err != nil {
+		return r.fail(ctx, &aum, "ServerError", err.Error())
+	}
+
+	if server.Status.State != arsys.StatePoweredOn || server.PrimaryIP() == "" {
+		log.Info("server provisioning", "id", server.ID, "state", server.Status.State, "percent", server.Status.Percent)
+		if err := r.setProvisioning(ctx, &aum, server); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+	}
+
+	// Server is up — register (or refresh) the owned UbuntuMachine.
+	if err := r.ensureUbuntuMachine(ctx, &aum, server); err != nil {
+		return r.fail(ctx, &aum, "MachineError", err.Error())
+	}
+
+	patch := client.MergeFrom(aum.DeepCopy())
+	aum.Status.Phase = arsysv1alpha1.PhaseReady
+	aum.Status.ServerID = server.ID
+	aum.Status.Address = server.PrimaryIP()
+	aum.Status.MachineRef = machineName(&aum)
+	aum.Status.ObservedGeneration = aum.Generation
+	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
+		Type:    arsysv1alpha1.ConditionReady,
+		Status:  metav1.ConditionTrue,
+		Reason:  "Ready",
+		Message: fmt.Sprintf("server %s up at %s; UbuntuMachine %q registered", server.ID, server.PrimaryIP(), machineName(&aum)),
+	})
+	apimeta.RemoveStatusCondition(&aum.Status.Conditions, arsysv1alpha1.ConditionError)
+	if err := r.Status().Patch(ctx, &aum, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: requeueReady}, nil
+}
+
+// ensureServer creates the dedicated server on first reconcile (capturing the
+// one-shot first_password into the credentials Secret) and thereafter returns
+// its current state.
+func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, cl *arsys.Client) (*arsys.Server, error) {
+	if aum.Status.ServerID != "" {
+		return cl.GetServer(ctx, aum.Status.ServerID)
+	}
+
+	req := arsys.CreateRequest{
+		Name:         serverName(aum),
+		ApplianceID:  aum.Spec.Server.ApplianceID,
+		DatacenterID: aum.Spec.Server.DatacenterID,
+		SSHPassword:  true,
+		PublicKey:    aum.Spec.Server.PublicKeys,
+		PowerOn:      true,
+	}
+	if aum.Spec.Server.Type == arsysv1alpha1.ServerTypeCloud {
+		req.Hardware = arsys.Hardware{
+			VCore:             aum.Spec.Server.VCore,
+			CoresPerProcessor: aum.Spec.Server.CoresPerProcessor,
+			RAM:               aum.Spec.Server.RAM,
+			HDDs:              []arsys.HDD{{Size: aum.Spec.Server.Disk, IsMain: true}},
+		}
+	} else {
+		// dedicated (default): bare-metal model, no vcore/ram/hdds.
+		req.ServerType = arsys.ServerTypeBaremetal
+		req.Hardware = arsys.Hardware{BaremetalModelID: aum.Spec.Server.BaremetalModelID}
+	}
+	server, err := cl.CreateServer(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("create server: %w", err)
+	}
+
+	// first_password is only returned on create — write it to the
+	// password Secret now, before the status write, so a crash can't lose it.
+	if server.FirstPassword != "" {
+		if err := r.writePasswordSecret(ctx, aum, server.FirstPassword); err != nil {
+			return nil, fmt.Errorf("store password: %w", err)
+		}
+	}
+
+	patch := client.MergeFrom(aum.DeepCopy())
+	aum.Status.ServerID = server.ID
+	aum.Status.Phase = arsysv1alpha1.PhaseProvisioning
+	if err := r.Status().Patch(ctx, aum, patch); err != nil {
+		return nil, fmt.Errorf("record server id %s: %w", server.ID, err)
+	}
+	return server, nil
+}
+
+// writePasswordSecret writes the server's root password into the Secret named
+// by spec.passwordSecretRef (kubernetes.io/basic-auth), creating it if absent.
+// Owned by the CR so it is garbage-collected on deletion.
+func (r *ArsysUbuntuMachineReconciler) writePasswordSecret(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, password string) error {
+	ref := aum.Spec.PasswordSecretRef
+	desired := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: ref.Name, Namespace: ref.Namespace},
+		Type:       corev1.SecretTypeBasicAuth,
+		Data: map[string][]byte{
+			corev1.BasicAuthUsernameKey: []byte(aum.Spec.SSH.User),
+			corev1.BasicAuthPasswordKey: []byte(password),
+		},
+	}
+	if err := controllerutil.SetControllerReference(aum, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set owner ref: %w", err)
+	}
+
+	var existing corev1.Secret
+	err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &existing)
+	if apierrors.IsNotFound(err) {
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return err
+	}
+	existing.Type = desired.Type
+	existing.Data = desired.Data
+	if err := controllerutil.SetControllerReference(aum, &existing, r.Scheme); err != nil {
+		return fmt.Errorf("set owner ref: %w", err)
+	}
+	return r.Update(ctx, &existing)
+}
+
+// ensureUbuntuMachine creates (or refreshes) the cluster-scoped UbuntuMachine
+// for the provisioned server: labels copied from the CR, owner set to the CR.
+func (r *ArsysUbuntuMachineReconciler) ensureUbuntuMachine(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, server *arsys.Server) error {
+	ip := server.PrimaryIP()
+	ssh := umv1alpha1.SSHAuth{
+		User: aum.Spec.SSH.User,
+		PasswordSecretRef: &corev1.SecretReference{
+			Name:      aum.Spec.PasswordSecretRef.Name,
+			Namespace: aum.Spec.PasswordSecretRef.Namespace,
+		},
+	}
+
+	desired := &umv1alpha1.UbuntuMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   machineName(aum),
+			Labels: copyLabels(aum.Labels),
+		},
+		Spec: umv1alpha1.UbuntuMachineSpec{
+			Address:         ip,
+			ExternalAddress: ip,
+			SSH:             ssh,
+		},
+	}
+	// Capacity is only known for cloud orders (vcore/ram); dedicated models
+	// leave it unconstrained.
+	if aum.Spec.Server.Type == arsysv1alpha1.ServerTypeCloud {
+		desired.Spec.Capacity = umv1alpha1.NodeResources{
+			CPU:    resource.MustParse(fmt.Sprintf("%d", aum.Spec.Server.VCore)),
+			Memory: resource.MustParse(fmt.Sprintf("%dGi", aum.Spec.Server.RAM)),
+		}
+	}
+	if err := controllerutil.SetControllerReference(aum, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set owner ref: %w", err)
+	}
+
+	var existing umv1alpha1.UbuntuMachine
+	err := r.Get(ctx, types.NamespacedName{Name: machineName(aum)}, &existing)
+	if apierrors.IsNotFound(err) {
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return err
+	}
+	existing.Labels = copyLabels(aum.Labels)
+	existing.Spec = desired.Spec
+	existing.OwnerReferences = desired.OwnerReferences
+	return r.Update(ctx, &existing)
+}
+
+func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, cl *arsys.Client) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+	if !controllerutil.ContainsFinalizer(aum, arsysv1alpha1.FinalizerName) {
+		return ctrl.Result{}, nil
+	}
+	if aum.Status.Phase != arsysv1alpha1.PhaseDeleting {
+		patch := client.MergeFrom(aum.DeepCopy())
+		aum.Status.Phase = arsysv1alpha1.PhaseDeleting
+		_ = r.Status().Patch(ctx, aum, patch)
+	}
+
+	// Delete the UbuntuMachine first (the credentials Secret is GC'd via its
+	// owner ref).
+	machine := &umv1alpha1.UbuntuMachine{ObjectMeta: metav1.ObjectMeta{Name: machineName(aum)}}
+	if err := r.Delete(ctx, machine); err != nil && !apierrors.IsNotFound(err) {
+		log.Error(err, "delete UbuntuMachine; retrying")
+		return ctrl.Result{RequeueAfter: requeueWorking}, nil
+	}
+
+	// Cancel the dedicated server.
+	if aum.Status.ServerID != "" {
+		if err := cl.DeleteServer(ctx, aum.Status.ServerID); err != nil {
+			log.Error(err, "delete arsys server; retrying", "id", aum.Status.ServerID)
+			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		}
+	}
+
+	patch := client.MergeFrom(aum.DeepCopy())
+	controllerutil.RemoveFinalizer(aum, arsysv1alpha1.FinalizerName)
+	if err := r.Patch(ctx, aum, patch); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	return ctrl.Result{}, nil
+}
+
+// arsysClient builds an API client from the token Secret referenced by the CR.
+func (r *ArsysUbuntuMachineReconciler) arsysClient(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine) (*arsys.Client, error) {
+	var sec corev1.Secret
+	key := types.NamespacedName{Name: aum.Spec.TokenSecretRef.Name, Namespace: aum.Spec.TokenSecretRef.Namespace}
+	if err := r.Get(ctx, key, &sec); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("token Secret %s not found", key.String())
+		}
+		return nil, fmt.Errorf("get token Secret %s: %w", key.String(), err)
+	}
+	token := sec.Data[arsysv1alpha1.TokenSecretKey]
+	if len(token) == 0 {
+		return nil, fmt.Errorf("token Secret %s has no %q key", key.String(), arsysv1alpha1.TokenSecretKey)
+	}
+	return arsys.New(string(token)), nil
+}
+
+func (r *ArsysUbuntuMachineReconciler) setProvisioning(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, server *arsys.Server) error {
+	patch := client.MergeFrom(aum.DeepCopy())
+	aum.Status.Phase = arsysv1alpha1.PhaseProvisioning
+	aum.Status.ServerID = server.ID
+	aum.Status.Address = server.PrimaryIP()
+	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
+		Type:    arsysv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  "Provisioning",
+		Message: fmt.Sprintf("server %s state=%s (%d%%)", server.ID, server.Status.State, server.Status.Percent),
+	})
+	return r.Status().Patch(ctx, aum, patch)
+}
+
+func (r *ArsysUbuntuMachineReconciler) fail(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, reason, msg string) (ctrl.Result, error) {
+	patch := client.MergeFrom(aum.DeepCopy())
+	aum.Status.Phase = arsysv1alpha1.PhaseFailed
+	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
+		Type:    arsysv1alpha1.ConditionError,
+		Status:  metav1.ConditionTrue,
+		Reason:  reason,
+		Message: msg,
+	})
+	if err := r.Status().Patch(ctx, aum, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: requeueWorking}, nil
+}
+
+// machineName is the 1:1 name of the UbuntuMachine for this CR.
+func machineName(aum *arsysv1alpha1.ArsysUbuntuMachine) string {
+	return aum.Name
+}
+
+// serverName is the Arsys server name (spec override or CR name).
+func serverName(aum *arsysv1alpha1.ArsysUbuntuMachine) string {
+	if aum.Spec.Server.Name != "" {
+		return aum.Spec.Server.Name
+	}
+	return aum.Name
+}
+
+// copyLabels duplicates the CR's labels onto the UbuntuMachine.
+func copyLabels(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func (r *ArsysUbuntuMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&arsysv1alpha1.ArsysUbuntuMachine{}).
+		Owns(&umv1alpha1.UbuntuMachine{}).
+		Named("arsysubuntumachine").
+		Complete(r)
+}
