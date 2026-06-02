@@ -27,6 +27,10 @@ const (
 	// what simple-cluster-operator-openstack writes.
 	SSHSecretPrivateKeyKey = "ssh-privatekey"
 
+	// SSHSecretPasswordKey is the data key for password login, matching
+	// the `kubernetes.io/basic-auth` Secret convention.
+	SSHSecretPasswordKey = "password"
+
 	// KubeconfigSecretSuffix and KubeconfigSecretKey define where the
 	// rendered cluster kubeconfig lands.
 	KubeconfigSecretSuffix = "-kubeconfig"
@@ -89,7 +93,10 @@ type UbuntuClusterSpec struct {
 	K3sAgentArgs []string `json:"k3sAgentArgs,omitempty"`
 }
 
-// SSHAuth describes how the operator logs in.
+// SSHAuth describes how the operator logs in. Exactly one of
+// PrivateKeySecretRef (SSH key) or PasswordSecretRef (username/password)
+// must be set; the chosen method applies to every host in the cluster.
+// +kubebuilder:validation:XValidation:rule="has(self.privateKeySecretRef) != has(self.passwordSecretRef)",message="exactly one of privateKeySecretRef or passwordSecretRef must be set"
 type SSHAuth struct {
 	// User is the sudo-capable login the operator SSHs as
 	// (e.g. "ubuntu", "eouser", "root").
@@ -105,7 +112,14 @@ type SSHAuth struct {
 	// PrivateKeySecretRef points at a Secret in the same namespace
 	// carrying the SSH private key under the `ssh-privatekey` data
 	// key (the standard `kubernetes.io/ssh-auth` shape).
-	PrivateKeySecretRef corev1.LocalObjectReference `json:"privateKeySecretRef"`
+	// +optional
+	PrivateKeySecretRef *corev1.LocalObjectReference `json:"privateKeySecretRef,omitempty"`
+
+	// PasswordSecretRef points at a Secret in the same namespace carrying
+	// the login password under the `password` data key (the standard
+	// `kubernetes.io/basic-auth` shape).
+	// +optional
+	PasswordSecretRef *corev1.LocalObjectReference `json:"passwordSecretRef,omitempty"`
 }
 
 // HostPool is just a wrapper to give group-level options room to grow

@@ -12,7 +12,7 @@ spec:
     singular: ubuntumachine
     shortNames:
       - um
-  scope: Namespaced
+  scope: Cluster
   versions:
     - name: v1alpha1
       served: true
@@ -71,11 +71,15 @@ spec:
                     against claims with `externalAddressRequired: true`.
                   type: string
                 ssh:
-                  description: Credential a consumer should use to log in.
+                  description: |-
+                    Credential a consumer should use to log in. Exactly one of
+                    privateKeySecretRef or passwordSecretRef must be set.
                   type: object
                   required:
                     - user
-                    - privateKeySecretRef
+                  x-kubernetes-validations:
+                    - rule: has(self.privateKeySecretRef) != has(self.passwordSecretRef)
+                      message: exactly one of privateKeySecretRef or passwordSecretRef must be set
                   properties:
                     user:
                       type: string
@@ -85,11 +89,23 @@ spec:
                       minimum: 1
                       maximum: 65535
                     privateKeySecretRef:
+                      description: |-
+                        Secret with the SSH private key under `ssh-privatekey`.
+                        Namespaced because UbuntuMachine is cluster-scoped.
                       type: object
                       properties:
                         name:
                           type: string
-                          default: ""
+                        namespace:
+                          type: string
+                    passwordSecretRef:
+                      description: Secret with the login password under `password`.
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
                 capacity:
                   description: |-
                     Advertised capacity. Claim binder requires
@@ -119,10 +135,14 @@ spec:
                     - Bound
                 boundClaimRef:
                   type: object
+                  required:
+                    - name
+                    - namespace
                   properties:
                     name:
                       type: string
-                      default: ""
+                    namespace:
+                      type: string
                 observedGeneration:
                   type: integer
                   format: int64
