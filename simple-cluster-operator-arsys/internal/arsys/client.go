@@ -165,9 +165,9 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 	}
 	httpReq.Header.Set("X-TOKEN", c.token)
 	httpReq.Header.Set("Accept", "application/json")
-	if body != nil {
-		httpReq.Header.Set("Content-Type", "application/json")
-	}
+	// Always set Content-Type — Arsys rejects bodyless requests (e.g. DELETE)
+	// without it (406 WRONG_CONTENT_TYPE).
+	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
