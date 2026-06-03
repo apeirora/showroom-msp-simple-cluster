@@ -82,7 +82,9 @@ type InputDeclaration struct {
 // each ResourceSpec.
 type TargetSpec struct {
 	// Namespace used by default for namespaced resources. Each ResourceSpec
-	// may override this via its own Namespace.
+	// may override this via its own Namespace. May be a Go template evaluated
+	// against .SC and .Inputs (e.g. "{{ .SC.namespace }}" to co-locate
+	// resources with the owning SimpleCluster).
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
@@ -111,6 +113,7 @@ type ResourceSpec struct {
 
 	// Namespace overrides Target.Namespace for this resource.
 	// Required for namespaced kinds when Target.Namespace is also empty.
+	// May be a Go template evaluated against .SC and .Inputs.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
