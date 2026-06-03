@@ -42,10 +42,10 @@ clusterConfig:
   # workspaces, so the list is curated here (override per env to match the
   # SCPCs applied on the cluster).
   providers:
-    - kind
+    - cloudferro
+    - gardener-sap-ironcore
     - gardener-sap-openstack
-    - openstack-sample
-    - ubuntu-machines-sample
+    - kind
   cpu:
     - "1"
     - "2"
