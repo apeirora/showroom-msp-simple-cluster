@@ -175,10 +175,6 @@ func buildContext(
 		return nil, err
 	}
 
-	targetNamespace := resource.Namespace
-	if targetNamespace == "" {
-		targetNamespace = scpc.Spec.Target.Namespace
-	}
 	baseName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
 	targetName := baseName
 	if repeated {
@@ -202,21 +198,15 @@ func buildContext(
 		}
 	}
 
-	scCtx := map[string]any{
-		"name":      sc.Name,
-		"namespace": sc.Namespace,
-		"uid":       string(sc.UID),
-		"workers": map[string]any{
-			"nodes":     sc.Spec.Workers.Nodes,
-			"requested": nodeResourcesContext(sc.Spec.Workers.Requested),
-		},
-		"labels": sc.Labels,
+	scCtx := scContext(sc)
+
+	rawNamespace := resource.Namespace
+	if rawNamespace == "" {
+		rawNamespace = scpc.Spec.Target.Namespace
 	}
-	if sc.Spec.ControlPlane != nil {
-		scCtx["controlPlane"] = map[string]any{
-			"nodes":     sc.Spec.ControlPlane.Nodes,
-			"requested": nodeResourcesContext(sc.Spec.ControlPlane.Requested),
-		}
+	targetNamespace, err := renderNamespace(resource.Name, rawNamespace, scCtx, inputs)
+	if err != nil {
+		return nil, err
 	}
 
 	prevAny := make([]any, 0, len(prev))
@@ -236,6 +226,69 @@ func buildContext(
 		"Index":     index,
 		"Prev":      prevAny,
 	}, nil
+}
+
+// scContext builds the .SC sub-context shared by the full render context and
+// the standalone namespace resolution.
+func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
+	scCtx := map[string]any{
+		"name":      sc.Name,
+		"namespace": sc.Namespace,
+		"uid":       string(sc.UID),
+		"workers": map[string]any{
+			"nodes":     sc.Spec.Workers.Nodes,
+			"requested": nodeResourcesContext(sc.Spec.Workers.Requested),
+		},
+		"labels": sc.Labels,
+	}
+	if sc.Spec.ControlPlane != nil {
+		scCtx["controlPlane"] = map[string]any{
+			"nodes":     sc.Spec.ControlPlane.Nodes,
+			"requested": nodeResourcesContext(sc.Spec.ControlPlane.Requested),
+		}
+	}
+	return scCtx
+}
+
+// renderNamespace expands a configured namespace (which may be a template) to a
+// concrete value. Templates see only .SC and .Inputs so the namespace stays
+// stable regardless of sibling resources or repeat index. A literal namespace
+// (no template action) is returned unchanged.
+func renderNamespace(resourceName, raw string, scCtx, inputs map[string]any) (string, error) {
+	if raw == "" || !strings.Contains(raw, "{{") {
+		return raw, nil
+	}
+	out, err := RenderString(resourceName+".namespace", raw, map[string]any{
+		"SC":     scCtx,
+		"Inputs": inputs,
+	})
+	if err != nil {
+		return "", fmt.Errorf("render namespace %q: %w", raw, err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// ResolveNamespace computes the target namespace for a ResourceSpec, rendering
+// resource.Namespace (else SCPC target.Namespace) as a template against .SC and
+// .Inputs. Used outside the full render flow (e.g. the delete fallback) so the
+// namespace matches what Render produced.
+func ResolveNamespace(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	resource *showroomv1alpha1.ResourceSpec,
+) (string, error) {
+	raw := resource.Namespace
+	if raw == "" {
+		raw = scpc.Spec.Target.Namespace
+	}
+	if raw == "" || !strings.Contains(raw, "{{") {
+		return raw, nil
+	}
+	inputs, err := buildInputs(scpc.Spec.Inputs, sc.Spec.Inputs)
+	if err != nil {
+		return "", err
+	}
+	return renderNamespace(resource.Name, raw, scContext(sc), inputs)
 }
 
 // nodeResourcesContext stringifies CPU/Memory quantities into the
