@@ -53,6 +53,7 @@ type UbuntuMachineClaimReconciler struct {
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *UbuntuMachineClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -154,6 +155,9 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 	claim *umv1alpha1.UbuntuMachineClaim,
 	m umv1alpha1.UbuntuMachine,
 ) (ctrl.Result, error) {
+	if err := r.ensureCredentialSecret(ctx, claim, m); err != nil {
+		return ctrl.Result{}, err
+	}
 	claim.Status.Phase = umv1alpha1.ClaimReady
 	claim.Status.Machine = &umv1alpha1.BoundMachine{
 		Name:            m.Name,
@@ -170,6 +174,44 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 	r.event(claim, corev1.EventTypeNormal, "Bound",
 		fmt.Sprintf("bound to UbuntuMachine %q", m.Name))
 	return ctrl.Result{}, nil
+}
+
+// ensureCredentialSecret mirrors the bound machine's SSH credential Secret
+// into the claim's namespace under the claim's name, owned by the claim so
+// Kubernetes garbage-collects it when the claim is deleted. Consumers then
+// read the credential from a Secret local to their namespace, named after the
+// claim. Idempotent: re-run on every reconcile so a rotated source propagates.
+func (r *UbuntuMachineClaimReconciler) ensureCredentialSecret(
+	ctx context.Context,
+	claim *umv1alpha1.UbuntuMachineClaim,
+	m umv1alpha1.UbuntuMachine,
+) error {
+	srcRef := m.Spec.SSH.PrivateKeySecretRef
+	if srcRef == nil {
+		srcRef = m.Spec.SSH.PasswordSecretRef
+	}
+	if srcRef == nil {
+		return fmt.Errorf("machine %q has no SSH credential secret reference", m.Name)
+	}
+
+	var src corev1.Secret
+	srcKey := types.NamespacedName{Namespace: srcRef.Namespace, Name: srcRef.Name}
+	if err := r.Get(ctx, srcKey, &src); err != nil {
+		return fmt.Errorf("get source credential Secret %s/%s: %w", srcRef.Namespace, srcRef.Name, err)
+	}
+
+	copySecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: claim.Name, Namespace: claim.Namespace},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, copySecret, func() error {
+		if err := controllerutil.SetControllerReference(claim, copySecret, r.Scheme); err != nil {
+			return err
+		}
+		copySecret.Type = src.Type
+		copySecret.Data = src.Data
+		return nil
+	})
+	return err
 }
 
 // ownedBy reports whether machine m is currently bound to claim. Matches
