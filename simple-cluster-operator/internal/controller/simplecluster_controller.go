@@ -539,9 +539,9 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
-		defaultNs := rs.Namespace
-		if defaultNs == "" {
-			defaultNs = scpc.Spec.Target.Namespace
+		defaultNs, nerr := rendertpl.ResolveNamespace(&scpc, sc, rs)
+		if nerr != nil {
+			return false, fmt.Errorf("resource %q: resolve namespace: %w", name, nerr)
 		}
 
 		// Enumerate the (name, namespace) pairs to delete. For repeated
