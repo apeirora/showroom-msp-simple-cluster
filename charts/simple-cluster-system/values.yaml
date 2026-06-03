@@ -6,7 +6,7 @@ simple-cluster-operator:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator
-        tag: "0.2.0"
+        tag: "0.4.0"
 
 kind-cluster-operator:
   metrics:
