@@ -20,7 +20,7 @@ spec:
     - host: {{ .Values.PUBLIC_HOST | quote }}
       http:
         paths:
-          - path: {{ .Values.ui.contentPath | default "/pm-content.json" | quote }}
+          - path: /
             pathType: Prefix
             backend:
               service:
