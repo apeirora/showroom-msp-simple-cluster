@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/component: portal-ui
       annotations:
         checksum/portal-config: {{ include (print $.Template.BasePath "/portal-configmap.yaml") . | sha256sum }}
+        checksum/cluster-config: {{ include (print $.Template.BasePath "/cluster-config-configmap.yaml") . | sha256sum }}
     spec:
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -28,17 +29,28 @@ spec:
       {{- end }}
       {{- end }}
       containers:
-        - name: nginx
-          image: {{ .Values.ui.image.repository }}:{{ .Values.ui.image.tag }}
+        - name: ui
+          image: {{ include "simple-cluster-ui.image" . }}
           imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
           ports:
             - containerPort: 80
               name: http
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /index.html
+              port: http
           volumeMounts:
             - name: portal-config
               mountPath: /usr/share/nginx/html/pm-content.json
               subPath: pm-content.json
+            - name: cluster-config
+              mountPath: /usr/share/nginx/html/simple-cluster-config.json
+              subPath: simple-cluster-config.json
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
       volumes:
@@ -48,4 +60,10 @@ spec:
             items:
               - key: pm-content.json
                 path: pm-content.json
+        - name: cluster-config
+          configMap:
+            name: {{ .Release.Name }}-cluster-config
+            items:
+              - key: simple-cluster-config.json
+                path: simple-cluster-config.json
 {{- end }}
