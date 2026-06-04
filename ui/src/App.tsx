@@ -54,11 +54,11 @@ const App = () => {
   const [kubeconfigClusterName, setKubeconfigClusterName] = useState<string | null>(null);
   const [kubeconfigContents, setKubeconfigContents] = useState<string | null>(null);
 
-  const toastRef = useRef<{ show: () => void } | null>(null);
   const [toastText, setToastText] = useState('');
+  const [toastOpen, setToastOpen] = useState(false);
   const flashToast = useCallback((msg: string) => {
     setToastText(msg);
-    requestAnimationFrame(() => toastRef.current?.show());
+    setToastOpen(true);
   }, []);
 
   const subscriptionActiveRef = useRef(false);
@@ -283,7 +283,7 @@ const App = () => {
         onClose={() => setKubeconfigOpen(false)}
       />
 
-      <Toast ref={toastRef as never} duration={3000}>
+      <Toast open={toastOpen} duration={3000} onClose={() => setToastOpen(false)}>
         {toastText}
       </Toast>
     </FlexBox>
