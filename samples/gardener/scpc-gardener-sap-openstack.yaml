@@ -15,9 +15,29 @@ spec:
     - { name: cloudProfile, type: string,   default: converged-cloud-ora-fp,      description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: eu-de-1,                     description: "Cloud region" }
     - { name: k8sVersion,   type: string,   default: "1.33.9",                    description: "Kubernetes version" }
-    - { name: machineType,  type: string,   default: g_c4_m8,                     description: "Worker machine type from the CloudProfile (verify name against the cluster's CloudProfile)" }
+    - { name: machineType,  from: profile,                                         description: "Worker machine type; auto-picked as the smallest profile fitting the SC's requested cpu/memory" }
     - { name: machineImage, type: string,   default: gardenlinux,                 description: "Worker OS image name" }
     - { name: zone,         type: string,   default: eu-de-1a,                    description: "Availability zone for the worker pool" }
+  # General-purpose (g_) machine types from the converged-cloud-ora-fp CloudProfile.
+  # The operator picks the smallest profile whose cpu and memory satisfy the SC's
+  # requested per-node resources; none big enough -> Phase=NoHardware.
+  profiles:
+    - { name: g_c2_m4,    cpu: "2",   memory: 4Gi }
+    - { name: g_c2_m8,    cpu: "2",   memory: 8Gi }
+    - { name: g_c4_m8,    cpu: "4",   memory: 8Gi }
+    - { name: g_c4_m16,   cpu: "4",   memory: 16Gi }
+    - { name: g_c6_m24,   cpu: "6",   memory: 24Gi }
+    - { name: g_c8_m16,   cpu: "8",   memory: 16Gi }
+    - { name: g_c8_m32,   cpu: "8",   memory: 32Gi }
+    - { name: g_c12_m24,  cpu: "12",  memory: 24Gi }
+    - { name: g_c12_m48,  cpu: "12",  memory: 48Gi }
+    - { name: g_c16_m32,  cpu: "16",  memory: 32Gi }
+    - { name: g_c16_m64,  cpu: "16",  memory: 64Gi }
+    - { name: g_c24_m96,  cpu: "24",  memory: 96Gi }
+    - { name: g_c32_m128, cpu: "32",  memory: 128Gi }
+    - { name: g_c48_m192, cpu: "48",  memory: 192Gi }
+    - { name: g_c64_m256, cpu: "64",  memory: 256Gi }
+    - { name: g_c128_m512, cpu: "128", memory: 512Gi }
   resources:
     - name: shoot
       apiVersion: core.gardener.cloud/v1beta1
