@@ -15,7 +15,7 @@ spec:
     - { name: cloudProfile, type: string,   default: ironcore,                    description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: wdf4,                        description: "Cloud region" }
     - { name: k8sVersion,   type: string,   default: "1.34.5",                    description: "Kubernetes version" }
-    - { name: machineType,  from: profile,                                         description: "Worker machine type; auto-picked as the smallest profile fitting the SC's requested cpu/memory" }
+    - { name: machineType,  from: profile,                                        description: "Worker machine type; auto-picked as the smallest profile fitting the SC's requested cpu/memory" }
     - { name: machineImage, type: string,   default: gardenlinux,                 description: "Worker OS image name" }
     - { name: zone,         type: string,   default: wdf4-a,                      description: "Availability zone for the worker pool" }
   # Machine types from the ironcore CloudProfile. The operator picks the smallest

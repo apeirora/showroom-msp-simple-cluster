@@ -42,6 +42,7 @@ jobs:
             simple-cluster-pm-integration
             simple-cluster-ui
             simple-cluster-sync-agent
+            simple-cluster-scpc-config
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do

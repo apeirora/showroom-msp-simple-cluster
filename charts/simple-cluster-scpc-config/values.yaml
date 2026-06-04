@@ -1,0 +1,9 @@
+enable:
+  singleSSH: true
+  cloudferro: true
+  dati: false
+  kind: true
+  ubuntuMachines: false
+  sap:
+    openstack: true
+    ironcore: true
