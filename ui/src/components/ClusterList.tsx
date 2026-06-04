@@ -89,7 +89,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
   const rows = clusters.map((c) => ({
     name: c.metadata.name,
     phase: derivePhase(c),
-    provider: c.status?.providerConfigRef?.name ?? c.spec.providerConfigRefs?.[0] ?? '—',
+    provider: c.status?.providerConfigRef?.name ?? c.spec?.providerConfigRefs?.[0] ?? '—',
     cp: c.status?.cp ?? '—',
     wkr: c.status?.wkr ?? '—',
     age: ageOf(c.metadata.creationTimestamp),
