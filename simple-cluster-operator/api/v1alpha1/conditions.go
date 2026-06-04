@@ -29,7 +29,7 @@ const (
 	FinalizerName = "simplecluster.apeirora.eu/finalizer"
 )
 
-// +kubebuilder:validation:Enum=Pending;Provisioning;Ready;Failed;Deleting
+// +kubebuilder:validation:Enum=Pending;Provisioning;Ready;Failed;Deleting;NoHardware
 type Phase string
 
 const (
@@ -38,4 +38,9 @@ const (
 	PhaseReady        Phase = "Ready"
 	PhaseFailed       Phase = "Failed"
 	PhaseDeleting     Phase = "Deleting"
+	// PhaseNoHardware — a from=profile input has no SC override and no
+	// SCPC profile is large enough for the SC's requested resources. No
+	// resource R is created until a fitting profile appears or the request
+	// shrinks.
+	PhaseNoHardware Phase = "NoHardware"
 )

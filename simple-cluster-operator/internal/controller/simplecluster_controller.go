@@ -13,6 +13,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -124,6 +125,15 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	order, err := validateAndTopoSort(&scpc)
 	if err != nil {
 		return r.failSC(ctx, &sc, "InvalidSCPC", err.Error())
+	}
+
+	// Resolve inputs up front so a from=profile input with no fitting profile
+	// parks the SC in Phase=NoHardware before any resource R is created.
+	if _, err := rendertpl.ResolveInputs(&scpc, &sc); err != nil {
+		if errors.Is(err, rendertpl.ErrNoProfile) {
+			return r.noHardwareSC(ctx, &sc, scpc.Name, err.Error())
+		}
+		return r.failSC(ctx, &sc, "InputError", err.Error())
 	}
 
 	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef)
@@ -699,6 +709,32 @@ func (r *SimpleClusterReconciler) failSC(
 	if sc.Status.Phase == "" {
 		sc.Status.Phase = showroomv1alpha1.PhasePending
 	}
+	setRoleCounts(sc)
+	if err := r.Status().Patch(ctx, sc, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+}
+
+// noHardwareSC parks the SC in Phase=NoHardware: a from=profile input could
+// not be satisfied by any SCPC profile. No resource R is created. The SC is
+// re-queued so it recovers automatically once a large-enough profile is added
+// or the request shrinks.
+func (r *SimpleClusterReconciler) noHardwareSC(
+	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName, msg string,
+) (ctrl.Result, error) {
+	patch := client.MergeFrom(sc.DeepCopy())
+	if sc.Status.ProviderConfigRef == nil {
+		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpcName}
+	}
+	sc.Status.Phase = showroomv1alpha1.PhaseNoHardware
+	sc.Status.ObservedGeneration = sc.Generation
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:    showroomv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  string(showroomv1alpha1.PhaseNoHardware),
+		Message: msg,
+	})
 	setRoleCounts(sc)
 	if err := r.Status().Patch(ctx, sc, patch); err != nil {
 		return ctrl.Result{}, err

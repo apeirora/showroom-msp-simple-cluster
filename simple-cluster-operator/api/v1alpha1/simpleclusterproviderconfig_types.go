@@ -18,8 +18,26 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// Profile is a named machine type with a fixed per-node CPU/memory capacity.
+// Profiles are the closed set of machine types an SCPC offers; an input
+// declared with From=profile resolves to the smallest profile that fits the
+// SC's requested per-node resources.
+type Profile struct {
+	// Name is the machine type identifier substituted into templates
+	// (e.g. "m5.large").
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// CPU is the profile's CPU capacity per node (e.g. "4", "8000m").
+	CPU resource.Quantity `json:"cpu"`
+
+	// Memory is the profile's memory capacity per node (e.g. "16Gi").
+	Memory resource.Quantity `json:"memory"`
+}
 
 // +kubebuilder:validation:Enum=string;int;bool;duration;enum
 type InputType string
@@ -30,6 +48,16 @@ const (
 	InputTypeBool     InputType = "bool"
 	InputTypeDuration InputType = "duration"
 	InputTypeEnum     InputType = "enum"
+)
+
+// +kubebuilder:validation:Enum=profile
+type InputSource string
+
+const (
+	// InputSourceProfile resolves the input to the name of the smallest
+	// SCPC profile (spec.profiles) that fits the SC's requested per-node
+	// resources. The SimpleCluster lands in Phase=NoHardware when none fits.
+	InputSourceProfile InputSource = "profile"
 )
 
 // InputEnumValue is one allowed choice for an enum-typed input.
@@ -57,7 +85,17 @@ type InputDeclaration struct {
 	Type InputType `json:"type,omitempty"`
 
 	// Default value substituted when SC.spec.inputs[Name] is unset.
-	Default string `json:"default"`
+	// Required unless From is set.
+	// +optional
+	Default string `json:"default,omitempty"`
+
+	// From derives the input's value from a source other than Default. With
+	// From=profile the value is the name of the smallest SCPC profile that
+	// fits the SC's requested per-node resources; such inputs need no Default
+	// and no Type (always string). An explicit SC override is passed through
+	// unchanged (free-form, not validated against the profile list).
+	// +optional
+	From InputSource `json:"from,omitempty"`
 
 	// Description shown in CRD docs / UI tooling.
 	// +optional
@@ -275,11 +313,21 @@ type SimpleClusterProviderConfigSpec struct {
 	KubeconfigSource KubeconfigSource `json:"kubeconfigSource"`
 
 	// Inputs is the closed set of keys a SimpleCluster may override via
-	// spec.inputs. Every entry MUST carry a default.
+	// spec.inputs. Every entry MUST carry a default unless it sets From.
 	// +optional
 	// +listType=map
 	// +listMapKey=name
 	Inputs []InputDeclaration `json:"inputs,omitempty"`
+
+	// Profiles is the closed set of machine types this SCPC offers. An input
+	// declared with From=profile resolves to the smallest profile whose cpu
+	// and memory satisfy the SC's requested per-node resources (the larger of
+	// the worker and control-plane pool asks). When no profile is large enough
+	// the SimpleCluster is parked in Phase=NoHardware.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	Profiles []Profile `json:"profiles,omitempty"`
 }
 
 // ResolvedResource records a successfully resolved ResourceSpec on the target cluster.
