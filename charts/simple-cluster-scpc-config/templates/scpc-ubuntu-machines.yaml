@@ -1,0 +1,74 @@
+{{if .Values.enable.ubuntuMachines}}
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: ubuntu-machines
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  target:
+    namespace: "{{ .SC.namespace }}"
+
+  resources:
+    - name: cp
+      apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+      kind: UbuntuMachineClaim
+      repeat: "{{ .SC.controlPlane.nodes }}"
+      template: |
+        apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+        kind: UbuntuMachineClaim
+        spec:
+          externalAddressRequired: true
+          required:
+            cpu: "{{ .SC.controlPlane.requested.cpu }}"
+            memory: "{{ .SC.controlPlane.requested.memory }}"
+
+    - name: worker
+      apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+      kind: UbuntuMachineClaim
+      repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - cp
+      template: |
+        apiVersion: ubuntumachines.apeirora.eu/v1alpha1
+        kind: UbuntuMachineClaim
+        spec:
+          externalAddressRequired: false
+          required:
+            cpu: "{{ .SC.workers.requested.cpu }}"
+            memory: "{{ .SC.workers.requested.memory }}"
+
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn:
+        - cp
+        - worker
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          ssh:
+            user: {{ (index .Resources.cp 0).status.machine.ssh.user }}
+            privateKeySecretRef:
+              name: {{ (index .Resources.cp 0).status.machine.ssh.privateKeySecretRef.name }}
+          controlPlane:
+            hosts:
+              {{- range $i, $cl := .Resources.cp }}
+              - name: cp-{{ $i }}
+                address: {{ $cl.status.machine.address }}
+                externalAddress: {{ $cl.status.machine.externalAddress }}
+              {{- end }}
+          workers:
+            hosts:
+              {{- range $i, $cl := .Resources.worker }}
+              - name: worker-{{ $i }}
+                address: {{ $cl.status.machine.address }}
+              {{- end }}
+
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"
+  {{-end}}
