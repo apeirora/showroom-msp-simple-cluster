@@ -1,4 +1,4 @@
-# Hostname under which the UI (and pm-content.json) is served. Must match the
+# Hostname under which the UI (SPA + pm-content.json) is served. Must match the
 # PUBLIC_HOST/PUBLIC_SCHEME of the simple-cluster-pm-integration chart so the
 # portal's ContentConfiguration.remoteConfiguration.url resolves here.
 PUBLIC_HOST: "localhost"
@@ -19,9 +19,13 @@ imagePullSecrets: []
 ui:
   enabled: true
   contentPath: "/pm-content.json"
+  # The micro-frontend container image (React + UI5, served by nginx). CI
+  # publishes it tagged with the operator release version and `latest`; the
+  # chart cannot know the operator version, so it defaults to `latest`. Pin a
+  # specific version per environment via the GitOps overlay.
   image:
-    repository: nginx
-    tag: "1.27"
+    repository: ghcr.io/apeirora/simple-cluster-ui
+    tag: "latest"
     pullPolicy: IfNotPresent
   resources: {}
   service:
@@ -30,12 +34,19 @@ ui:
   ingress:
     annotations: {}
 
+# URL of the workspace-aware GraphQL gateway. The Luigi context.crdGatewayApiUrl
+# flows into the UI at runtime and overrides this; this value is only a
+# fallback used when the portal does not provide one.
+graphql:
+  url: "/api/kubernetes-graphql-gateway/root/graphql"
+
 branding:
   sidebar:
     title: "Simple Cluster"
 
-# Predefined choices surfaced in the create dialog. Editing these tunes the
-# dropdowns without rebuilding anything.
+# Predefined choices surfaced in the create dialog (served as
+# simple-cluster-config.json). Editing these tunes the dropdowns without
+# rebuilding the container image.
 clusterConfig:
   # Available SimpleClusterProviderConfig (SCPC) names offered in the provider
   # drop-down. SCPCs are admin-managed and not exported into consumer
@@ -58,3 +69,11 @@ clusterConfig:
     - "8Gi"
     - "16Gi"
     - "32Gi"
+  controlPlane:
+    min: 1
+    max: 10
+    default: 1
+  workers:
+    min: 1
+    max: 10
+    default: 1
