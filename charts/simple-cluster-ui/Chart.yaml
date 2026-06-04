@@ -2,5 +2,5 @@ apiVersion: v2
 name: simple-cluster-ui
 description: SimpleCluster provider UI for the Platform Mesh portal (React + UI5 micro-frontend served by nginx).
 type: application
-version: 0.6.0
+version: 0.6.1
 appVersion: 0.4.0
