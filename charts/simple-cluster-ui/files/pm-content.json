@@ -1,6 +1,5 @@
 {{- $logo := (.Files.Get "files/icon.svg") | b64enc -}}
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
-{{- $host := include "simple-cluster-ui.externalUrl" . -}}
 {
     "name": "simple-cluster",
     "creationTimestamp": "2024-01-01T00:00:00Z",
@@ -23,7 +22,113 @@
                         "enabled": false
                     },
                     "keepSelectedForChildren": true,
-                    "url": "{{ $host }}/index.html"
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "context": {
+                        "resourceDefinition": {
+                            "group": "showroom.apeirora.eu",
+                            "kind": "SimpleCluster",
+                            "version": "v1alpha1",
+                            "plural": "simpleClusters",
+                            "singular": "simpleCluster",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "readyCondition": {
+                                "jsonPathExpression": "status.conditions[?(@.type=='Ready' && @.status=='True')]",
+                                "property": [
+                                    "status.conditions.status",
+                                    "status.conditions.type"
+                                ]
+                            },
+                            "ui": {
+                                "listView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Phase",
+                                            "property": "status.phase"
+                                        },
+                                        {
+                                            "label": "Provider",
+                                            "property": "status.providerConfigRef.name"
+                                        },
+                                        {
+                                            "label": "Control Plane",
+                                            "property": "status.cp"
+                                        },
+                                        {
+                                            "label": "Workers",
+                                            "property": "status.wkr"
+                                        }
+                                    ]
+                                },
+                                "detailView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Phase",
+                                            "property": "status.phase"
+                                        },
+                                        {
+                                            "label": "Provider",
+                                            "property": "status.providerConfigRef.name"
+                                        },
+                                        {
+                                            "label": "Target Cluster",
+                                            "property": "status.targetCluster"
+                                        },
+                                        {
+                                            "label": "Control Plane (ready/declared)",
+                                            "property": "status.cp"
+                                        },
+                                        {
+                                            "label": "Workers (ready/declared)",
+                                            "property": "status.wkr"
+                                        },
+                                        {
+                                            "label": "Kubeconfig Secret",
+                                            "property": "status.kubeconfigSecretRef.name"
+                                        },
+                                        {
+                                            "label": "Kubeconfig Expires",
+                                            "property": "status.kubeconfigExpiresAt"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "children": [
+                        {
+                            "pathSegment": ":simpleclusterId",
+                            "hideFromNav": true,
+                            "keepSelectedForChildren": false,
+                            "defineEntity": {
+                                "id": "showroom_apeirora_eu_simplecluster",
+                                "contextKey": "simpleclusterId",
+                                "graphqlEntity": {
+                                    "group": "showroom_apeirora_eu",
+                                    "version": "v1alpha1",
+                                    "kind": "SimpleCluster",
+                                    "query": "{ metadata { name } }"
+                                }
+                            },
+                            "context": {
+                                "accountId": ":accountId",
+                                "namespaceId": ":namespaceId",
+                                "simpleclusterId": ":simpleclusterId",
+                                "resourceId": ":simpleclusterId"
+                            }
+                        }
+                    ]
                 }
             ]
         }
