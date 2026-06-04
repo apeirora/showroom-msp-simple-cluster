@@ -173,17 +173,36 @@
                                 "id": "showroom_apeirora_eu_simplecluster",
                                 "contextKey": "simpleClusterName",
                                 "graphqlEntity": {
-                                    "group": "showroom.apeirora.eu",
+                                    "group": "showroom_apeirora_eu",
                                     "version": "v1alpha1",
                                     "kind": "SimpleCluster",
                                     "query": "{ metadata { name annotations } }"
                                 }
                             },
                             "context": {
-                                "simpleClusterName": ":simpleClusterName"
+                                "accountId": ":accountId",
+                                "namespaceId": ":namespaceId",
+                                "simpleClusterName": ":simpleClusterName",
+                                "resourceId": ":simpleClusterName"
                             }
                         }
                     ]
+                },
+                {
+                    "entityType": "main.core_platform-mesh_io_account.namespace.showroom_apeirora_eu_simplecluster",
+                    "pathSegment": "dashboard",
+                    "label": "Dashboard",
+                    "order": 100,
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-detail-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "defineEntity": {
+                        "id": "dashboard"
+                    },
+                    "compound": {
+                        "children": []
+                    }
                 }
             ]
         }
