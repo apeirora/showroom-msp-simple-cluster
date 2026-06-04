@@ -15,9 +15,15 @@ spec:
     - { name: cloudProfile, type: string,   default: ironcore,                    description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: wdf4,                        description: "Cloud region" }
     - { name: k8sVersion,   type: string,   default: "1.34.5",                    description: "Kubernetes version" }
-    - { name: machineType,  type: string,   default: memory-intel1-1cpu,          description: "Worker machine type from the CloudProfile (verify name against the cluster's CloudProfile)" }
+    - { name: machineType,  from: profile,                                         description: "Worker machine type; auto-picked as the smallest profile fitting the SC's requested cpu/memory" }
     - { name: machineImage, type: string,   default: gardenlinux,                 description: "Worker OS image name" }
     - { name: zone,         type: string,   default: wdf4-a,                      description: "Availability zone for the worker pool" }
+  # Machine types from the ironcore CloudProfile. The operator picks the smallest
+  # profile whose cpu and memory satisfy the SC's requested per-node resources;
+  # none big enough -> Phase=NoHardware.
+  profiles:
+    - { name: memory-intel1-1cpu, cpu: "1", memory: 8Gi }
+    - { name: memory-intel1-2cpu, cpu: "2", memory: 16Gi }
   resources:
     - name: shoot
       apiVersion: core.gardener.cloud/v1beta1
