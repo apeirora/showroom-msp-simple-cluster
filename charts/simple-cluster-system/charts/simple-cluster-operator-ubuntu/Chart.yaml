@@ -2,6 +2,6 @@ apiVersion: v2
 name: simple-cluster-operator-ubuntu
 description: A Helm chart to distribute the project simple-cluster-operator-ubuntu
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "0.1.0"
 icon: "https://example.com/icon.png"
