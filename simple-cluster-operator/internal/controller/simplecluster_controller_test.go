@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -73,6 +74,92 @@ var _ = Describe("SimpleCluster Controller", func() {
 			Expect(errCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(errCond.Reason).To(Equal("SCPCNotFound"))
 			Expect(updated.Status.Phase).To(Equal(showroomv1alpha1.PhasePending))
+		})
+	})
+
+	Context("when a from=profile input has no fitting profile", func() {
+		const scpcName = "tiny-profiles"
+		const scName = "too-big"
+		ctx := context.Background()
+		scKey := types.NamespacedName{Name: scName, Namespace: "default"}
+
+		BeforeEach(func() {
+			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleClusterProviderConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: scpcName},
+				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
+					Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
+					Inputs: []showroomv1alpha1.InputDeclaration{
+						{Name: "machineType", From: showroomv1alpha1.InputSourceProfile},
+					},
+					Profiles: []showroomv1alpha1.Profile{
+						{Name: "small", CPU: resource.MustParse("2"), Memory: resource.MustParse("8Gi")},
+					},
+					Resources: []showroomv1alpha1.ResourceSpec{{
+						Name:       "config",
+						APIVersion: "v1",
+						Kind:       "ConfigMap",
+						Template: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ignored
+data:
+  machineType: "{{ .Inputs.machineType }}"
+`,
+					}},
+					KubeconfigSource: showroomv1alpha1.KubeconfigSource{
+						ResourceName: "config",
+						Inline:       &showroomv1alpha1.KubeconfigInlineSource{KubeconfigPath: "data.kubeconfig"},
+					},
+				},
+			})).To(Succeed())
+
+			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
+				Spec: showroomv1alpha1.SimpleClusterSpec{
+					Workers: showroomv1alpha1.WorkersSpec{
+						Nodes: 1,
+						Requested: showroomv1alpha1.NodeResources{
+							CPU:    resource.MustParse("16"),
+							Memory: resource.MustParse("8Gi"),
+						},
+					},
+					ProviderConfigRefs: []string{scpcName},
+				},
+			})).To(Succeed())
+		})
+
+		AfterEach(func() {
+			sc := &showroomv1alpha1.SimpleCluster{}
+			if err := k8sClient.Get(ctx, scKey, sc); err == nil {
+				sc.Finalizers = nil
+				_ = k8sClient.Update(ctx, sc)
+				_ = k8sClient.Delete(ctx, sc)
+			}
+			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc); err == nil {
+				_ = k8sClient.Delete(ctx, scpc)
+			}
+		})
+
+		It("parks the SC in Phase=NoHardware and creates no resource", func() {
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
+			}
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			updated := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, scKey, updated)).To(Succeed())
+			Expect(updated.Status.Phase).To(Equal(showroomv1alpha1.PhaseNoHardware))
+			Expect(updated.Status.Resources).To(BeEmpty())
+
+			cm := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "too-big-config", Namespace: "default"}, cm)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 	})
 

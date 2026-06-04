@@ -170,7 +170,7 @@ func buildContext(
 	index int,
 	prev []map[string]any,
 ) (map[string]any, error) {
-	inputs, err := buildInputs(scpc.Spec.Inputs, sc.Spec.Inputs)
+	inputs, err := buildInputs(scpc, sc)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +284,7 @@ func ResolveNamespace(
 	if raw == "" || !strings.Contains(raw, "{{") {
 		return raw, nil
 	}
-	inputs, err := buildInputs(scpc.Spec.Inputs, sc.Spec.Inputs)
+	inputs, err := buildInputs(scpc, sc)
 	if err != nil {
 		return "", err
 	}
@@ -322,7 +322,25 @@ func RenderString(name, body string, ctx map[string]any) (string, error) {
 	return buf.String(), nil
 }
 
-func buildInputs(decls []showroomv1alpha1.InputDeclaration, overrides map[string]string) (map[string]any, error) {
+// ResolveInputs computes the closed input set for an SC against its SCPC:
+// SC overrides where present, otherwise the declaration's Default or, for
+// From=profile inputs, the smallest fitting profile's name. It returns
+// ErrNoProfile when a from=profile input cannot be satisfied; the controller
+// maps that to Phase=NoHardware.
+func ResolveInputs(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+) (map[string]any, error) {
+	return buildInputs(scpc, sc)
+}
+
+func buildInputs(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+) (map[string]any, error) {
+	decls := scpc.Spec.Inputs
+	overrides := sc.Spec.Inputs
+
 	declared := make(map[string]showroomv1alpha1.InputDeclaration, len(decls))
 	for _, d := range decls {
 		declared[d.Name] = d
@@ -336,6 +354,14 @@ func buildInputs(decls []showroomv1alpha1.InputDeclaration, overrides map[string
 	out := make(map[string]any, len(decls))
 	for _, d := range decls {
 		raw, has := overrides[d.Name]
+		if !has && d.From == showroomv1alpha1.InputSourceProfile {
+			name, err := SelectProfile(scpc, sc)
+			if err != nil {
+				return nil, err
+			}
+			out[d.Name] = name
+			continue
+		}
 		if !has {
 			raw = d.Default
 		}

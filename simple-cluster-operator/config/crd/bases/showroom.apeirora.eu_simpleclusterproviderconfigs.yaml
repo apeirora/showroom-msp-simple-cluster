@@ -53,7 +53,7 @@ spec:
               inputs:
                 description: |-
                   Inputs is the closed set of keys a SimpleCluster may override via
-                  spec.inputs. Every entry MUST carry a default.
+                  spec.inputs. Every entry MUST carry a default unless it sets From.
                 items:
                   description: |-
                     InputDeclaration is a single SC input slot: name, type, default, and metadata
@@ -64,11 +64,22 @@ spec:
                         Type=string.
                       type: boolean
                     default:
-                      description: Default value substituted when SC.spec.inputs[Name]
-                        is unset.
+                      description: |-
+                        Default value substituted when SC.spec.inputs[Name] is unset.
+                        Required unless From is set.
                       type: string
                     description:
                       description: Description shown in CRD docs / UI tooling.
+                      type: string
+                    from:
+                      description: |-
+                        From derives the input's value from a source other than Default. With
+                        From=profile the value is the name of the smallest SCPC profile that
+                        fits the SC's requested per-node resources; such inputs need no Default
+                        and no Type (always string). An explicit SC override is passed through
+                        unchanged (free-form, not validated against the profile list).
+                      enum:
+                      - profile
                       type: string
                     name:
                       description: Name as referenced from the template (e.g. region
@@ -114,7 +125,6 @@ spec:
                       - key
                       x-kubernetes-list-type: map
                   required:
-                  - default
                   - name
                   type: object
                 type: array
@@ -197,6 +207,50 @@ spec:
                 required:
                 - resourceName
                 type: object
+              profiles:
+                description: |-
+                  Profiles is the closed set of machine types this SCPC offers. An input
+                  declared with From=profile resolves to the smallest profile whose cpu
+                  and memory satisfy the SC's requested per-node resources (the larger of
+                  the worker and control-plane pool asks). When no profile is large enough
+                  the SimpleCluster is parked in Phase=NoHardware.
+                items:
+                  description: |-
+                    Profile is a named machine type with a fixed per-node CPU/memory capacity.
+                    Profiles are the closed set of machine types an SCPC offers; an input
+                    declared with From=profile resolves to the smallest profile that fits the
+                    SC's requested per-node resources.
+                  properties:
+                    cpu:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: CPU is the profile's CPU capacity per node (e.g.
+                        "4", "8000m").
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    memory:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Memory is the profile's memory capacity per node
+                        (e.g. "16Gi").
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    name:
+                      description: Name is the machine type identifier substituted
+                        into templates (e.g. "m5.large").
+                      minLength: 1
+                      type: string
+                  required:
+                  - cpu
+                  - memory
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               resources:
                 description: |-
                   Resources is the ordered DAG of resources to render and create.
