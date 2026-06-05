@@ -79,7 +79,16 @@ jobs:
             ghcr.io/apeirora/${{ matrix.image }}:${{ needs.release-please.outputs.version }}
             ghcr.io/apeirora/${{ matrix.image }}:latest
 
-  # NOTE: Helm charts are published by .github/workflows/publish-charts.yml
-  # (triggered on charts/** changes, at each chart's own Chart.yaml version),
-  # not here — release-please is scoped to the simple-cluster-operator/ Go
-  # package, so chart-only changes would never cut a release.
+  # Publish every chart at the operator release version, with that version
+  # stamped into chart version/appVersion and all operator image tags — so
+  # charts and images stay in lockstep. See publish-charts.yml.
+  publish-charts:
+    needs: [release-please, publish-images]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/publish-charts.yml
+    with:
+      version: ${{ needs.release-please.outputs.version }}
+    permissions:
+      contents: read
+      packages: write
+    secrets: inherit
