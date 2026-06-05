@@ -1,4 +1,4 @@
-{{if or .Values.enable.sap.openstack .Values.enable.sap.ironcore }}
+{{- if or .Values.enable.sap.openstack .Values.enable.sap.ironcore }}
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -16,11 +16,11 @@ spec:
       remoteRef:
         key: simple-cluster-gardener-sap-kubeconfig
         property: kubeconfig
-{{-end}}
+{{- end }}
 
-{{if .Values.enable.sap.ironcore }}
+{{- if .Values.enable.sap.ironcore }}
 ---
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: gardener-sap-ironcore
@@ -96,11 +96,12 @@ spec:
       expirationPath: status.expirationTimestamp
     validity: 720h
     renewalBefore: 72h
-{{-end}}
+` }}
+{{- end }}
 
-{{if .Values.enable.sap.openstack}}
+{{- if .Values.enable.sap.openstack }}
 ---
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: gardener-sap-openstack
@@ -196,4 +197,5 @@ spec:
       expirationPath: status.expirationTimestamp
     validity: 720h
     renewalBefore: 72h
-{{-end}}
+` }}
+{{- end }}
