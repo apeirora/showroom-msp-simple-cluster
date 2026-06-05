@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.5.0...v0.5.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* selecting profile ([3453434](https://github.com/apeirora/showroom-simple-cluster/commit/3453434a4f1db460a3d335ac1ab5120775a1070c))
+
 ## [0.5.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.4.0...v0.5.0) (2026-06-04)
 
 
