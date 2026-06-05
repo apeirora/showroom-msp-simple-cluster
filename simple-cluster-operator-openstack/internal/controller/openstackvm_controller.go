@@ -275,7 +275,7 @@ func (r *OpenStackVMReconciler) eventf(vm *openstackv1alpha1.OpenStackVM, eventT
 
 func (r *OpenStackVMReconciler) openstackClients(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (*openstack.Clients, error) {
 	var creds corev1.Secret
-	key := types.NamespacedName{Name: vm.Spec.CredentialsRef.Name, Namespace: vm.Namespace}
+	key := credentialsRef(vm)
 	if err := r.Get(ctx, key, &creds); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("credentials Secret %s not found", key.String())
@@ -283,6 +283,17 @@ func (r *OpenStackVMReconciler) openstackClients(ctx context.Context, vm *openst
 		return nil, fmt.Errorf("get credentials Secret %s: %w", key.String(), err)
 	}
 	return openstack.NewClientsFromSecret(ctx, &creds)
+}
+
+// credentialsRef resolves the Secret carrying the VM's OpenStack
+// credentials. spec.credentialsRef.namespace is optional and defaults
+// to the VM's namespace.
+func credentialsRef(vm *openstackv1alpha1.OpenStackVM) types.NamespacedName {
+	ns := vm.Spec.CredentialsRef.Namespace
+	if ns == "" {
+		ns = vm.Namespace
+	}
+	return types.NamespacedName{Name: vm.Spec.CredentialsRef.Name, Namespace: ns}
 }
 
 // effectiveSSHKeyRef computes which Secret carries this VM's keypair.
@@ -348,7 +359,7 @@ func (r *OpenStackVMReconciler) ensureSSHKeypair(ctx context.Context, vm *openst
 			Namespace: ref.Namespace,
 			Annotations: map[string]string{
 				openstackv1alpha1.SSHSecretCredentialsNameAnno:      vm.Spec.CredentialsRef.Name,
-				openstackv1alpha1.SSHSecretCredentialsNamespaceAnno: vm.Namespace,
+				openstackv1alpha1.SSHSecretCredentialsNamespaceAnno: credentialsRef(vm).Namespace,
 				openstackv1alpha1.SSHSecretKeypairNameAnno:          keypairNameFor(ref),
 			},
 			Finalizers: []string{openstackv1alpha1.KeypairFinalizerName},
@@ -394,7 +405,7 @@ func (r *OpenStackVMReconciler) ensureSecretBookkeeping(
 	}
 	want := map[string]string{
 		openstackv1alpha1.SSHSecretCredentialsNameAnno:      vm.Spec.CredentialsRef.Name,
-		openstackv1alpha1.SSHSecretCredentialsNamespaceAnno: vm.Namespace,
+		openstackv1alpha1.SSHSecretCredentialsNamespaceAnno: credentialsRef(vm).Namespace,
 		openstackv1alpha1.SSHSecretKeypairNameAnno:          keypairNameFor(ref),
 	}
 	for k, v := range want {
