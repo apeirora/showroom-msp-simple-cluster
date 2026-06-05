@@ -1,5 +1,5 @@
-{{if .Values.enable.ubuntuMachines}}
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{- if .Values.enable.ubuntuMachines }}
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: ubuntu-machines
@@ -71,4 +71,5 @@ spec:
     resourceName: cluster
     secretRef:
       name: "{{ .Target.name }}-kubeconfig"
-  {{-end}}
+` }}
+{{- end }}
