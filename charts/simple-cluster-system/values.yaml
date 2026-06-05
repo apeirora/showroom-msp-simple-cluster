@@ -5,7 +5,7 @@ simple-cluster-operator:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator
-        tag: "0.5.1"
+        tag: "0.5.2"
 
 kind-cluster-operator:
   metrics:
@@ -14,7 +14,7 @@ kind-cluster-operator:
     container:
       image:
         repository: ghcr.io/apeirora/kind-cluster-operator
-        tag: "0.2.0"
+        tag: "0.5.2"
 
 simple-cluster-operator-openstack:
   metrics:
@@ -23,7 +23,7 @@ simple-cluster-operator-openstack:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-openstack
-        tag: "0.2.0"
+        tag: "0.5.2"
 
 simple-cluster-operator-ubuntu:
   metrics:
@@ -32,4 +32,4 @@ simple-cluster-operator-ubuntu:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-ubuntu
-        tag: "0.2.0"
+        tag: "0.5.2"
