@@ -1,4 +1,3 @@
-# TODO auto update image versions when deploying
 simple-cluster-operator:
   metrics:
     enable: false
