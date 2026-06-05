@@ -1,15 +1,15 @@
 dependencies:
 - name: simple-cluster-operator
   repository: ""
-  version: 0.2.0
+  version: 0.3.0
 - name: kind-cluster-operator
   repository: ""
-  version: 0.2.0
+  version: 0.3.0
 - name: simple-cluster-operator-openstack
   repository: ""
-  version: 0.2.0
+  version: 0.3.0
 - name: simple-cluster-operator-ubuntu
   repository: ""
-  version: 0.2.0
-digest: sha256:5ab616e92f47e7f330642a3c7f22e5c409a46b13b7cdb0dbe7b192ea165a22f0
-generated: "2026-06-04T18:54:12.71228535+02:00"
+  version: 0.3.0
+digest: sha256:f575409b978952c1b05f0419bee445307e453321213d2cb718da743203abe7a3
+generated: "2026-06-05T02:30:50.672819184+02:00"
