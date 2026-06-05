@@ -323,6 +323,7 @@ spec:
                 - Ready
                 - Failed
                 - Deleting
+                - NoHardware
                 type: string
               providerConfigRef:
                 description: |-
@@ -382,6 +383,7 @@ spec:
                             - Ready
                             - Failed
                             - Deleting
+                            - NoHardware
                             type: string
                           targetName:
                             description: TargetName is the name of this R-object on
@@ -426,6 +428,7 @@ spec:
                       - Ready
                       - Failed
                       - Deleting
+                      - NoHardware
                       type: string
                     reason:
                       description: Reason is the operator's per-resource state code,
