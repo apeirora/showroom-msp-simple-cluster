@@ -67,6 +67,52 @@
                                         }
                                     ]
                                 },
+                                "createView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Provider",
+                                            "property": "spec.providerConfigRefs[0]",
+                                            "required": true,
+                                            "values": {{ .Values.clusterConfig.providers | toJson }}
+                                        },
+                                        {
+                                            "label": "Worker Nodes",
+                                            "property": "spec.workers.nodes",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Worker CPU",
+                                            "property": "spec.workers.requested.cpu",
+                                            "required": true,
+                                            "values": {{ .Values.clusterConfig.cpu | toJson }}
+                                        },
+                                        {
+                                            "label": "Worker Memory",
+                                            "property": "spec.workers.requested.memory",
+                                            "required": true,
+                                            "values": {{ .Values.clusterConfig.memory | toJson }}
+                                        },
+                                        {
+                                            "label": "Control Plane Nodes",
+                                            "property": "spec.controlPlane.nodes"
+                                        },
+                                        {
+                                            "label": "Control Plane CPU",
+                                            "property": "spec.controlPlane.requested.cpu",
+                                            "values": {{ .Values.clusterConfig.cpu | toJson }}
+                                        },
+                                        {
+                                            "label": "Control Plane Memory",
+                                            "property": "spec.controlPlane.requested.memory",
+                                            "values": {{ .Values.clusterConfig.memory | toJson }}
+                                        }
+                                    ]
+                                },
                                 "detailView": {
                                     "fields": [
                                         {
