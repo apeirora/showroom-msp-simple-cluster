@@ -1,5 +1,5 @@
-{{if .Values.enable.kind}}
-# SCPC that delegates "make me a cluster" to kind-cluster-operator.
+{{- if .Values.enable.kind }}
+{{ `# SCPC that delegates "make me a cluster" to kind-cluster-operator.
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
@@ -31,4 +31,5 @@ spec:
     resourceName: cluster
     secretRef:
       name: "{{ .Target.name }}-kubeconfig"
-  {{-end}}
+` }}
+{{- end }}

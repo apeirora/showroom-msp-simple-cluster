@@ -1,5 +1,5 @@
-{{if .Values.enable.dati}}
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{- if .Values.enable.dati }}
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: gardener-dati
@@ -91,4 +91,5 @@ spec:
       expirationPath: status.expirationTimestamp
     validity: 720h
     renewalBefore: 72h
-  {{-end}}
+` }}
+{{- end }}
