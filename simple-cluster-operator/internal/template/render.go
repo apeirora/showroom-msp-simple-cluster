@@ -241,10 +241,21 @@ func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 		},
 		"labels": sc.Labels,
 	}
-	if sc.Spec.ControlPlane != nil {
+	// ControlPlane is optional on the SC: Gardener providers manage the CP
+	// themselves and never read .SC.controlPlane, while flat providers
+	// (openstack, ubuntu, cloudferro) require it. When omitted, default it to a
+	// single node mirroring the worker resource ask so those templates render
+	// without forcing the user to fill it in. The default mirrors workers, so
+	// SelectProfile (which maxes worker and CP asks) is unaffected.
+	if cp := sc.Spec.ControlPlane; cp != nil {
 		scCtx["controlPlane"] = map[string]any{
-			"nodes":     sc.Spec.ControlPlane.Nodes,
-			"requested": nodeResourcesContext(sc.Spec.ControlPlane.Requested),
+			"nodes":     cp.Nodes,
+			"requested": nodeResourcesContext(cp.Requested),
+		}
+	} else {
+		scCtx["controlPlane"] = map[string]any{
+			"nodes":     int32(1),
+			"requested": nodeResourcesContext(sc.Spec.Workers.Requested),
 		}
 	}
 	return scCtx

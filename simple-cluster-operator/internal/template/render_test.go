@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
@@ -396,5 +397,56 @@ func TestSanitiseTargetName(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("Sanitise(%q,%q)=%q want %q", tc.prefix, tc.base, got, tc.want)
 		}
+	}
+}
+
+func TestRender_ControlPlaneDefaultsToWorkers(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "cp",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Template: `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cp
+data:
+  nodes: "{{ .SC.controlPlane.nodes }}"
+  cpu: "{{ .SC.controlPlane.requested.cpu }}"
+  memory: "{{ .SC.controlPlane.requested.memory }}"
+`,
+	}
+
+	// ControlPlane omitted: a flat-provider template still renders, defaulting
+	// to a single control-plane node mirroring the worker resource ask.
+	sc := minimalSC(3, nil)
+	sc.Spec.Workers.Requested = showroomv1alpha1.NodeResources{
+		CPU:    resource.MustParse("4"),
+		Memory: resource.MustParse("8Gi"),
+	}
+	objs, err := Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render (cp omitted): %v", err)
+	}
+	data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["nodes"] != "1" || data["cpu"] != "4" || data["memory"] != "8Gi" {
+		t.Errorf("control-plane default mismatch: %v", data)
+	}
+
+	// ControlPlane set: its own values win over the default.
+	sc.Spec.ControlPlane = &showroomv1alpha1.ControlPlaneSpec{
+		Nodes: 3,
+		Requested: showroomv1alpha1.NodeResources{
+			CPU:    resource.MustParse("8"),
+			Memory: resource.MustParse("16Gi"),
+		},
+	}
+	objs, err = Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render (cp set): %v", err)
+	}
+	data, _, _ = unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["nodes"] != "3" || data["cpu"] != "8" || data["memory"] != "16Gi" {
+		t.Errorf("explicit control-plane mismatch: %v", data)
 	}
 }
