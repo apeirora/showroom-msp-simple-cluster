@@ -282,6 +282,13 @@ spec:
                   as the CP printer column (e.g. "1/3"). "-/-" when the SCPC owns
                   the control plane (spec.controlPlane is omitted).
                 type: string
+              kubeconfig:
+                description: |-
+                  Kubeconfig is the raw NC kubeconfig, mirrored from the Secret
+                  referenced by KubeconfigSecretRef so the generic portal detail
+                  view can surface it for copy/download. Readable by anyone with
+                  get access to this SimpleCluster.
+                type: string
               kubeconfigExpiresAt:
                 description: KubeconfigExpiresAt is the expiry time of the embedded
                   credential.

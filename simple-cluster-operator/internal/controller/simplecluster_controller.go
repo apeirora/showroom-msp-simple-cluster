@@ -335,6 +335,7 @@ func (r *SimpleClusterReconciler) syncKubeconfig(
 	}
 
 	sc.Status.KubeconfigSecretRef = &corev1.LocalObjectReference{Name: res.SecretName}
+	sc.Status.Kubeconfig = string(data)
 	if res.IssuedAt != nil {
 		sc.Status.KubeconfigIssuedAt = &metav1.Time{Time: *res.IssuedAt}
 	} else {
