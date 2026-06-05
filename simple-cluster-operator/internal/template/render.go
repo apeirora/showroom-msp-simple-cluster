@@ -354,7 +354,7 @@ func buildInputs(
 	out := make(map[string]any, len(decls))
 	for _, d := range decls {
 		raw, has := overrides[d.Name]
-		if !has && d.From == showroomv1alpha1.InputSourceProfile {
+		if d.From == showroomv1alpha1.InputSourceProfile && (!has || raw == "") {
 			name, err := SelectProfile(scpc, sc)
 			if err != nil {
 				return nil, err
