@@ -1,16 +1,24 @@
 name: Publish Charts
 
-# Charts are versioned independently of the operator release (release-please is
-# scoped to simple-cluster-operator/). This publishes each chart to the OCI
-# registry at its own Chart.yaml version whenever a chart changes on main, or
-# on demand. Bump a chart's `version` to ship a change.
+# Single-version model: every chart is published at one version — the
+# simple-cluster-operator release version — and that same version is stamped
+# into each chart's `version`, `appVersion` and every operator image tag. This
+# keeps charts and images in lockstep (chart X.Y.Z always pulls images X.Y.Z).
+#
+# Normally invoked by the Release Please workflow on an operator release. Can
+# also be run manually (workflow_dispatch) to re-publish at an explicit version.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'charts/**'
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
+        description: "Version to stamp into all charts (version, appVersion, image tags) and publish at."
 
 permissions:
   contents: read
@@ -22,6 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OCI_REPO: oci://ghcr.io/apeirora/charts
+      VERSION: ${{ inputs.version }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,9 +41,24 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: helm registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Package and push charts (at each chart's Chart.yaml version)
+      - name: Stamp release version into operator image tags
         run: |
           set -euo pipefail
+          V="${VERSION}"
+          # Umbrella sub-chart operator images (all built by publish-images at $V).
+          yq -i "
+            .[\"simple-cluster-operator\"].controllerManager.container.image.tag = \"$V\" |
+            .[\"kind-cluster-operator\"].controllerManager.container.image.tag = \"$V\" |
+            .[\"simple-cluster-operator-openstack\"].controllerManager.container.image.tag = \"$V\" |
+            .[\"simple-cluster-operator-ubuntu\"].controllerManager.container.image.tag = \"$V\"
+          " charts/simple-cluster-system/values.yaml
+          # Micro-frontend image.
+          yq -i ".ui.image.tag = \"$V\"" charts/simple-cluster-ui/values.yaml
+
+      - name: Package and push charts at the release version
+        run: |
+          set -euo pipefail
+          V="${VERSION}"
           CHARTS=(
             simple-cluster-system
             ubuntu-machines-operator
@@ -46,10 +70,10 @@ jobs:
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do
-            echo ">>> $c"
+            echo ">>> $c @ $V"
             # Resolve external deps (api-syncagent); umbrella sub-charts are vendored.
             helm dependency build "charts/$c" || true
-            helm package "charts/$c" --destination .cr-release-packages
+            helm package "charts/$c" --version "$V" --app-version "$V" --destination .cr-release-packages
           done
           for pkg in .cr-release-packages/*.tgz; do
             echo ">>> push $pkg"
