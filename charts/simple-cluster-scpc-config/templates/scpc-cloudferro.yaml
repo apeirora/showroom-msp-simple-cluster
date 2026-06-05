@@ -57,6 +57,7 @@ spec:
         spec:
           credentialsRef:
             name: openstack-creds
+            namespace: simple-cluster-system-scpc-configs
           network: {{ .Inputs.network }}
           floatingIPPool: {{ .Inputs.floatingIPPool }}
           floatingIP: true
@@ -82,6 +83,7 @@ spec:
         spec:
           credentialsRef:
             name: openstack-creds
+            namespace: simple-cluster-system-scpc-configs
           network: {{ .Inputs.network }}
           floatingIP: false
           securityGroups:
@@ -114,6 +116,7 @@ spec:
             user: eouser
             privateKeySecretRef:
               name: openstack-sample-ssh
+              namespace: simple-cluster-system-scpc-configs
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}

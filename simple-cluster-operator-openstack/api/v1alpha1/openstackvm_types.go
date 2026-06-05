@@ -73,11 +73,12 @@ const (
 // OpenStackVMSpec describes one Nova server. The CR is self-contained:
 // every spec field is what Nova actually needs (no shared parent CR).
 type OpenStackVMSpec struct {
-	// CredentialsRef is a Secret in the same namespace carrying Keystone
-	// v3 application credentials. Required keys:
+	// CredentialsRef is a Secret carrying Keystone v3 application
+	// credentials. Namespace is optional and defaults to the VM's
+	// namespace. Required keys:
 	// OS_AUTH_URL, OS_REGION_NAME, OS_APPLICATION_CREDENTIAL_ID,
 	// OS_APPLICATION_CREDENTIAL_SECRET.
-	CredentialsRef corev1.LocalObjectReference `json:"credentialsRef"`
+	CredentialsRef corev1.SecretReference `json:"credentialsRef"`
 
 	// Network is the name (or UUID) of the Neutron network this server's
 	// port lives on.

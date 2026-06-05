@@ -74,19 +74,19 @@ spec:
             properties:
               credentialsRef:
                 description: |-
-                  CredentialsRef is a Secret in the same namespace carrying Keystone
-                  v3 application credentials. Required keys:
+                  CredentialsRef is a Secret carrying Keystone v3 application
+                  credentials. Namespace is optional and defaults to the VM's
+                  namespace. Required keys:
                   OS_AUTH_URL, OS_REGION_NAME, OS_APPLICATION_CREDENTIAL_ID,
                   OS_APPLICATION_CREDENTIAL_SECRET.
                 properties:
                   name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    description: name is unique within a namespace to reference a
+                      secret resource.
+                    type: string
+                  namespace:
+                    description: namespace defines the space within which the secret
+                      name must be unique.
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
