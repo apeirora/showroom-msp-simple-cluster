@@ -35,13 +35,6 @@
                             "singular": "simpleCluster",
                             "scope": "Namespaced",
                             "namespace": null,
-                            "readyCondition": {
-                                "jsonPathExpression": "status.conditions[?(@.type=='Ready' && @.status=='True')]",
-                                "property": [
-                                    "status.conditions.status",
-                                    "status.conditions.type"
-                                ]
-                            },
                             "ui": {
                                 "listView": {
                                     "fields": [
