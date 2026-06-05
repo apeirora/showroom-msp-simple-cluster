@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.5.1...v0.5.2) (2026-06-05)
+
+
+### Bug Fixes
+
+* SC sets Phase=Deleting on deletion ([1c5d924](https://github.com/apeirora/showroom-simple-cluster/commit/1c5d9242fad56b5854376c9353da145a31e55da2))
+
 ## [0.5.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.5.0...v0.5.1) (2026-06-05)
 
 
