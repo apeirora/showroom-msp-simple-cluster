@@ -1,7 +1,7 @@
 dependencies:
 - name: simple-cluster-operator
   repository: ""
-  version: 0.3.0
+  version: 0.3.1
 - name: kind-cluster-operator
   repository: ""
   version: 0.3.0
@@ -11,5 +11,5 @@ dependencies:
 - name: simple-cluster-operator-ubuntu
   repository: ""
   version: 0.3.0
-digest: sha256:f575409b978952c1b05f0419bee445307e453321213d2cb718da743203abe7a3
-generated: "2026-06-05T02:30:50.672819184+02:00"
+digest: sha256:2ab275546e12432d70f10c60d32cedd1aeacda62b3461f1bf9dd5ebb150be2bc
+generated: "2026-06-05T04:20:24.009745872+02:00"
