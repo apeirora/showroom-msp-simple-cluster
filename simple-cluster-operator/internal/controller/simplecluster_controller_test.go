@@ -284,9 +284,55 @@ data:
 			Expect(updated.Status.KubeconfigSecretRef).NotTo(BeNil())
 			Expect(updated.Status.KubeconfigSecretRef.Name).To(Equal("demo-kubeconfig"))
 
+			By("mirroring the kubeconfig onto status so the portal detail view can show it")
+			Expect(updated.Status.Kubeconfig).NotTo(BeEmpty())
+			Expect(updated.Status.Kubeconfig).To(Equal(string(secret.Data["kubeconfig"])))
+
 			kcCond := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionKubeconfigValid)
 			Expect(kcCond).NotTo(BeNil())
 			Expect(kcCond.Status).To(Equal(metav1.ConditionTrue))
+		})
+
+		It("sets Phase=Deleting when the SC deletion is requested", func() {
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
+			}
+
+			By("reconciling the SC to a steady state with the finalizer in place")
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("pinning the target ConfigMap with a finalizer so the cascade barrier holds")
+			cmKey := types.NamespacedName{Name: "demo-config", Namespace: "default"}
+			cm := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(ctx, cmKey, cm)).To(Succeed())
+			cm.Finalizers = append(cm.Finalizers, "test.showroom/hold")
+			Expect(k8sClient.Update(ctx, cm)).To(Succeed())
+			DeferCleanup(func() {
+				held := &corev1.ConfigMap{}
+				if err := k8sClient.Get(ctx, cmKey, held); err == nil {
+					held.Finalizers = nil
+					_ = k8sClient.Update(ctx, held)
+				}
+			})
+
+			By("requesting deletion of the SC")
+			sc := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, scKey, sc)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, sc)).To(Succeed())
+
+			By("reconciling once and observing Phase=Deleting while the cascade is in flight")
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			deleting := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, scKey, deleting)).To(Succeed())
+			Expect(deleting.DeletionTimestamp).NotTo(BeNil())
+			Expect(deleting.Status.Phase).To(Equal(showroomv1alpha1.PhaseDeleting))
 		})
 
 		It("marks dependents WaitingForDependencies until predecessors are Ready", func() {
