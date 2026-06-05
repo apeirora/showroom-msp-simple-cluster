@@ -148,6 +148,26 @@ func TestResolveInputs_FromProfileOverridePassthrough(t *testing.T) {
 	}
 }
 
+func TestResolveInputs_FromProfileEmptyOverride(t *testing.T) {
+	scpc := minimalSCPC([]showroomv1alpha1.InputDeclaration{
+		{Name: "machineType", From: showroomv1alpha1.InputSourceProfile},
+	})
+	scpc.Spec.Profiles = []showroomv1alpha1.Profile{
+		profile("s", "2", "8Gi"),
+		profile("m", "4", "16Gi"),
+	}
+	sc := scWithRequest("3", "10Gi", nil)
+	sc.Spec.Inputs = map[string]string{"machineType": ""} // empty override must not bypass profile selection
+
+	inputs, err := ResolveInputs(scpc, sc)
+	if err != nil {
+		t.Fatalf("ResolveInputs: %v", err)
+	}
+	if inputs["machineType"] != "m" {
+		t.Errorf("empty from=profile override should resolve via profile to %q, got %v", "m", inputs["machineType"])
+	}
+}
+
 func TestResolveInputs_FromProfileNoHardware(t *testing.T) {
 	scpc := minimalSCPC([]showroomv1alpha1.InputDeclaration{
 		{Name: "machineType", From: showroomv1alpha1.InputSourceProfile},
