@@ -1,5 +1,23 @@
 {{- if .Values.enable.dati }}
-{{ `apiVersion: showroom.apeirora.eu/v1alpha1
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: gardener-sap-kubeconfig
+spec:
+  refreshInterval: 15m0s
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-msp
+  target:
+    name: gardener-sap-kubeconfig
+    creationPolicy: Owner
+  data:
+    - secretKey: kubeconfig
+      remoteRef:
+        key: simple-cluster-gardener-sap-kubeconfig
+        property: kubeconfig
+---
+apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: gardener-dati
@@ -13,7 +31,6 @@ spec:
       name: gardener-dati-kubeconfig
       namespace: simple-cluster-system-scpc-configs
   inputs:
-    - { name: cloudProfile, type: string,   default: openstack,                   description: "Gardener CloudProfile name" }
     - { name: region,       type: string,   default: RegionOne,                   description: "Cloud region" }
     - { name: k8sVersion,   type: string,   default: "1.33.9",                    description: "Kubernetes version" }
     - { name: machineType,  type: string,   default: 4vCPU-8192RAM-100STORAGE,    description: "Worker machine type from the CloudProfile" }
@@ -37,14 +54,22 @@ spec:
       template: |
         apiVersion: core.gardener.cloud/v1beta1
         kind: Shoot
+        metadata:
+          name: dati-test-new
+          namespace: garden-sap
         spec:
           cloudProfile:
-            name: {{ .Inputs.cloudProfile }}
+            name: openstack
             kind: CloudProfile
           credentialsBindingName: my-openstack-secret
           region: {{ .Inputs.region }}
           kubernetes:
             version: "{{ .Inputs.k8sVersion }}"
+          networking:
+            type: calico
+            nodes: 10.250.0.0/16
+            pods: 100.128.0.0/11
+            services: 100.72.0.0/13
           provider:
             type: openstack
             infrastructureConfig:
@@ -59,26 +84,26 @@ spec:
               loadBalancerProvider: amphora
             workers:
               - name: worker-main
-                minimum: {{ .SC.workers.nodes }}
-                maximum: {{ .SC.workers.nodes }}
                 machine:
                   type: {{ .Inputs.machineType }}
                   image:
-                    name: {{ .Inputs.machineImage }}
+                    name: gardenlinux
+                    version: "2150.0.0"
+                minimum: 1
+                maximum: 3
                 zones:
                   - {{ .Inputs.zone }}
-          networking:
-            type: calico
-            nodes: 10.250.0.0/16
-            pods: 100.128.0.0/11
-            services: 100.72.0.0/13
           maintenance:
             autoUpdate:
               kubernetesVersion: false
               machineImageVersion: false
             timeWindow:
-              begin: 220000+0000
-              end: 230000+0000
+              begin: "220000+0000"
+              end: "230000+0000"
+          dns:
+            providers:
+             - type: unmanaged
+               primary: true
           hibernation:
             enabled: false
   kubeconfigSource:
@@ -91,5 +116,4 @@ spec:
       expirationPath: status.expirationTimestamp
     validity: 720h
     renewalBefore: 72h
-` }}
 {{- end }}
