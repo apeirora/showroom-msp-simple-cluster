@@ -7,3 +7,6 @@ enable:
   sap:
     openstack: true
     ironcore: true
+  arsys:
+    virtual: true
+    dedicated: true

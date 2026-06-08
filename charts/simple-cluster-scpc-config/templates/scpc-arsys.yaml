@@ -1,0 +1,218 @@
+{{- if or .Values.enable.arsys.dedicated .Values.enable.arsys.virtual }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: arsys-token
+spec:
+  refreshInterval: 15m0s
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-msp
+  target:
+    name: arsys-token
+    creationPolicy: Owner
+  data:
+    - secretKey: token
+      remoteRef:
+        key: simple-cluster-arsys-token
+        property: token
+{{- end}}
+{{ if .Values.enable.arsys.dedicated }}
+---
+# Dedicated
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: arsys-dedicated
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+spec:
+  target:
+    namespace: "{{ .SC.namespace }}"
+
+  inputs:
+    - { name: applianceID,  type: string, default: '5D3BBD43E3AB7E8884753025F70DF294',            description: "arsys applianceID" }
+    - { name: datacenterID,  type: string, default: '9B94281B5B67A755F2B76165E25F6A65',           description: "arsys datacenterID" }
+    - { name: baremetalModelID,  type: string, default: '1A85528AA9484F62B00DD6A0A19BBEC9',       description: "arsys baremetalModelID" }
+
+  resources:
+    - name: vmcp
+      apiVersion: arsys.apeirora.eu/v1alpha1
+      kind: ArsysUbuntuMachine
+      repeat: "{{ .SC.controlPlane.nodes }}"
+      template: |
+        apiVersion: arsys.apeirora.eu/v1alpha1
+        kind: ArsysUbuntuMachine
+        spec:
+          tokenSecretRef:
+            name: arsys-token
+            namespace: simple-cluster-system
+          passwordSecretRef:
+            name: aum-dedicated-password
+            namespace: default
+          server:
+            type: dedicated
+            applianceID: "{{ .Inputs.applianceID }}
+            datacenterID: "{{ .Inputs.datacenterID }}
+            baremetalModelID: "{{ .Inputs.baremetalModelID }}
+          ssh:
+            user: root
+
+      - name: vmworker
+        apiVersion: arsys.apeirora.eu/v1alpha1
+        kind: ArsysUbuntuMachine
+        repeat: "{{ .SC.workers.nodes }}"
+        template: |
+          apiVersion: arsys.apeirora.eu/v1alpha1
+          kind: ArsysUbuntuMachine
+          spec:
+            tokenSecretRef:
+              name: arsys-token
+              namespace: simple-cluster-system
+            passwordSecretRef:
+              name: aum-dedicated-password
+              namespace: default
+            server:
+              type: dedicated
+              applianceID: "{{ .Inputs.applianceID }}
+              datacenterID: "{{ .Inputs.datacenterID }}
+              baremetalModelID: "{{ .Inputs.baremetalModelID }}
+            ssh:
+              user: root
+
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn:
+        - vmcp
+        - vmworker
+      forceCleanupOnCascade: true
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          ssh:
+            user: root
+            privateKeySecretRef:
+              name: scpc-single-ssh
+              namespace: simple-cluster-system-scpc-configs
+          controlPlane:
+            hosts:
+              {{- range $i, $vm := .Resources.vmcp }}
+              - name: cp-{{ $i }}
+                address: {{ $vm.status.internalAddress }}
+                externalAddress: {{ $vm.status.externalAddress }}
+              {{- end }}
+          workers:
+            hosts:
+              {{- range $i, $vm := .Resources.vmworker }}
+              - name: worker-{{ $i }}
+                address: {{ $vm.status.internalAddress }}
+              {{- end }}
+
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"
+{{- end}}
+
+{{ if .Values.enable.arsys.virtual }}
+---
+# Virtual
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: arsys-virtual
+  labels:
+    app.kubernetes.io/name: simple-cluster-operator
+spec:
+  target:
+    namespace: "{{ .SC.namespace }}"
+
+  inputs:
+    - { name: applianceID,  type: string, default: 'E994A2B0F5B5EE36281F16214D1185D8',            description: "arsys applianceID" }
+    - { name: datacenterID,  type: string, default: '9B94281B5B67A755F2B76165E25F6A65',           description: "arsys datacenterID" }
+
+  resources:
+    - name: vmcp
+      apiVersion: arsys.apeirora.eu/v1alpha1
+      kind: ArsysUbuntuMachine
+      repeat: "{{ .SC.controlPlane.nodes }}"
+      template: |
+        apiVersion: arsys.apeirora.eu/v1alpha1
+        kind: ArsysUbuntuMachine
+        spec:
+        tokenSecretRef:
+        name: arsys-token
+        namespace: simple-cluster-system
+        passwordSecretRef:
+        name: aum-dedicated-password
+        namespace: default
+        server:
+        type: dedicated
+        applianceID: "{{ .Inputs.applianceID }}
+        datacenterID: "{{ .Inputs.datacenterID }}
+        baremetalModelID: "{{ .Inputs.baremetalModelID }}
+        ssh:
+        user: root
+
+        - name: vmworker
+          apiVersion: arsys.apeirora.eu/v1alpha1
+          kind: ArsysUbuntuMachine
+          repeat: "{{ .SC.workers.nodes }}"
+          template: |
+            apiVersion: arsys.apeirora.eu/v1alpha1
+            kind: ArsysUbuntuMachine
+            spec:
+              tokenSecretRef:
+                name: arsys-token
+                namespace: simple-cluster-system
+              passwordSecretRef:
+                name: aum-dedicated-password
+                namespace: default
+              server:
+                type: cloud
+                applianceID: "{{ .Inputs.applianceID }}
+                datacenterID: "{{ .Inputs.datacenterID }}
+                vcore: 4
+                coresPerProcessor: 2
+                ram: 8
+                disk: 50
+              ssh:
+                user: root
+
+    - name: cluster
+      apiVersion: ubuntu.apeirora.eu/v1alpha1
+      kind: UbuntuCluster
+      dependsOn:
+        - vmcp
+        - vmworker
+      forceCleanupOnCascade: true
+      template: |
+        apiVersion: ubuntu.apeirora.eu/v1alpha1
+        kind: UbuntuCluster
+        spec:
+          ssh:
+            user: root
+            privateKeySecretRef:
+              name: scpc-single-ssh
+              namespace: simple-cluster-system-scpc-configs
+          controlPlane:
+            hosts:
+              {{- range $i, $vm := .Resources.vmcp }}
+              - name: cp-{{ $i }}
+                address: {{ $vm.status.internalAddress }}
+                externalAddress: {{ $vm.status.externalAddress }}
+              {{- end }}
+          workers:
+            hosts:
+              {{- range $i, $vm := .Resources.vmworker }}
+              - name: worker-{{ $i }}
+                address: {{ $vm.status.internalAddress }}
+              {{- end }}
+
+  kubeconfigSource:
+    resourceName: cluster
+    secretRef:
+      name: "{{ .Target.name }}-kubeconfig"
+{{- end}}
