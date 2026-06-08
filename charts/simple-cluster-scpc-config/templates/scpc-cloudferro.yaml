@@ -30,7 +30,7 @@ spec:
         property: OS_REGION_NAME
 
 ---
-{{ `apiVersion: showroom.apeirora.eu/v1alpha1
+apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: cloudferro
@@ -104,9 +104,6 @@ spec:
       dependsOn:
         - vmcp
         - vmworker
-      # k3s lives only on the VMs below. When the SC is deleted those VMs
-      # are torn down in the same cascade, so UbuntuCluster's SSH-based
-      # uninstall has nothing to talk to. Skip its graceful cleanup.
       forceCleanupOnCascade: true
       template: |
         apiVersion: ubuntu.apeirora.eu/v1alpha1
@@ -115,7 +112,7 @@ spec:
           ssh:
             user: eouser
             privateKeySecretRef:
-              name: openstack-sample-ssh
+              name: scpc-single-ssh
               namespace: simple-cluster-system-scpc-configs
           controlPlane:
             hosts:
@@ -135,5 +132,4 @@ spec:
     resourceName: cluster
     secretRef:
       name: "{{ .Target.name }}-kubeconfig"
-` }}
 {{- end }}
