@@ -52,6 +52,9 @@ jobs:
           - context: ubuntu-machines
             image: ubuntu-machines
             platforms: linux/amd64,linux/arm64
+          - context: simple-cluster-operator-arsys
+            image: arsys-ubuntu-machine-operator
+            platforms: linux/amd64,linux/arm64
           - context: ui
             image: simple-cluster-ui
             platforms: linux/amd64,linux/arm64
