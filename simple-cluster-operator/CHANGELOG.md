@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.8.3...v0.8.4) (2026-06-09)
+
+
+### Miscellaneous Chores
+
+* release 0.8.4 ([0190685](https://github.com/apeirora/showroom-simple-cluster/commit/0190685302b6f49037f58156281c588b17ba19e8))
+
 ## [0.8.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.8.0...v0.8.3) (2026-06-08)
 
 
