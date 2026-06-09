@@ -30,7 +30,7 @@ spec:
         property: OS_REGION_NAME
 
 ---
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: cloudferro
@@ -132,4 +132,5 @@ spec:
     resourceName: cluster
     secretRef:
       name: "{{ .Target.name }}-kubeconfig"
+` }}
 {{- end }}

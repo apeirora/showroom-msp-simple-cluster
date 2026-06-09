@@ -20,7 +20,7 @@ spec:
 {{ if .Values.enable.arsys.dedicated }}
 ---
 # Dedicated
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: arsys-dedicated
@@ -114,12 +114,13 @@ spec:
     resourceName: cluster
     secretRef:
       name: "{{ .Target.name }}-kubeconfig"
+` }}
 {{- end}}
 
 {{ if .Values.enable.arsys.virtual }}
 ---
 # Virtual
-apiVersion: showroom.apeirora.eu/v1alpha1
+{{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
   name: arsys-virtual
@@ -215,4 +216,5 @@ spec:
     resourceName: cluster
     secretRef:
       name: "{{ .Target.name }}-kubeconfig"
+` }}
 {{- end}}
