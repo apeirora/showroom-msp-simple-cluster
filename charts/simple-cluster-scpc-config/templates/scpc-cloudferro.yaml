@@ -56,7 +56,7 @@ spec:
         kind: OpenStackVM
         spec:
           credentialsRef:
-            name: openstack-creds
+            name: cloudferro-openstack-creds
             namespace: simple-cluster-system-scpc-configs
           network: {{ .Inputs.network }}
           floatingIPPool: {{ .Inputs.floatingIPPool }}
@@ -82,7 +82,7 @@ spec:
         kind: OpenStackVM
         spec:
           credentialsRef:
-            name: openstack-creds
+            name: cloudferro-openstack-creds
             namespace: simple-cluster-system-scpc-configs
           network: {{ .Inputs.network }}
           floatingIP: false

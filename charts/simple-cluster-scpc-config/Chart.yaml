@@ -2,6 +2,6 @@ apiVersion: v2
 name: simple-cluster-scpc-config
 description: A Helm chart with SCPC
 type: application
-version: 0.9.3
-appVersion: "0.9.3"
+version: 0.9.4
+appVersion: "0.9.4"
 icon: "https://example.com/icon.png"
