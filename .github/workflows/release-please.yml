@@ -52,7 +52,10 @@ jobs:
           - context: ubuntu-machines
             image: ubuntu-machines
             platforms: linux/amd64,linux/arm64
-          - context: simple-cluster-operator-arsys
+          # arsys builds from the repo root: its go.mod has a
+          # `replace => ../ubuntu-machines`, so the Dockerfile COPYs that sibling.
+          - context: .
+            dockerfile: simple-cluster-operator-arsys/Dockerfile
             image: arsys-ubuntu-machine-operator
             platforms: linux/amd64,linux/arm64
           - context: ui
@@ -76,6 +79,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile || format('{0}/Dockerfile', matrix.context) }}
           platforms: ${{ matrix.platforms }}
           push: true
           tags: |
