@@ -1,7 +1,7 @@
 enable:
   singleSSH: true
   cloudferro: true
-  dati: false
+  dati: true
   kind: true
   ubuntuMachines: false
   sap:
