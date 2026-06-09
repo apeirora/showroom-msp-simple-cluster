@@ -6,14 +6,16 @@
 #   docker build -f simple-cluster-operator-arsys/Dockerfile \
 #     -t arsys-ubuntu-machine-operator:dev .
 #
-FROM golang:1.24 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24 AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /workspace
 # Sibling module pulled in via a local replace directive.
 COPY ubuntu-machines/ ubuntu-machines/
 COPY simple-cluster-operator-arsys/ simple-cluster-operator-arsys/
 WORKDIR /workspace/simple-cluster-operator-arsys
 RUN go mod download || true
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o /manager cmd/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o /manager cmd/main.go
 
 # Pure HTTP + Kubernetes client — distroless static is enough.
 FROM gcr.io/distroless/static:nonroot
