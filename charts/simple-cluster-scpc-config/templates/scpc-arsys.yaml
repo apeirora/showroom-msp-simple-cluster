@@ -52,33 +52,33 @@ spec:
             namespace: default
           server:
             type: dedicated
-            applianceID: "{{ .Inputs.applianceID }}
-            datacenterID: "{{ .Inputs.datacenterID }}
-            baremetalModelID: "{{ .Inputs.baremetalModelID }}
+            applianceID: "{{ .Inputs.applianceID }}"
+            datacenterID: "{{ .Inputs.datacenterID }}"
+            baremetalModelID: "{{ .Inputs.baremetalModelID }}"
           ssh:
             user: root
 
-      - name: vmworker
+    - name: vmworker
+      apiVersion: arsys.apeirora.eu/v1alpha1
+      kind: ArsysUbuntuMachine
+      repeat: "{{ .SC.workers.nodes }}"
+      template: |
         apiVersion: arsys.apeirora.eu/v1alpha1
         kind: ArsysUbuntuMachine
-        repeat: "{{ .SC.workers.nodes }}"
-        template: |
-          apiVersion: arsys.apeirora.eu/v1alpha1
-          kind: ArsysUbuntuMachine
-          spec:
-            tokenSecretRef:
-              name: arsys-token
-              namespace: simple-cluster-system
-            passwordSecretRef:
-              name: aum-dedicated-password
-              namespace: default
-            server:
-              type: dedicated
-              applianceID: "{{ .Inputs.applianceID }}
-              datacenterID: "{{ .Inputs.datacenterID }}
-              baremetalModelID: "{{ .Inputs.baremetalModelID }}
-            ssh:
-              user: root
+        spec:
+          tokenSecretRef:
+            name: arsys-token
+            namespace: simple-cluster-system
+          passwordSecretRef:
+            name: aum-dedicated-password
+            namespace: default
+          server:
+            type: dedicated
+            applianceID: "{{ .Inputs.applianceID }}"
+            datacenterID: "{{ .Inputs.datacenterID }}"
+            baremetalModelID: "{{ .Inputs.baremetalModelID }}"
+          ssh:
+            user: root
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
@@ -143,44 +143,44 @@ spec:
         apiVersion: arsys.apeirora.eu/v1alpha1
         kind: ArsysUbuntuMachine
         spec:
-        tokenSecretRef:
-        name: arsys-token
-        namespace: simple-cluster-system
-        passwordSecretRef:
-        name: aum-dedicated-password
-        namespace: default
-        server:
-        type: dedicated
-        applianceID: "{{ .Inputs.applianceID }}
-        datacenterID: "{{ .Inputs.datacenterID }}
-        baremetalModelID: "{{ .Inputs.baremetalModelID }}
-        ssh:
-        user: root
+          tokenSecretRef:
+            name: arsys-token
+            namespace: simple-cluster-system
+          passwordSecretRef:
+            name: aum-dedicated-password
+            namespace: default
+          server:
+            type: dedicated
+            applianceID: "{{ .Inputs.applianceID }}"
+            datacenterID: "{{ .Inputs.datacenterID }}"
+            baremetalModelID: "{{ .Inputs.baremetalModelID }}"
+          ssh:
+            user: root
 
-        - name: vmworker
-          apiVersion: arsys.apeirora.eu/v1alpha1
-          kind: ArsysUbuntuMachine
-          repeat: "{{ .SC.workers.nodes }}"
-          template: |
-            apiVersion: arsys.apeirora.eu/v1alpha1
-            kind: ArsysUbuntuMachine
-            spec:
-              tokenSecretRef:
-                name: arsys-token
-                namespace: simple-cluster-system
-              passwordSecretRef:
-                name: aum-dedicated-password
-                namespace: default
-              server:
-                type: cloud
-                applianceID: "{{ .Inputs.applianceID }}
-                datacenterID: "{{ .Inputs.datacenterID }}
-                vcore: 4
-                coresPerProcessor: 2
-                ram: 8
-                disk: 50
-              ssh:
-                user: root
+    - name: vmworker
+      apiVersion: arsys.apeirora.eu/v1alpha1
+      kind: ArsysUbuntuMachine
+      repeat: "{{ .SC.workers.nodes }}"
+      template: |
+        apiVersion: arsys.apeirora.eu/v1alpha1
+        kind: ArsysUbuntuMachine
+        spec:
+          tokenSecretRef:
+            name: arsys-token
+            namespace: simple-cluster-system
+          passwordSecretRef:
+            name: aum-dedicated-password
+            namespace: default
+          server:
+            type: cloud
+            applianceID: "{{ .Inputs.applianceID }}"
+            datacenterID: "{{ .Inputs.datacenterID }}"
+            vcore: 4
+            coresPerProcessor: 2
+            ram: 8
+            disk: 50
+          ssh:
+            user: root
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
