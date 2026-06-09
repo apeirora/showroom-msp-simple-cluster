@@ -150,10 +150,13 @@ spec:
             name: aum-dedicated-password
             namespace: default
           server:
-            type: dedicated
+            type: cloud
             applianceID: "{{ .Inputs.applianceID }}"
             datacenterID: "{{ .Inputs.datacenterID }}"
-            baremetalModelID: "{{ .Inputs.baremetalModelID }}"
+            vcore: 4
+            coresPerProcessor: 2
+            ram: 8
+            disk: 50
           ssh:
             user: root
 
