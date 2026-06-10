@@ -1,0 +1,38 @@
+# Standalone IronCoreVM examples.
+#
+# Both VMs share one SSH keypair Secret (`ironcore-vm-instances-ssh`)
+# via spec.sshKeySecretRef. simple-cluster-operator-ironcore generates
+# the ed25519 keypair into that Secret on first reconcile and injects
+# the public key into each VM's OS user via an IronCore ignition Secret.
+apiVersion: ironcore.apeirora.eu/v1alpha1
+kind: IronCoreVM
+metadata:
+  name: ic-instance-1
+spec:
+  credentialsRef:
+    name: ironcore-creds
+  network: sample-net
+  image: ghcr.io/ironcore-dev/gardenlinux:latest
+  resources:
+    cpu: "2"
+    memory: 16Gi
+  publicIP: true
+  sshKeySecretRef:
+    name: ironcore-vm-instances-ssh
+
+---
+apiVersion: ironcore.apeirora.eu/v1alpha1
+kind: IronCoreVM
+metadata:
+  name: ic-instance-2
+spec:
+  credentialsRef:
+    name: ironcore-creds
+  network: sample-net
+  image: ghcr.io/ironcore-dev/gardenlinux:latest
+  resources:
+    cpu: "1"
+    memory: 8Gi
+  publicIP: false
+  sshKeySecretRef:
+    name: ironcore-vm-instances-ssh

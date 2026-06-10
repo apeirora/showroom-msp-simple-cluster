@@ -1,0 +1,211 @@
+/*
+Copyright 2026.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+*/
+
+package v1alpha1
+
+import (
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+const (
+	FinalizerName = "ironcorevm.apeirora.eu/finalizer"
+
+	ConditionReady = "Ready"
+	ConditionError = "Error"
+
+	SSHSecretPrivateKeyKey = "ssh-privatekey"
+	SSHSecretPublicKeyKey  = "ssh-publickey"
+
+	CredentialsKubeconfigKey = "kubeconfig"
+	IgnitionSecretKey        = "ignition.yaml"
+
+	LabelVMNamespace = "ironcore.apeirora.eu/vm-namespace"
+	LabelVMName      = "ironcore.apeirora.eu/vm-name"
+)
+
+// +kubebuilder:validation:Enum=Init;Provisioning;Ready;Failed;Deleting
+type Phase string
+
+const (
+	PhaseInit         Phase = "Init"
+	PhaseProvisioning Phase = "Provisioning"
+	PhaseReady        Phase = "Ready"
+	PhaseFailed       Phase = "Failed"
+	PhaseDeleting     Phase = "Deleting"
+)
+
+// IronCoreVMSpec describes one IronCore Machine.
+type IronCoreVMSpec struct {
+	// CredentialsRef is a Secret carrying a kubeconfig for the IronCore cluster.
+	// Key: kubeconfig. Namespace defaults to the VM's namespace.
+	CredentialsRef corev1.SecretReference `json:"credentialsRef"`
+
+	// IronCoreNamespace is the namespace in the IronCore cluster where resources
+	// are created.
+	// +optional
+	// +kubebuilder:default="default"
+	IronCoreNamespace string `json:"ironcoreNamespace,omitempty"`
+
+	// Network is the IronCore Network name. The operator ensures it exists.
+	// +kubebuilder:validation:MinLength=1
+	Network string `json:"network"`
+
+	// IPPool is the ipam Prefix name to allocate the NIC IP from (/32 ephemeral).
+	// If empty, IPs are omitted and the environment default is used.
+	// +optional
+	IPPool string `json:"ipPool,omitempty"`
+
+	// Resources defines the CPU/memory floor for MachineClass selection.
+	Resources NodeResources `json:"resources"`
+
+	// Image is the OCI reference for the boot image
+	// (e.g. ghcr.io/ironcore-dev/gardenlinux:latest).
+	// +kubebuilder:validation:MinLength=1
+	Image string `json:"image"`
+
+	// PublicIP, when true, attaches a Public VirtualIP to the NetworkInterface.
+	// +optional
+	PublicIP bool `json:"publicIP,omitempty"`
+
+	// MachinePool sets the MachinePoolRef on the Machine. Empty means the
+	// IronCore scheduler picks a pool.
+	// +optional
+	MachinePool string `json:"machinePool,omitempty"`
+
+	// SSHUser is the OS user the SSH key is injected for via ignition.
+	// +optional
+	// +kubebuilder:default="root"
+	SSHUser string `json:"sshUser,omitempty"`
+
+	// UserData is extra payload written as a file + oneshot systemd unit via ignition.
+	// +optional
+	UserData string `json:"userData,omitempty"`
+
+	// SSHKeySecretRef opts the VM into a shared SSH keypair. When set the operator
+	// looks up or creates the named Secret. If unset, a per-VM Secret
+	// `<vm-name>-ssh` is used.
+	// +optional
+	SSHKeySecretRef *corev1.SecretReference `json:"sshKeySecretRef,omitempty"`
+}
+
+// NodeResources is the per-VM CPU/memory floor used for MachineClass selection.
+type NodeResources struct {
+	// CPU is the minimum CPU count (e.g. "2" or "1500m").
+	CPU resource.Quantity `json:"cpu"`
+
+	// Memory is the minimum RAM (e.g. "4Gi").
+	Memory resource.Quantity `json:"memory"`
+
+	// MachineClassPattern narrows selection to MachineClass names matching this
+	// Go regex.
+	// +optional
+	MachineClassPattern string `json:"machineClassPattern,omitempty"`
+}
+
+// IronCoreVMStatus is the observed state of one IronCore Machine.
+type IronCoreVMStatus struct {
+	// Phase is the coarse state.
+	// +optional
+	Phase Phase `json:"phase,omitempty"`
+
+	// MachineID is the provider-internal Machine ID.
+	// +optional
+	MachineID string `json:"machineID,omitempty"`
+
+	// MachineState mirrors Machine.status.state.
+	// +optional
+	MachineState string `json:"machineState,omitempty"`
+
+	// InternalAddress is the IP from NetworkInterface.status.ips[0].
+	// +optional
+	InternalAddress string `json:"internalAddress,omitempty"`
+
+	// ExternalAddress is the VirtualIP from NetworkInterface.status.virtualIP.
+	// +optional
+	ExternalAddress string `json:"externalAddress,omitempty"`
+
+	// SSHSecretRef references the Secret on the management cluster holding the
+	// ed25519 keypair. Keys: ssh-privatekey, ssh-publickey.
+	// +optional
+	SSHSecretRef *corev1.LocalObjectReference `json:"sshSecretRef,omitempty"`
+
+	// ResolvedMachineClass is the MachineClass the operator picked.
+	// +optional
+	ResolvedMachineClass ResolvedMachineClass `json:"resolvedMachineClass,omitempty"`
+
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+// ResolvedMachineClass records the MachineClass the operator selected.
+type ResolvedMachineClass struct {
+	// Name is the MachineClass name.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// CPU is the MachineClass cpu capability as integer cores.
+	// +optional
+	CPU int32 `json:"cpu,omitempty"`
+
+	// Memory is the MachineClass memory capability as a human-readable size.
+	// +optional
+	Memory string `json:"memory,omitempty"`
+
+	// Description is a one-line summary (cpu / memory).
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Image mirrors spec.image.
+	// +optional
+	Image string `json:"image,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=icvm
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Class",type=string,JSONPath=`.status.resolvedMachineClass.name`
+// +kubebuilder:printcolumn:name="Internal",type=string,JSONPath=`.status.internalAddress`
+// +kubebuilder:printcolumn:name="External",type=string,JSONPath=`.status.externalAddress`
+// +kubebuilder:printcolumn:name="SSH",type=string,JSONPath=`.status.sshSecretRef.name`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+
+// IronCoreVM requests one IronCore Machine. The operator generates a per-VM
+// ed25519 SSH keypair, injects it via ignition, and exposes the machine's
+// addresses in status.
+type IronCoreVM struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+
+	// +required
+	Spec IronCoreVMSpec `json:"spec"`
+	// +optional
+	Status IronCoreVMStatus `json:"status,omitempty,omitzero"`
+}
+
+// +kubebuilder:object:root=true
+
+type IronCoreVMList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []IronCoreVM `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&IronCoreVM{}, &IronCoreVMList{})
+}
