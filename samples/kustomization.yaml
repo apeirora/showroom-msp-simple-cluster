@@ -1,6 +1,7 @@
 ## Aggregator: applies every provider's samples.
 resources:
   - gardener
+  - ironcore
   - kind
   - openstack
   - ubuntu-machines

@@ -1,0 +1,17 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: ironcore-sample
+spec:
+  controlPlane:
+    nodes: 1
+    requested:
+      cpu: 2
+      memory: 16Gi
+  workers:
+    nodes: 2
+    requested:
+      cpu: 1
+      memory: 8Gi
+  providerConfigRefs:
+    - ironcore-sample
