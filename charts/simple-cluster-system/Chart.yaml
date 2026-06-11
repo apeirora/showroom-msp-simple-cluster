@@ -1,12 +1,12 @@
 apiVersion: v2
 name: simple-cluster-system
 description: Umbrella chart that deploys simple-cluster-operator and its
-  per-target companions (kind / openstack / ubuntu) into a single
-  namespace. The four sub-charts under `charts/` are regenerated from
+  per-target companions (kind / openstack / ubuntu / ironcore) into a single
+  namespace. The sub-charts under `charts/` are regenerated from
   each operator's `kubebuilder edit --plugins=helm/v1-alpha` output
   by `scripts/regen-helm-charts.sh`.
 type: application
-version: 0.6.3
+version: 0.7.0
 appVersion: "0.1.0"
 dependencies:
   - name: simple-cluster-operator
@@ -17,3 +17,5 @@ dependencies:
     version: 0.3.0
   - name: simple-cluster-operator-ubuntu
     version: 0.3.0
+  - name: simple-cluster-operator-ironcore
+    version: 0.1.0

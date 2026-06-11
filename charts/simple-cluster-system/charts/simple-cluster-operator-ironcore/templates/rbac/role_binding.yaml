@@ -4,11 +4,11 @@ kind: ClusterRoleBinding
 metadata:
   labels:
     {{- include "chart.labels" . | nindent 4 }}
-  name: arsys-ubuntu-machine-operator-manager-rolebinding
+  name: simple-cluster-operator-ironcore-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: arsys-ubuntu-machine-operator-manager-role
+  name: simple-cluster-operator-ironcore-manager-role
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.controllerManager.serviceAccountName }}
