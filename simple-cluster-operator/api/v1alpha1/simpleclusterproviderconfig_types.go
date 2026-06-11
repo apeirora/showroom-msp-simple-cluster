@@ -160,6 +160,12 @@ type ResourceSpec struct {
 	// +optional
 	NamePrefix string `json:"namePrefix,omitempty"`
 
+	// NameTemplate, when set, overrides NamePrefix and computes the R name
+	// by rendering this Go template against .SC and .Inputs. The result is
+	// used verbatim as the target resource name.
+	// +optional
+	NameTemplate string `json:"nameTemplate,omitempty"`
+
 	// Template is the YAML body of R rendered through the Helm-style
 	// text/template + sprig/v3 engine. The post-render result MUST embed
 	// apiVersion/kind consistent with this ResourceSpec.
