@@ -54,8 +54,8 @@ clusterConfig:
   # SCPCs applied on the cluster).
   providers:
     - cloudferro
-    - gardener-sap-ironcore
-    - gardener-sap-openstack
+    - sap-gardener-ironcore
+    - sap-gardener-openstack
     - kind
   cpu:
     - "1"

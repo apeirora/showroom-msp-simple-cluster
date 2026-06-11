@@ -8,6 +8,6 @@ Multiple configurations are provided.
 
 
 ## Simple Cluster Provider Configs:
-* gardener-dati-openstack
-* gardener-sap-openstack
-* gardener-sap-ironcore
+* dati-openstack
+* sap-gardener-openstack
+* sap-gardener-ironcore

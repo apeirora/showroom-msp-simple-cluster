@@ -1,2 +1,2 @@
-gardener-sap-kubeconfig-secret.yaml
-gardener-dati-kubeconfig-secret.yaml
+sap-gardener-kubeconfig-secret.yaml
+dati-kubeconfig-secret.yaml
