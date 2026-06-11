@@ -35,6 +35,14 @@ const SecretSuffix = "-kubeconfig"
 // kubeconfig bytes.
 const SecretDataKey = "kubeconfig"
 
+// LabelKubeconfig marks Secrets that hold a cluster kubeconfig under
+// SecretDataKey. Portal forms (e.g. the PrivateLLM BYOC dropdown) list
+// kubeconfig Secrets by this label.
+const LabelKubeconfig = "apeirora.eu/kubeconfig"
+
+// LabelKubeconfigValue is the value set for LabelKubeconfig.
+const LabelKubeconfigValue = "true"
+
 // SecretResult bundles the outcome of EnsureSecret for the caller to
 // mirror into SC.Status.
 type SecretResult struct {
@@ -80,6 +88,9 @@ func EnsureSecret(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: sc.Namespace,
+			Labels: map[string]string{
+				LabelKubeconfig: LabelKubeconfigValue,
+			},
 			Annotations: map[string]string{
 				rendertpl.AnnoSimpleCluster:         sc.Namespace + "/" + sc.Name,
 				rendertpl.AnnoSimpleClusterProvider: scpc.Name,
@@ -106,7 +117,8 @@ func EnsureSecret(
 		return result, nil
 	}
 
-	if bytes.Equal(existing.Data[SecretDataKey], kubeconfigBytes) {
+	if bytes.Equal(existing.Data[SecretDataKey], kubeconfigBytes) &&
+		existing.Labels[LabelKubeconfig] == LabelKubeconfigValue {
 		return result, nil
 	}
 

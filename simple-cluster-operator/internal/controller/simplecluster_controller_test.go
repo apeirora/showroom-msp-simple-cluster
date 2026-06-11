@@ -279,6 +279,7 @@ data:
 				Name: "demo-kubeconfig", Namespace: "default",
 			}, secret)).To(Succeed())
 			Expect(secret.Data).To(HaveKey("kubeconfig"))
+			Expect(secret.Labels).To(HaveKeyWithValue("apeirora.eu/kubeconfig", "true"))
 			Expect(secret.OwnerReferences).NotTo(BeEmpty())
 			Expect(secret.OwnerReferences[0].Kind).To(Equal("SimpleCluster"))
 			Expect(updated.Status.KubeconfigSecretRef).NotTo(BeNil())
