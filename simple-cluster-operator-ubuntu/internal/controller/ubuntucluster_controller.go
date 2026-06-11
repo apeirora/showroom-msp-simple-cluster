@@ -463,13 +463,15 @@ func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster
 	auth := cluster.Spec.SSH
 	switch {
 	case auth.PrivateKeySecretRef != nil:
-		data, err := r.readSecretKey(ctx, cluster.Namespace, auth.PrivateKeySecretRef.Name, ubuntuv1alpha1.SSHSecretPrivateKeyKey)
+		ns := refNamespace(auth.PrivateKeySecretRef.Namespace, cluster.Namespace)
+		data, err := r.readSecretKey(ctx, ns, auth.PrivateKeySecretRef.Name, ubuntuv1alpha1.SSHSecretPrivateKeyKey)
 		if err != nil {
 			return sshpkg.Credential{}, err
 		}
 		return sshpkg.Credential{PrivateKeyPEM: data}, nil
 	case auth.PasswordSecretRef != nil:
-		data, err := r.readSecretKey(ctx, cluster.Namespace, auth.PasswordSecretRef.Name, ubuntuv1alpha1.SSHSecretPasswordKey)
+		ns := refNamespace(auth.PasswordSecretRef.Namespace, cluster.Namespace)
+		data, err := r.readSecretKey(ctx, ns, auth.PasswordSecretRef.Name, ubuntuv1alpha1.SSHSecretPasswordKey)
 		if err != nil {
 			return sshpkg.Credential{}, err
 		}
@@ -477,6 +479,16 @@ func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster
 	default:
 		return sshpkg.Credential{}, fmt.Errorf("spec.ssh has neither privateKeySecretRef nor passwordSecretRef")
 	}
+}
+
+// refNamespace returns ns when set, otherwise the fallback (the referring
+// object's own namespace). Lets an SSH secret ref omit the namespace to mean
+// "same namespace as the UbuntuCluster".
+func refNamespace(ns, fallback string) string {
+	if ns != "" {
+		return ns
+	}
+	return fallback
 }
 
 // readSecretKey fetches one data key out of a Secret in the given namespace.
