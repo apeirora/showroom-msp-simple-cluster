@@ -79,16 +79,20 @@ spec:
                     minimum: 1
                     type: integer
                   privateKeySecretRef:
-                    description: Secret in the same namespace holding `ssh-privatekey`.
+                    description: Secret holding `ssh-privatekey`. Namespace is optional; defaults to the UbuntuCluster namespace.
                     properties:
                       name:
+                        type: string
+                      namespace:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
                   passwordSecretRef:
-                    description: Secret in the same namespace holding `password`.
+                    description: Secret holding `password`. Namespace is optional; defaults to the UbuntuCluster namespace.
                     properties:
                       name:
+                        type: string
+                      namespace:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic

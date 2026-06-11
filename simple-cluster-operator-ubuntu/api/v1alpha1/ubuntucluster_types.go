@@ -109,17 +109,19 @@ type SSHAuth struct {
 	// +optional
 	Port int32 `json:"port,omitempty"`
 
-	// PrivateKeySecretRef points at a Secret in the same namespace
-	// carrying the SSH private key under the `ssh-privatekey` data
-	// key (the standard `kubernetes.io/ssh-auth` shape).
+	// PrivateKeySecretRef points at a Secret carrying the SSH private key
+	// under the `ssh-privatekey` data key (the standard
+	// `kubernetes.io/ssh-auth` shape). Namespace is optional and defaults
+	// to the UbuntuCluster's own namespace when empty.
 	// +optional
-	PrivateKeySecretRef *corev1.LocalObjectReference `json:"privateKeySecretRef,omitempty"`
+	PrivateKeySecretRef *corev1.SecretReference `json:"privateKeySecretRef,omitempty"`
 
-	// PasswordSecretRef points at a Secret in the same namespace carrying
-	// the login password under the `password` data key (the standard
-	// `kubernetes.io/basic-auth` shape).
+	// PasswordSecretRef points at a Secret carrying the login password
+	// under the `password` data key (the standard `kubernetes.io/basic-auth`
+	// shape). Namespace is optional and defaults to the UbuntuCluster's own
+	// namespace when empty.
 	// +optional
-	PasswordSecretRef *corev1.LocalObjectReference `json:"passwordSecretRef,omitempty"`
+	PasswordSecretRef *corev1.SecretReference `json:"passwordSecretRef,omitempty"`
 }
 
 // HostPool is just a wrapper to give group-level options room to grow
