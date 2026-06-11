@@ -71,7 +71,7 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYRfmGXcSdAxBZ5pcdONfiHkR9f3Ed9yvgQM3Fe9kV2 openstack-sample-ssh@sample"
+              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkenFJqdAGaOOrrUas/BsuaL6oCUKP5//hYXXdDPY+L ubuntu-cluster@sample.com"
 
     - name: vmworker
       apiVersion: openstack.apeirora.eu/v1alpha1
@@ -96,7 +96,7 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYRfmGXcSdAxBZ5pcdONfiHkR9f3Ed9yvgQM3Fe9kV2 openstack-sample-ssh@sample"
+              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkenFJqdAGaOOrrUas/BsuaL6oCUKP5//hYXXdDPY+L ubuntu-cluster@sample.com"
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
