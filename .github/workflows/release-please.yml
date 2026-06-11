@@ -16,9 +16,9 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs['simple-cluster-operator--release_created'] }}
-      tag_name: ${{ steps.release.outputs['simple-cluster-operator--tag_name'] }}
-      version: ${{ steps.release.outputs['simple-cluster-operator--version'] }}
+      release_created: ${{ steps.release.outputs['.--release_created'] }}
+      tag_name: ${{ steps.release.outputs['.--tag_name'] }}
+      version: ${{ steps.release.outputs['.--version'] }}
     steps:
       - id: release
         uses: googleapis/release-please-action@v4.3.0
@@ -48,6 +48,9 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - context: simple-cluster-operator-ubuntu
             image: simple-cluster-operator-ubuntu
+            platforms: linux/amd64,linux/arm64
+          - context: simple-cluster-operator-ironcore
+            image: simple-cluster-operator-ironcore
             platforms: linux/amd64,linux/arm64
           - context: ubuntu-machines
             image: ubuntu-machines
