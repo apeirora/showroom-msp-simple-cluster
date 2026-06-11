@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.0...v0.10.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* SimpleCluster: Machines are not actually deleted when a cluster is deleted — deletion is assumed complete once the request is accepted ([#19](https://github.com/apeirora/showroom-simple-cluster/issues/19)) ([a0a0c31](https://github.com/apeirora/showroom-simple-cluster/commit/a0a0c31346b4be2538345538eb711fdcc98477f0))
+* SimpleCluster: update config chart ([f757e12](https://github.com/apeirora/showroom-simple-cluster/commit/f757e1296064073f03f4d9818e1ceee4051dcd53))
+
 ## [0.10.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.9.0...v0.10.0) (2026-06-11)
 
 
