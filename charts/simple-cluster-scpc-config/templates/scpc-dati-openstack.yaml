@@ -40,7 +40,7 @@ spec:
     - name: shoot
       apiVersion: core.gardener.cloud/v1beta1
       kind: Shoot
-      namePrefix: ap
+      nameTemplate: '{{- printf "%s/%s" .SC.namespace .SC.name | sha256sum | trunc 18 | printf "sc-%s" }}'
       deletionAnnotations:
         confirmation.gardener.cloud/deletion: "true"
       readiness:

@@ -308,6 +308,12 @@ spec:
                         NamePrefix prepended to the generated R name. The actual name is
                         sanitise(<NamePrefix><SC.name>-<Name>).
                       type: string
+                    nameTemplate:
+                      description: |-
+                        NameTemplate, when set, overrides NamePrefix and computes the R name
+                        by rendering this Go template against .SC and .Inputs. The result is
+                        used verbatim as the target resource name.
+                      type: string
                     namespace:
                       description: |-
                         Namespace overrides Target.Namespace for this resource.
