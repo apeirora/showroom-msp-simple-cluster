@@ -103,10 +103,32 @@ func (r *IronCoreVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return r.fail(ctx, &vm, "NetworkError", err.Error())
 	}
 
-	pick, err := ironcore.PickMachineClass(ctx, clients.Client,
-		vm.Spec.Resources.CPU, vm.Spec.Resources.Memory, vm.Spec.Resources.MachineClassPattern)
+	poolName := vm.Spec.IPPool
+	if poolName == "" {
+		poolName = vm.Spec.Network
+		if err := ironcore.EnsurePrefix(ctx, clients, poolName, vm.Spec.NetworkCIDR); err != nil {
+			return r.fail(ctx, &vm, "PrefixError", err.Error())
+		}
+	}
+
+	var pick *ironcore.ClassPick
+	switch {
+	case vm.Spec.CloudProfile != "":
+		pick, err = ironcore.GetMachineClass(ctx, clients.Client, vm.Spec.CloudProfile)
+	case vm.Spec.Resources != nil:
+		pick, err = ironcore.PickMachineClass(ctx, clients.Client,
+			vm.Spec.Resources.CPU, vm.Spec.Resources.Memory, vm.Spec.Resources.MachineClassPattern)
+	default:
+		err = fmt.Errorf("set exactly one of spec.cloudProfile or spec.resources")
+	}
 	if err != nil {
+		_ = r.setCloudProfileCondition(ctx, &vm, metav1.ConditionFalse, "Unresolved", err.Error())
+		r.eventf(&vm, corev1.EventTypeWarning, "CloudProfileError", err.Error())
 		return r.fail(ctx, &vm, "MachineClassError", err.Error())
+	}
+	if err := r.setCloudProfileCondition(ctx, &vm, metav1.ConditionTrue, "Resolved",
+		fmt.Sprintf("resolved to MachineClass %s (%s)", pick.Name, pick.Description)); err != nil {
+		return ctrl.Result{}, err
 	}
 	resolved := ironcorev1alpha1.ResolvedMachineClass{
 		Name:        pick.Name,
@@ -125,7 +147,7 @@ func (r *IronCoreVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	nicName := ironcore.NICName(vm.Namespace, vm.Name)
-	if err := ironcore.EnsureNetworkInterface(ctx, clients, nicName, vm.Spec.Network, vm.Spec.IPPool, vipName, vmLabels); err != nil {
+	if err := ironcore.EnsureNetworkInterface(ctx, clients, nicName, vm.Spec.Network, poolName, vipName, vmLabels); err != nil {
 		return r.fail(ctx, &vm, "NICError", err.Error())
 	}
 
@@ -144,6 +166,8 @@ func (r *IronCoreVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err != nil {
 			return r.fail(ctx, &vm, "CreateError", err.Error())
 		}
+		r.eventf(&vm, corev1.EventTypeNormal, "Created",
+			"created IronCore Machine %s (class %s)", machineName, pick.Name)
 		if machine == nil {
 			return r.requeueProvisioning(ctx, &vm, resolved, sshSecretName)
 		}
@@ -223,16 +247,17 @@ func (r *IronCoreVMReconciler) reconcileDelete(ctx context.Context, vm *ironcore
 		return ctrl.Result{}, nil
 	}
 
-	clients, err := r.ironcoreClients(ctx, vm)
-	if err != nil {
-		log.Error(err, "IronCore auth during delete; retrying")
-		return ctrl.Result{RequeueAfter: requeueWorking}, nil
-	}
-
-	vmLabels := ironcore.VMLabels(vm.Namespace, vm.Name)
-	if err := ironcore.DeleteByVM(ctx, clients, vmLabels); err != nil {
-		log.Error(err, "delete remote resources during delete; retrying")
-		return ctrl.Result{RequeueAfter: requeueWorking}, nil
+	if err := r.cleanupRemote(ctx, vm); err != nil {
+		// A Failed VM never provisioned successfully, so an unreachable or
+		// forbidden backend must not trap it — drop the finalizer best-effort.
+		if vm.Status.Phase == ironcorev1alpha1.PhaseFailed {
+			log.Error(err, "remote cleanup failed for a Failed VM; removing finalizer anyway")
+			r.eventf(vm, corev1.EventTypeWarning, "ForceDeleted",
+				"removing finalizer despite cleanup error: %v", err)
+		} else {
+			log.Error(err, "remote cleanup during delete; retrying")
+			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		}
 	}
 
 	patch := client.MergeFrom(vm.DeepCopy())
@@ -241,6 +266,21 @@ func (r *IronCoreVMReconciler) reconcileDelete(ctx context.Context, vm *ironcore
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// cleanupRemote best-effort deletes the VM's remote IronCore resources. It
+// returns an error when the IronCore client cannot be built or a delete fails.
+func (r *IronCoreVMReconciler) cleanupRemote(ctx context.Context, vm *ironcorev1alpha1.IronCoreVM) error {
+	clients, err := r.ironcoreClients(ctx, vm)
+	if err != nil {
+		return err
+	}
+	r.eventf(vm, corev1.EventTypeNormal, "Deleting", "deleting IronCore resources for %s", vm.Name)
+	if err := ironcore.DeleteByVM(ctx, clients, ironcore.VMLabels(vm.Namespace, vm.Name)); err != nil {
+		return err
+	}
+	r.eventf(vm, corev1.EventTypeNormal, "Deleted", "deleted IronCore resources for %s", vm.Name)
+	return nil
 }
 
 func (r *IronCoreVMReconciler) eventf(vm *ironcorev1alpha1.IronCoreVM, eventType, reason, format string, args ...any) {
@@ -252,26 +292,22 @@ func (r *IronCoreVMReconciler) eventf(vm *ironcorev1alpha1.IronCoreVM, eventType
 
 func (r *IronCoreVMReconciler) ironcoreClients(ctx context.Context, vm *ironcorev1alpha1.IronCoreVM) (*ironcore.Clients, error) {
 	var creds corev1.Secret
-	key := credentialsRef(vm)
+	key := ironCoreKubeconfigRef(vm)
 	if err := r.Get(ctx, key, &creds); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("credentials Secret %s not found", key.String())
 		}
 		return nil, fmt.Errorf("get credentials Secret %s: %w", key.String(), err)
 	}
-	ns := vm.Spec.IronCoreNamespace
-	if ns == "" {
-		ns = "default"
-	}
-	return ironcore.NewClientsFromSecret(ctx, &creds, ns)
+	return ironcore.NewClientsFromSecret(ctx, &creds, vm.Spec.IronCoreNamespace)
 }
 
-func credentialsRef(vm *ironcorev1alpha1.IronCoreVM) types.NamespacedName {
-	ns := vm.Spec.CredentialsRef.Namespace
+func ironCoreKubeconfigRef(vm *ironcorev1alpha1.IronCoreVM) types.NamespacedName {
+	ns := vm.Spec.IronCoreKubeconfig.Namespace
 	if ns == "" {
 		ns = vm.Namespace
 	}
-	return types.NamespacedName{Name: vm.Spec.CredentialsRef.Name, Namespace: ns}
+	return types.NamespacedName{Name: vm.Spec.IronCoreKubeconfig.Name, Namespace: ns}
 }
 
 func effectiveSSHKeyRef(vm *ironcorev1alpha1.IronCoreVM) types.NamespacedName {
@@ -337,6 +373,18 @@ func (r *IronCoreVMReconciler) setPhase(ctx context.Context, vm *ironcorev1alpha
 	apimeta.SetStatusCondition(&vm.Status.Conditions, metav1.Condition{
 		Type:               ironcorev1alpha1.ConditionReady,
 		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: vm.Generation,
+	})
+	return r.Status().Patch(ctx, vm, patch)
+}
+
+func (r *IronCoreVMReconciler) setCloudProfileCondition(ctx context.Context, vm *ironcorev1alpha1.IronCoreVM, status metav1.ConditionStatus, reason, msg string) error {
+	patch := client.MergeFrom(vm.DeepCopy())
+	apimeta.SetStatusCondition(&vm.Status.Conditions, metav1.Condition{
+		Type:               ironcorev1alpha1.ConditionCloudProfile,
+		Status:             status,
 		Reason:             reason,
 		Message:            msg,
 		ObservedGeneration: vm.Generation,

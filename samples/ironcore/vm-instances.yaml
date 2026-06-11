@@ -1,38 +1,53 @@
-# Standalone IronCoreVM examples.
-#
-# Both VMs share one SSH keypair Secret (`ironcore-vm-instances-ssh`)
-# via spec.sshKeySecretRef. simple-cluster-operator-ironcore generates
-# the ed25519 keypair into that Secret on first reconcile and injects
-# the public key into each VM's OS user via an IronCore ignition Secret.
+# Two standalone VMs showing the two ways to choose a flavor.
+# Both leave networking to the operator: it creates the Network and a root
+# Prefix (NetworkCIDR, default 10.0.0.0/24) and allocates each NIC a /32.
+---
 apiVersion: ironcore.apeirora.eu/v1alpha1
 kind: IronCoreVM
 metadata:
   name: ic-instance-1
 spec:
-  credentialsRef:
-    name: ironcore-creds
+  ironcoreKubeconfig:
+    name: ironcore-kubeconfig
   network: sample-net
-  image: ghcr.io/ironcore-dev/gardenlinux:latest
-  resources:
-    cpu: "2"
-    memory: 16Gi
+  image: ghcr.io/ironcore-dev/gardenlinux/gardener:2150.0.0-kvm
+  cloudProfile: memory-intel1-2cpu   # pick a MachineClass by name
   publicIP: true
   sshKeySecretRef:
     name: ironcore-vm-instances-ssh
-
+  userData: |
+    #!/bin/bash
+    # gardenlinux/gardener disables the sshd unit and blocks direct root login
+    # (SAP hardening). Re-enable sshd and permit key-based root login for bootstrap.
+    ssh-keygen -A 2>/dev/null || true
+    install -d -m755 /etc/ssh/sshd_config.d
+    echo 'PermitRootLogin prohibit-password' > /etc/ssh/sshd_config.d/00-ironcore-root.conf
+    sed -ri 's/^\s*PermitRootLogin\s+no/PermitRootLogin prohibit-password/I' /etc/ssh/sshd_config 2>/dev/null || true
+    systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 ---
 apiVersion: ironcore.apeirora.eu/v1alpha1
 kind: IronCoreVM
 metadata:
   name: ic-instance-2
 spec:
-  credentialsRef:
-    name: ironcore-creds
+  ironcoreKubeconfig:
+    name: ironcore-kubeconfig
   network: sample-net
-  image: ghcr.io/ironcore-dev/gardenlinux:latest
-  resources:
+  image: ghcr.io/ironcore-dev/gardenlinux/gardener:2150.0.0-kvm
+  resources:                         # operator picks the smallest fitting class
     cpu: "1"
     memory: 8Gi
   publicIP: false
   sshKeySecretRef:
     name: ironcore-vm-instances-ssh
+  userData: |
+    #!/bin/bash
+    # gardenlinux/gardener disables the sshd unit and blocks direct root login
+    # (SAP hardening). Re-enable sshd and permit key-based root login for bootstrap.
+    ssh-keygen -A 2>/dev/null || true
+    install -d -m755 /etc/ssh/sshd_config.d
+    echo 'PermitRootLogin prohibit-password' > /etc/ssh/sshd_config.d/00-ironcore-root.conf
+    sed -ri 's/^\s*PermitRootLogin\s+no/PermitRootLogin prohibit-password/I' /etc/ssh/sshd_config 2>/dev/null || true
+    systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
+    systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true

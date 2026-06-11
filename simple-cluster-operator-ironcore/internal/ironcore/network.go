@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 
+	commonv1alpha1 "github.com/ironcore-dev/ironcore/api/common/v1alpha1"
 	ipamv1alpha1 "github.com/ironcore-dev/ironcore/api/ipam/v1alpha1"
 	networkingv1alpha1 "github.com/ironcore-dev/ironcore/api/networking/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +42,38 @@ func EnsureNetwork(ctx context.Context, c *Clients, name string) error {
 	}
 	if err := c.Client.Create(ctx, obj); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create Network %s/%s: %w", c.Namespace, name, err)
+	}
+	return nil
+}
+
+// EnsurePrefix creates a root ipam Prefix (no parent) with the given CIDR if it
+// does not already exist. Idempotent. The Prefix is shared infrastructure keyed
+// by name, like the Network, and is not deleted with individual VMs.
+func EnsurePrefix(ctx context.Context, c *Clients, name, cidr string) error {
+	var existing ipamv1alpha1.Prefix
+	err := c.Client.Get(ctx, types.NamespacedName{Namespace: c.Namespace, Name: name}, &existing)
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("get Prefix %s/%s: %w", c.Namespace, name, err)
+	}
+	prefix, err := commonv1alpha1.ParseNewIPPrefix(cidr)
+	if err != nil {
+		return fmt.Errorf("parse networkCIDR %q: %w", cidr, err)
+	}
+	obj := &ipamv1alpha1.Prefix{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: c.Namespace,
+		},
+		Spec: ipamv1alpha1.PrefixSpec{
+			IPFamily: corev1.IPv4Protocol,
+			Prefix:   prefix,
+		},
+	}
+	if err := c.Client.Create(ctx, obj); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create Prefix %s/%s: %w", c.Namespace, name, err)
 	}
 	return nil
 }
