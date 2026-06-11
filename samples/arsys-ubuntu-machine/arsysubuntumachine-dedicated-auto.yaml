@@ -1,0 +1,24 @@
+apiVersion: arsys.apeirora.eu/v1alpha1
+kind: ArsysUbuntuMachine
+metadata:
+  name: aum-dedicated-auto
+  labels:
+    pool: arsys-test
+spec:
+  tokenSecretRef:
+    name: arsys-token
+    namespace: simple-cluster-system
+  passwordSecretRef:
+    name: aum-dedicated-auto-password
+    namespace: default
+  server:
+    type: dedicated
+    applianceID: "5D3BBD43E3AB7E8884753025F70DF294"        # Ubuntu 24.04, type=BAREMETAL
+    datacenterID: "9B94281B5B67A755F2B76165E25F6A65"       # curl -s -H "X-TOKEN: $TOKEN" "$BASE/datacenters" | jq '.[] | {id, country_code, location}'
+    # No baremetalModelID: the operator lists $BASE/servers/baremetal_models and
+    # orders the smallest ENABLED model with at least these cores/RAM that is
+    # available in datacenterID (fewest cores, then least RAM).
+    vcore: 4          # minimum cores
+    ram: 16           # minimum RAM in GiB
+  ssh:
+    user: root

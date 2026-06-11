@@ -77,7 +77,7 @@ const (
 // ServerSpec mirrors the Arsys CloudBuilder server order body. A dedicated
 // (bare-metal) order is sized by BaremetalModelID; a cloud (virtual) order by
 // vcore/coresPerProcessor/ram/disk.
-// +kubebuilder:validation:XValidation:rule="self.type != 'dedicated' || (has(self.baremetalModelID) && self.baremetalModelID != ”)",message="baremetalModelID is required when type is dedicated"
+// +kubebuilder:validation:XValidation:rule="self.type != 'dedicated' || (has(self.baremetalModelID) && self.baremetalModelID != '') || (has(self.vcore) && has(self.ram))",message="dedicated requires baremetalModelID, or vcore and ram to auto-select the smallest model"
 // +kubebuilder:validation:XValidation:rule="self.type != 'cloud' || (has(self.vcore) && has(self.ram) && has(self.disk))",message="vcore, ram and disk are required when type is cloud"
 type ServerSpec struct {
 	// Name is the server name at Arsys. Defaults to metadata.name.
@@ -97,12 +97,15 @@ type ServerSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	DatacenterID string `json:"datacenterID"`
 
-	// BaremetalModelID picks the bare-metal model (e.g. "BMC_S") — required
-	// when type is dedicated. List with GET /servers/baremetal_models.
+	// BaremetalModelID picks the bare-metal model (e.g. "BMC_S") for a
+	// dedicated order. When omitted the operator auto-selects the smallest
+	// ENABLED model meeting vcore/ram that is available in datacenterID.
+	// List with GET /servers/baremetal_models.
 	// +optional
 	BaremetalModelID string `json:"baremetalModelID,omitempty"`
 
-	// VCore is the number of virtual cores (cloud only).
+	// VCore is the number of cores: the exact size for a cloud order, or the
+	// minimum cores to match when auto-selecting a dedicated model.
 	// +optional
 	VCore int32 `json:"vcore,omitempty"`
 
@@ -110,7 +113,8 @@ type ServerSpec struct {
 	// +optional
 	CoresPerProcessor int32 `json:"coresPerProcessor,omitempty"`
 
-	// RAM is memory in GiB (cloud only).
+	// RAM is memory in GiB: the exact size for a cloud order, or the minimum
+	// RAM to match when auto-selecting a dedicated model.
 	// +optional
 	RAM int32 `json:"ram,omitempty"`
 
@@ -140,6 +144,20 @@ type ArsysUbuntuMachineStatus struct {
 	// ServerID is the Arsys server id, set once the order is accepted.
 	// +optional
 	ServerID string `json:"serverID,omitempty"`
+
+	// BaremetalModelID is the dedicated model the server was ordered with.
+	// When spec.server.baremetalModelID was empty this is the auto-selected
+	// smallest model that met vcore/ram in the datacenter.
+	// +optional
+	BaremetalModelID string `json:"baremetalModelID,omitempty"`
+
+	// SelectedCores and SelectedRAMGB are the auto-selected model's actual
+	// size, mirrored onto the UbuntuMachine capacity. Unset for explicit-model
+	// or cloud orders.
+	// +optional
+	SelectedCores int32 `json:"selectedCores,omitempty"`
+	// +optional
+	SelectedRAMGB int32 `json:"selectedRAMGB,omitempty"`
 
 	// Address is the server's public IP once assigned.
 	// +optional
