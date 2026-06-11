@@ -400,6 +400,38 @@ func TestSanitiseTargetName(t *testing.T) {
 	}
 }
 
+func TestRender_NameTemplate(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:         "shoot",
+		APIVersion:   "core.gardener.cloud/v1beta1",
+		Kind:         "Shoot",
+		NameTemplate: `{{- printf "%s/%s" .SC.namespace .SC.name | sha256sum | trunc 18 | printf "sc-%s" }}`,
+		Template: `apiVersion: core.gardener.cloud/v1beta1
+kind: Shoot
+metadata:
+  name: placeholder
+`,
+	}
+	sc := minimalSC(1, nil)
+	objs, err := Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	name := objs[0].GetName()
+	if len(name) != 21 {
+		t.Errorf("expected 21-char name, got %d: %q", len(name), name)
+	}
+	if !strings.HasPrefix(name, "sc-") {
+		t.Errorf("expected sc- prefix, got %q", name)
+	}
+	// deterministic
+	objs2, _ := Render(scpc, sc, r, nil)
+	if objs2[0].GetName() != name {
+		t.Errorf("not deterministic: %q vs %q", name, objs2[0].GetName())
+	}
+}
+
 func TestRender_ControlPlaneDefaultsToWorkers(t *testing.T) {
 	scpc := minimalSCPC(nil)
 	r := &showroomv1alpha1.ResourceSpec{
