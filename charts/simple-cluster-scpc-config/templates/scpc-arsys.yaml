@@ -33,7 +33,6 @@ spec:
   inputs:
     - { name: applianceID,  type: string, default: '5D3BBD43E3AB7E8884753025F70DF294',            description: "arsys applianceID" }
     - { name: datacenterID,  type: string, default: '9B94281B5B67A755F2B76165E25F6A65',           description: "arsys datacenterID" }
-    - { name: baremetalModelID,  type: string, default: '1A85528AA9484F62B00DD6A0A19BBEC9',       description: "arsys baremetalModelID" }
 
   resources:
     - name: vmcp
@@ -46,7 +45,7 @@ spec:
         spec:
           tokenSecretRef:
             name: arsys-token
-            namespace: simple-cluster-system
+            namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: aum-dedicated-password
             namespace: default
@@ -54,7 +53,8 @@ spec:
             type: dedicated
             applianceID: "{{ .Inputs.applianceID }}"
             datacenterID: "{{ .Inputs.datacenterID }}"
-            baremetalModelID: "{{ .Inputs.baremetalModelID }}"
+            vcore: {{ .SC.controlPlane.requested.cpu }}
+            ram: {{ .SC.controlPlane.requested.memory | trimSuffix "Gi" }}
           ssh:
             user: root
 
@@ -68,7 +68,7 @@ spec:
         spec:
           tokenSecretRef:
             name: arsys-token
-            namespace: simple-cluster-system
+            namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: aum-dedicated-password
             namespace: default
@@ -76,7 +76,8 @@ spec:
             type: dedicated
             applianceID: "{{ .Inputs.applianceID }}"
             datacenterID: "{{ .Inputs.datacenterID }}"
-            baremetalModelID: "{{ .Inputs.baremetalModelID }}"
+            vcore: {{ .SC.workers.requested.cpu }}
+            ram: {{ .SC.workers.requested.memory | trimSuffix "Gi" }}
           ssh:
             user: root
 
@@ -145,7 +146,7 @@ spec:
         spec:
           tokenSecretRef:
             name: arsys-token
-            namespace: simple-cluster-system
+            namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: aum-dedicated-password
             namespace: default
@@ -170,7 +171,7 @@ spec:
         spec:
           tokenSecretRef:
             name: arsys-token
-            namespace: simple-cluster-system
+            namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: aum-dedicated-password
             namespace: default

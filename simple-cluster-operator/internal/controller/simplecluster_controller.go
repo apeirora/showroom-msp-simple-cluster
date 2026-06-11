@@ -76,6 +76,7 @@ type SimpleClusterReconciler struct {
 // each known group so the controller can Get/Create/Patch/Delete the
 // rendered objects (no narrower carve-out is possible because the SCPC
 // chooses the GVK at runtime).
+// +kubebuilder:rbac:groups=arsys.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ubuntu.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
