@@ -175,10 +175,26 @@ func buildContext(
 		return nil, err
 	}
 
-	baseName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
-	targetName := baseName
-	if repeated {
-		targetName = fmt.Sprintf("%s-%d", baseName, index)
+	var targetName string
+	if resource.NameTemplate != "" {
+		nameCtx := map[string]any{"SC": scContext(sc), "Inputs": inputs}
+		rendered, nerr := RenderString(resource.Name+".nameTemplate", resource.NameTemplate, nameCtx)
+		if nerr != nil {
+			return nil, fmt.Errorf("nameTemplate: %w", nerr)
+		}
+		base := strings.TrimSpace(rendered)
+		if repeated {
+			targetName = fmt.Sprintf("%s-%d", base, index)
+		} else {
+			targetName = base
+		}
+	} else {
+		baseName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
+		if repeated {
+			targetName = fmt.Sprintf("%s-%d", baseName, index)
+		} else {
+			targetName = baseName
+		}
 	}
 
 	resourcesCtx := make(map[string]any, len(predecessors))
