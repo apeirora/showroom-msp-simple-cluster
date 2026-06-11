@@ -21,6 +21,9 @@ const (
 
 	ConditionReady = "Ready"
 	ConditionError = "Error"
+	// ConditionCloudProfile reports whether the requested flavor (spec.cloudProfile
+	// or spec.resources) resolved to an existing MachineClass.
+	ConditionCloudProfile = "CloudProfile"
 
 	SSHSecretPrivateKeyKey = "ssh-privatekey"
 	SSHSecretPublicKeyKey  = "ssh-publickey"
@@ -44,28 +47,46 @@ const (
 )
 
 // IronCoreVMSpec describes one IronCore Machine.
+// +kubebuilder:validation:XValidation:rule="has(self.cloudProfile) != has(self.resources)",message="set exactly one of spec.cloudProfile or spec.resources"
 type IronCoreVMSpec struct {
-	// CredentialsRef is a Secret carrying a kubeconfig for the IronCore cluster.
-	// Key: kubeconfig. Namespace defaults to the VM's namespace.
-	CredentialsRef corev1.SecretReference `json:"credentialsRef"`
+	// IronCoreKubeconfig references a Secret carrying a kubeconfig for the IronCore
+	// cluster under key `kubeconfig`. Set `namespace` to read the Secret from a
+	// different namespace; when empty it defaults to the VM's namespace.
+	IronCoreKubeconfig corev1.SecretReference `json:"ironcoreKubeconfig"`
 
 	// IronCoreNamespace is the namespace in the IronCore cluster where resources
-	// are created.
+	// are created. When empty it defaults to the namespace set in the credentials
+	// kubeconfig context, else "default".
 	// +optional
-	// +kubebuilder:default="default"
 	IronCoreNamespace string `json:"ironcoreNamespace,omitempty"`
 
 	// Network is the IronCore Network name. The operator ensures it exists.
 	// +kubebuilder:validation:MinLength=1
 	Network string `json:"network"`
 
-	// IPPool is the ipam Prefix name to allocate the NIC IP from (/32 ephemeral).
-	// If empty, IPs are omitted and the environment default is used.
+	// IPPool, when set, is an existing ipam Prefix the NIC allocates its /32 from.
+	// When empty, the operator creates a root Prefix named after Network using
+	// NetworkCIDR and allocates from that.
 	// +optional
 	IPPool string `json:"ipPool,omitempty"`
 
-	// Resources defines the CPU/memory floor for MachineClass selection.
-	Resources NodeResources `json:"resources"`
+	// NetworkCIDR is the CIDR of the root Prefix the operator creates for Network
+	// when IPPool is unset.
+	// +optional
+	// +kubebuilder:default="10.0.0.0/24"
+	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$`
+	NetworkCIDR string `json:"networkCIDR,omitempty"`
+
+	// CloudProfile selects an IronCore MachineClass by name directly
+	// (e.g. "memory-intel1-2cpu"), the same name as the matching Gardener
+	// CloudProfile machineType. Mutually exclusive with Resources.
+	// +optional
+	CloudProfile string `json:"cloudProfile,omitempty"`
+
+	// Resources defines the CPU/memory floor; the operator picks the smallest
+	// MachineClass that satisfies it. Mutually exclusive with CloudProfile.
+	// +optional
+	Resources *NodeResources `json:"resources,omitempty"`
 
 	// Image is the OCI reference for the boot image
 	// (e.g. ghcr.io/ironcore-dev/gardenlinux:latest).

@@ -2,5 +2,5 @@ resources:
   - manager.yaml
 images:
   - name: controller
-    newName: simple-cluster-operator-openstack
+    newName: simple-cluster-operator-ironcore
     newTag: dev

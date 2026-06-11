@@ -45,9 +45,14 @@ func NewClientsFromSecret(_ context.Context, creds *corev1.Secret, namespace str
 			creds.Namespace, creds.Name, ironcoreapiv1alpha1.CredentialsKubeconfigKey)
 	}
 
-	cfg, err := clientcmd.RESTConfigFromKubeConfig(kubeconfigBytes)
+	clientCfg, err := clientcmd.NewClientConfigFromBytes(kubeconfigBytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse kubeconfig from Secret %s/%s: %w",
+			creds.Namespace, creds.Name, err)
+	}
+	cfg, err := clientCfg.ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("build REST config from Secret %s/%s: %w",
 			creds.Namespace, creds.Name, err)
 	}
 
@@ -77,6 +82,12 @@ func NewClientsFromSecret(_ context.Context, creds *corev1.Secret, namespace str
 	}
 
 	ns := namespace
+	if ns == "" {
+		// Fall back to the namespace set in the kubeconfig context.
+		if kubeNs, _, nerr := clientCfg.Namespace(); nerr == nil {
+			ns = kubeNs
+		}
+	}
 	if ns == "" {
 		ns = "default"
 	}
