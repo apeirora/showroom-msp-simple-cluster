@@ -24,8 +24,8 @@ spec:
         apiVersion: ironcore.apeirora.eu/v1alpha1
         kind: IronCoreVM
         spec:
-          credentialsRef:
-            name: ironcore-creds
+          ironcoreKubeconfig:
+            name: ironcore-kubeconfig
           network: {{ .Inputs.network }}
           ipPool: {{ .Inputs.ipPool }}
           image: "{{ .Inputs.image }}"
@@ -46,8 +46,8 @@ spec:
         apiVersion: ironcore.apeirora.eu/v1alpha1
         kind: IronCoreVM
         spec:
-          credentialsRef:
-            name: ironcore-creds
+          ironcoreKubeconfig:
+            name: ironcore-kubeconfig
           network: {{ .Inputs.network }}
           ipPool: {{ .Inputs.ipPool }}
           image: "{{ .Inputs.image }}"
