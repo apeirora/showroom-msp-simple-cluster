@@ -1,7 +1,7 @@
 apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
-  name: gardener-sap-openstack
+  name: sap-gardener-openstack
   labels:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
@@ -9,7 +9,7 @@ spec:
   target:
     namespace: garden-pm-cc-d2
     kubeconfigSecretRef:
-      name: gardener-sap-kubeconfig
+      name: sap-gardener-kubeconfig
       namespace: default
   inputs:
     - { name: cloudProfile, type: string,   default: converged-cloud-ora-fp,      description: "Gardener CloudProfile name" }

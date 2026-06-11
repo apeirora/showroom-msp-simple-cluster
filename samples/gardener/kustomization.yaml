@@ -1,8 +1,8 @@
 ## Gardener-targeted SCPCs (create Shoots on remote Gardener clusters).
 resources:
-  - gardener-sap-kubeconfig-secret.yaml
-  - gardener-dati-kubeconfig-secret.yaml
-  - scpc-gardener-dati-openstack.yaml
-  - scpc-gardener-sap-openstack.yaml
-  - scpc-gardener-sap-ironcore.yaml
+  - sap-gardener-kubeconfig-secret.yaml
+  - dati-kubeconfig-secret.yaml
+  - scpc-dati-openstack.yaml
+  - scpc-sap-gardener-openstack.yaml
+  - scpc-sap-gardener-ironcore.yaml
 #  - simplecluster.yaml
