@@ -17,6 +17,7 @@ rules:
   - update
   - watch
 - apiGroups:
+  - arsys.apeirora.eu
   - authentication.gardener.cloud
   - core.gardener.cloud
   - kind.apeirora.eu
