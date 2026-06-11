@@ -97,8 +97,10 @@ spec:
                     type: string
                   baremetalModelID:
                     description: |-
-                      BaremetalModelID picks the bare-metal model (e.g. "BMC_S") — required
-                      when type is dedicated. List with GET /servers/baremetal_models.
+                      BaremetalModelID picks the bare-metal model (e.g. "BMC_S") for a
+                      dedicated order. When omitted the operator auto-selects the smallest
+                      ENABLED model meeting vcore/ram that is available in datacenterID.
+                      List with GET /servers/baremetal_models.
                     type: string
                   coresPerProcessor:
                     description: CoresPerProcessor is the core/processor layout (cloud
@@ -126,7 +128,9 @@ spec:
                       type: string
                     type: array
                   ram:
-                    description: RAM is memory in GiB (cloud only).
+                    description: |-
+                      RAM is memory in GiB: the exact size for a cloud order, or the minimum
+                      RAM to match when auto-selecting a dedicated model.
                     format: int32
                     type: integer
                   type:
@@ -138,7 +142,9 @@ spec:
                     - dedicated
                     type: string
                   vcore:
-                    description: VCore is the number of virtual cores (cloud only).
+                    description: |-
+                      VCore is the number of cores: the exact size for a cloud order, or the
+                      minimum cores to match when auto-selecting a dedicated model.
                     format: int32
                     type: integer
                 required:
@@ -146,9 +152,8 @@ spec:
                 - datacenterID
                 type: object
                 x-kubernetes-validations:
-                - message: baremetalModelID is required when type is dedicated
-                  rule: self.type != 'dedicated' || (has(self.baremetalModelID) &&
-                    self.baremetalModelID != '')
+                - message: dedicated requires baremetalModelID, or vcore and ram to auto-select the smallest model
+                  rule: self.type != 'dedicated' || (has(self.baremetalModelID) && self.baremetalModelID != '') || (has(self.vcore) && has(self.ram))
                 - message: vcore, ram and disk are required when type is cloud
                   rule: self.type != 'cloud' || (has(self.vcore) && has(self.ram)
                     && has(self.disk))
@@ -189,6 +194,12 @@ spec:
             properties:
               address:
                 description: Address is the server's public IP once assigned.
+                type: string
+              baremetalModelID:
+                description: |-
+                  BaremetalModelID is the dedicated model the server was ordered with.
+                  When spec.server.baremetalModelID was empty this is the auto-selected
+                  smallest model that met vcore/ram in the datacenter.
                 type: string
               conditions:
                 items:
@@ -265,6 +276,16 @@ spec:
                 - Failed
                 - Deleting
                 type: string
+              selectedCores:
+                description: |-
+                  SelectedCores and SelectedRAMGB are the auto-selected model's actual
+                  size, mirrored onto the UbuntuMachine capacity. Unset for explicit-model
+                  or cloud orders.
+                format: int32
+                type: integer
+              selectedRAMGB:
+                format: int32
+                type: integer
               serverID:
                 description: ServerID is the Arsys server id, set once the order is
                   accepted.

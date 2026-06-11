@@ -105,6 +105,97 @@ type Hardware struct {
 // ServerTypeBaremetal is the server_type value for a dedicated order.
 const ServerTypeBaremetal = "baremetal"
 
+// StateEnabled is the BaremetalModel.State value for an orderable model.
+const StateEnabled = "ENABLED"
+
+// BaremetalModel is one dedicated-server model from GET /servers/baremetal_models.
+type BaremetalModel struct {
+	ID           string                  `json:"id"`
+	Name         string                  `json:"name"`
+	Hardware     BaremetalHardware       `json:"hardware"`
+	State        string                  `json:"state"`
+	Availability []BaremetalAvailability `json:"availability"`
+}
+
+// BaremetalHardware is a model's fixed compute. TotalCores is core (sockets)
+// times cores_per_processor; ram is in Unit (always "GB" in practice).
+type BaremetalHardware struct {
+	Core              int32  `json:"core"`
+	CoresPerProcessor int32  `json:"cores_per_processor"`
+	RAM               int32  `json:"ram"`
+	Unit              string `json:"unit"`
+}
+
+// BaremetalAvailability is whether a model can be ordered in a datacenter.
+type BaremetalAvailability struct {
+	DatacenterID string `json:"datacenter_id"`
+	Available    bool   `json:"available"`
+}
+
+// TotalCores is the model's usable core count (sockets * cores per processor).
+func (h BaremetalHardware) TotalCores() int32 { return h.Core * h.CoresPerProcessor }
+
+// RAMGB returns the RAM normalized to GB, honouring the Unit field.
+func (h BaremetalHardware) RAMGB() int32 {
+	switch h.Unit {
+	case "MB":
+		return h.RAM / 1024
+	case "TB":
+		return h.RAM * 1024
+	default: // "GB" or unspecified
+		return h.RAM
+	}
+}
+
+// AvailableIn reports whether the model is orderable in the given datacenter.
+func (m *BaremetalModel) AvailableIn(datacenterID string) bool {
+	for _, a := range m.Availability {
+		if a.DatacenterID == datacenterID && a.Available {
+			return true
+		}
+	}
+	return false
+}
+
+// ListBaremetalModels lists the dedicated-server models (GET
+// /servers/baremetal_models). Undocumented but live; the operator uses it to
+// auto-pick a model when the CR omits baremetalModelID.
+func (c *Client) ListBaremetalModels(ctx context.Context) ([]BaremetalModel, error) {
+	var out []BaremetalModel
+	if err := c.do(ctx, http.MethodGet, "/servers/baremetal_models", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SmallestModel returns the cheapest-fitting model: the ENABLED model available
+// in datacenterID with at least minCores cores and minRAMGB GB of RAM, choosing
+// the fewest cores and then the least RAM. Returns nil if none qualifies.
+func SmallestModel(models []BaremetalModel, datacenterID string, minCores, minRAMGB int32) *BaremetalModel {
+	var best *BaremetalModel
+	for i := range models {
+		m := &models[i]
+		if m.State != StateEnabled || !m.AvailableIn(datacenterID) {
+			continue
+		}
+		if m.Hardware.TotalCores() < minCores || m.Hardware.RAMGB() < minRAMGB {
+			continue
+		}
+		if best == nil || smaller(m.Hardware, best.Hardware) {
+			best = m
+		}
+	}
+	return best
+}
+
+// smaller orders by fewest total cores, then least RAM.
+func smaller(a, b BaremetalHardware) bool {
+	if ac, bc := a.TotalCores(), b.TotalCores(); ac != bc {
+		return ac < bc
+	}
+	return a.RAMGB() < b.RAMGB()
+}
+
 // HDD is one disk in the order.
 type HDD struct {
 	Size   int32 `json:"size"`
