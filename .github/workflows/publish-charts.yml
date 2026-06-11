@@ -54,7 +54,8 @@ jobs:
             .[\"simple-cluster-operator\"].controllerManager.container.image.tag = \"$V\" |
             .[\"kind-cluster-operator\"].controllerManager.container.image.tag = \"$V\" |
             .[\"simple-cluster-operator-openstack\"].controllerManager.container.image.tag = \"$V\" |
-            .[\"simple-cluster-operator-ubuntu\"].controllerManager.container.image.tag = \"$V\"
+            .[\"simple-cluster-operator-ubuntu\"].controllerManager.container.image.tag = \"$V\" |
+            .[\"simple-cluster-operator-ironcore\"].controllerManager.container.image.tag = \"$V\"
           " charts/simple-cluster-system/values.yaml
           # Micro-frontend image.
           yq -i ".ui.image.tag = \"$V\"" charts/simple-cluster-ui/values.yaml
@@ -67,7 +68,6 @@ jobs:
             simple-cluster-system
             ubuntu-machines-operator
             arsys-ubuntu-machine-operator
-            simple-cluster-operator-ironcore
             simple-cluster-pm-integration
             simple-cluster-ui
             simple-cluster-sync-agent
