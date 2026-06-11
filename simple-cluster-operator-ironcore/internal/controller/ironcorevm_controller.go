@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	requeueReady   = 2 * time.Minute
-	requeueWorking = 20 * time.Second
+	requeueReady    = 2 * time.Minute
+	requeueWorking  = 20 * time.Second
+	requeueDeleting = 10 * time.Second
 
 	sshSecretSuffix = "-ssh"
 )
@@ -256,7 +257,7 @@ func (r *IronCoreVMReconciler) reconcileDelete(ctx context.Context, vm *ironcore
 				"removing finalizer despite cleanup error: %v", err)
 		} else {
 			log.Error(err, "remote cleanup during delete; retrying")
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 		}
 	}
 
@@ -276,8 +277,14 @@ func (r *IronCoreVMReconciler) cleanupRemote(ctx context.Context, vm *ironcorev1
 		return err
 	}
 	r.eventf(vm, corev1.EventTypeNormal, "Deleting", "deleting IronCore resources for %s", vm.Name)
-	if err := ironcore.DeleteByVM(ctx, clients, ironcore.VMLabels(vm.Namespace, vm.Name)); err != nil {
+	labels := ironcore.VMLabels(vm.Namespace, vm.Name)
+	if err := ironcore.DeleteByVM(ctx, clients, labels); err != nil {
 		return err
+	}
+	if exists, err := ironcore.AnyExistForVM(ctx, clients, labels); err != nil {
+		return err
+	} else if exists {
+		return fmt.Errorf("IronCore resources for %s still terminating", vm.Name)
 	}
 	r.eventf(vm, corev1.EventTypeNormal, "Deleted", "deleted IronCore resources for %s", vm.Name)
 	return nil

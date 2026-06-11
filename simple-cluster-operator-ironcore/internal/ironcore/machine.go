@@ -179,6 +179,19 @@ func DeleteByVM(ctx context.Context, c *Clients, labels map[string]string) error
 	return nil
 }
 
+// AnyExistForVM returns true if any Machine objects labelled for the given VM
+// still exist in the IronCore API server (including those with a DeletionTimestamp).
+func AnyExistForVM(ctx context.Context, c *Clients, labels map[string]string) (bool, error) {
+	var list computev1alpha1.MachineList
+	if err := c.Client.List(ctx, &list,
+		client.InNamespace(c.Namespace),
+		client.MatchingLabels(labels),
+	); err != nil && !apierrors.IsNotFound(err) {
+		return false, err
+	}
+	return len(list.Items) > 0, nil
+}
+
 // deleteByLabels lists objects matching the labels in the client namespace and
 // deletes each individually. Per-object Delete (rather than DeleteAllOf) needs
 // only the list+delete verbs, avoiding the deletecollection permission.
