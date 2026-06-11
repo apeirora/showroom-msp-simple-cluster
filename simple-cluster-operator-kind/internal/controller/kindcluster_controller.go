@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	requeueReady   = 2 * time.Minute
-	requeueWorking = 20 * time.Second
+	requeueReady    = 2 * time.Minute
+	requeueWorking  = 20 * time.Second
+	requeueDeleting = 10 * time.Second
 
 	secretSuffix     = "-kubeconfig"
 	secretDataKey    = "kubeconfig"
@@ -148,8 +149,10 @@ func (r *KindClusterReconciler) reconcileDelete(ctx context.Context, kc *kindv1a
 		log.Info("deleting kind cluster from host docker", "name", clusterName)
 		if err := r.Provider.Delete(clusterName, ""); err != nil {
 			log.Error(err, "kind delete cluster failed; retrying")
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 		}
+		// Wait until the cluster is confirmed gone from Docker.
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 	}
 
 	patch := client.MergeFrom(kc.DeepCopy())

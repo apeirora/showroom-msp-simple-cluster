@@ -36,6 +36,7 @@ const (
 	requeueReady        = 5 * time.Minute
 	requeueProvisioning = 20 * time.Second
 	requeueWorking      = 20 * time.Second
+	requeueDeleting     = 10 * time.Second
 )
 
 // ArsysUbuntuMachineReconciler orders dedicated servers from Arsys
@@ -300,18 +301,36 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 	}
 
 	// Delete the UbuntuMachine first (the credentials Secret is GC'd via its
-	// owner ref).
+	// owner ref) and wait until it is confirmed gone.
 	machine := &umv1alpha1.UbuntuMachine{ObjectMeta: metav1.ObjectMeta{Name: machineName(aum)}}
 	if err := r.Delete(ctx, machine); err != nil && !apierrors.IsNotFound(err) {
 		log.Error(err, "delete UbuntuMachine; retrying")
-		return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+	}
+	if err := r.Get(ctx, types.NamespacedName{Name: machineName(aum)}, machine); err == nil {
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+	} else if !apierrors.IsNotFound(err) {
+		log.Error(err, "get UbuntuMachine during delete; retrying")
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 	}
 
-	// Cancel the dedicated server.
+	// Cancel the dedicated server and wait until it is confirmed removed from Arsys.
 	if aum.Status.ServerID != "" {
-		if err := cl.DeleteServer(ctx, aum.Status.ServerID); err != nil {
-			log.Error(err, "delete arsys server; retrying", "id", aum.Status.ServerID)
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		server, err := cl.GetServer(ctx, aum.Status.ServerID)
+		if err != nil {
+			if apiErr, ok := err.(*arsys.APIError); !ok || apiErr.StatusCode != 404 {
+				log.Error(err, "get arsys server during delete; retrying", "id", aum.Status.ServerID)
+				return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+			}
+			// 404 — server is already gone, proceed
+		} else {
+			if server.Status.State != arsys.StateRemoving {
+				if err := cl.DeleteServer(ctx, aum.Status.ServerID); err != nil {
+					log.Error(err, "delete arsys server; retrying", "id", aum.Status.ServerID)
+					return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+				}
+			}
+			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 		}
 	}
 
