@@ -67,6 +67,7 @@ jobs:
             simple-cluster-system
             ubuntu-machines-operator
             arsys-ubuntu-machine-operator
+            simple-cluster-operator-ironcore
             simple-cluster-pm-integration
             simple-cluster-ui
             simple-cluster-sync-agent
