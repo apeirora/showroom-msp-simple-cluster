@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	computev1alpha1 "github.com/ironcore-dev/ironcore/api/compute/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -63,21 +64,19 @@ func PickMachineClass(ctx context.Context, c client.Client, cpu, memory resource
 		matching []candidate
 	)
 
-	for _, mc := range list.Items {
-		cpuQty := mc.Capabilities.CPU()
-		memQty := mc.Capabilities.Memory()
-		if cpuQty == nil || memQty == nil {
+	for i := range list.Items {
+		mc := &list.Items[i]
+		cpuCores, ramMiB, ok := machineClassCapacity(mc)
+		if !ok {
 			continue
 		}
-		cpuCores := int((cpuQty.MilliValue() + 999) / 1000)
-		ramMiB := int((memQty.Value() + (1024*1024 - 1)) / (1024 * 1024))
-		c := candidate{name: mc.Name, cpuCores: cpuCores, ramMiB: ramMiB}
-		all = append(all, c)
+		cand := candidate{name: mc.Name, cpuCores: cpuCores, ramMiB: ramMiB}
+		all = append(all, cand)
 		if nameRE != nil && !nameRE.MatchString(mc.Name) {
 			continue
 		}
 		if cpuCores >= cpuFloor && ramMiB >= memFloorMiB {
-			matching = append(matching, c)
+			matching = append(matching, cand)
 		}
 	}
 
@@ -114,6 +113,61 @@ func PickMachineClass(ctx context.Context, c client.Client, cpu, memory resource
 		MemoryHuman: memHuman,
 		Description: fmt.Sprintf("%d vCPU / %s RAM", pick.cpuCores, memHuman),
 	}, nil
+}
+
+// GetMachineClass fetches a named (cluster-scoped) MachineClass and returns it as
+// a ClassPick. When the class does not exist the error lists the available
+// classes, mirroring PickMachineClass.
+func GetMachineClass(ctx context.Context, c client.Client, name string) (*ClassPick, error) {
+	var mc computev1alpha1.MachineClass
+	if err := c.Get(ctx, client.ObjectKey{Name: name}, &mc); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("get MachineClass %q: %w", name, err)
+		}
+		return nil, fmt.Errorf("MachineClass %q not found; available: %s", name, availableClasses(ctx, c))
+	}
+	cpuCores, ramMiB, ok := machineClassCapacity(&mc)
+	if !ok {
+		return nil, fmt.Errorf("MachineClass %q has no cpu/memory capabilities", name)
+	}
+	memHuman := formatMiB(ramMiB)
+	return &ClassPick{
+		Name:        mc.Name,
+		CPU:         int32(cpuCores),
+		MemoryHuman: memHuman,
+		Description: fmt.Sprintf("%d vCPU / %s RAM", cpuCores, memHuman),
+	}, nil
+}
+
+// machineClassCapacity extracts whole-core CPU and MiB memory from a MachineClass.
+// ok is false when either capability is missing.
+func machineClassCapacity(mc *computev1alpha1.MachineClass) (cpuCores, ramMiB int, ok bool) {
+	cpuQty := mc.Capabilities.CPU()
+	memQty := mc.Capabilities.Memory()
+	if cpuQty == nil || memQty == nil {
+		return 0, 0, false
+	}
+	cpuCores = int((cpuQty.MilliValue() + 999) / 1000)
+	ramMiB = int((memQty.Value() + (1024*1024 - 1)) / (1024 * 1024))
+	return cpuCores, ramMiB, true
+}
+
+// availableClasses returns a sorted, human-readable list of all MachineClasses.
+func availableClasses(ctx context.Context, c client.Client) string {
+	var list computev1alpha1.MachineClassList
+	if err := c.List(ctx, &list); err != nil {
+		return fmt.Sprintf("<list error: %v>", err)
+	}
+	names := make([]string, 0, len(list.Items))
+	for i := range list.Items {
+		cpuCores, ramMiB, ok := machineClassCapacity(&list.Items[i])
+		if !ok {
+			continue
+		}
+		names = append(names, fmt.Sprintf("%s (%d vCPU / %s)", list.Items[i].Name, cpuCores, formatMiB(ramMiB)))
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 // ceilCPU rounds a CPU quantity up to whole cores.

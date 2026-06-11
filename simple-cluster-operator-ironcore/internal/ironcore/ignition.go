@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Ignition v3.4.0 minimal structs (no external dependency).
+// Ignition v3.2.0 minimal structs (no external dependency).
 
 type ignitionConfig struct {
 	Ignition ignitionMeta     `json:"ignition"`
@@ -71,14 +71,14 @@ type ignitionUnit struct {
 	Contents *string `json:"contents,omitempty"`
 }
 
-// BuildIgnition produces a minimal Ignition v3.4.0 JSON document that
+// BuildIgnition produces a minimal Ignition v3.2.0 JSON document that
 // injects sshPublicKey into the authorized_keys for sshUser. If userData is
 // non-empty, a storage file and a oneshot systemd unit are added to execute it.
-// FLAGGED: ignition version 3.4.0 assumed; verify against gardenlinux ignition
-// parser version on the target cluster.
+// Version 3.2.0 matches the gardenlinux ignition parser used by this landscape's
+// running VMs; only fields present since 3.0 are used, so this is forward-safe.
 func BuildIgnition(sshUser, sshPublicKey, userData string) ([]byte, error) {
 	cfg := ignitionConfig{
-		Ignition: ignitionMeta{Version: "3.4.0"},
+		Ignition: ignitionMeta{Version: "3.2.0"},
 		Passwd: &ignitionPasswd{
 			Users: []ignitionUser{
 				{

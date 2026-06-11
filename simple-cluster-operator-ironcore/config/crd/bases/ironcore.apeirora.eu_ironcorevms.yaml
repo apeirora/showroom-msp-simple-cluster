@@ -63,10 +63,29 @@ spec:
           spec:
             description: IronCoreVMSpec describes one IronCore Machine.
             properties:
-              credentialsRef:
+              cloudProfile:
                 description: |-
-                  CredentialsRef is a Secret carrying a kubeconfig for the IronCore cluster.
-                  Key: kubeconfig. Namespace defaults to the VM's namespace.
+                  CloudProfile selects an IronCore MachineClass by name directly
+                  (e.g. "memory-intel1-2cpu"), the same name as the matching Gardener
+                  CloudProfile machineType. Mutually exclusive with Resources.
+                type: string
+              image:
+                description: |-
+                  Image is the OCI reference for the boot image
+                  (e.g. ghcr.io/ironcore-dev/gardenlinux:latest).
+                minLength: 1
+                type: string
+              ipPool:
+                description: |-
+                  IPPool, when set, is an existing ipam Prefix the NIC allocates its /32 from.
+                  When empty, the operator creates a root Prefix named after Network using
+                  NetworkCIDR and allocates from that.
+                type: string
+              ironcoreKubeconfig:
+                description: |-
+                  IronCoreKubeconfig references a Secret carrying a kubeconfig for the IronCore
+                  cluster under key `kubeconfig`. Set `namespace` to read the Secret from a
+                  different namespace; when empty it defaults to the VM's namespace.
                 properties:
                   name:
                     description: name is unique within a namespace to reference a
@@ -78,22 +97,11 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              image:
-                description: |-
-                  Image is the OCI reference for the boot image
-                  (e.g. ghcr.io/ironcore-dev/gardenlinux:latest).
-                minLength: 1
-                type: string
-              ipPool:
-                description: |-
-                  IPPool is the ipam Prefix name to allocate the NIC IP from (/32 ephemeral).
-                  If empty, IPs are omitted and the environment default is used.
-                type: string
               ironcoreNamespace:
-                default: default
                 description: |-
                   IronCoreNamespace is the namespace in the IronCore cluster where resources
-                  are created.
+                  are created. When empty it defaults to the namespace set in the credentials
+                  kubeconfig context, else "default".
                 type: string
               machinePool:
                 description: |-
@@ -105,13 +113,21 @@ spec:
                   it exists.
                 minLength: 1
                 type: string
+              networkCIDR:
+                default: 10.0.0.0/24
+                description: |-
+                  NetworkCIDR is the CIDR of the root Prefix the operator creates for Network
+                  when IPPool is unset.
+                pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$
+                type: string
               publicIP:
                 description: PublicIP, when true, attaches a Public VirtualIP to the
                   NetworkInterface.
                 type: boolean
               resources:
-                description: Resources defines the CPU/memory floor for MachineClass
-                  selection.
+                description: |-
+                  Resources defines the CPU/memory floor; the operator picks the smallest
+                  MachineClass that satisfies it. Mutually exclusive with CloudProfile.
                 properties:
                   cpu:
                     anyOf:
@@ -162,11 +178,13 @@ spec:
                   systemd unit via ignition.
                 type: string
             required:
-            - credentialsRef
             - image
+            - ironcoreKubeconfig
             - network
-            - resources
             type: object
+            x-kubernetes-validations:
+            - message: set exactly one of spec.cloudProfile or spec.resources
+              rule: has(self.cloudProfile) != has(self.resources)
           status:
             description: IronCoreVMStatus is the observed state of one IronCore Machine.
             properties:

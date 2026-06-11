@@ -1,7 +1,7 @@
 ## ironcore SCPC + sample SimpleCluster.
 
 resources:
-  - ironcore-creds-secret.yaml
+  - ironcore-kubeconfig-secret.yaml
   - scpc-ironcore.yaml
 #  - vm-instances.yaml
 #  - simplecluster.yaml

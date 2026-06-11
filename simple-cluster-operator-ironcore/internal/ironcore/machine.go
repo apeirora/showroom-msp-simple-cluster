@@ -17,11 +17,24 @@ import (
 
 	commonv1alpha1 "github.com/ironcore-dev/ironcore/api/common/v1alpha1"
 	computev1alpha1 "github.com/ironcore-dev/ironcore/api/compute/v1alpha1"
+	corev1alpha1 "github.com/ironcore-dev/ironcore/api/core/v1alpha1"
 	networkingv1alpha1 "github.com/ironcore-dev/ironcore/api/networking/v1alpha1"
+	storagev1alpha1 "github.com/ironcore-dev/ironcore/api/storage/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	// bootVolumeClass is the IronCore VolumeClass used for the root disk.
+	bootVolumeClass = "general-purpose"
+	// bootDiskSize is the root disk capacity.
+	bootDiskSize = "20Gi"
+	// rootDevice is the device name the root volume is attached at.
+	rootDevice = "oda"
 )
 
 // VMLabels returns the label set the operator stamps on every remote resource
@@ -93,6 +106,7 @@ func CreateMachine(
 	name, machineClassName, nicName, ignitionSecretName, image, machinePool string,
 	labels map[string]string,
 ) (*computev1alpha1.Machine, error) {
+	device := rootDevice
 	machine := &computev1alpha1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -112,10 +126,22 @@ func CreateMachine(
 			},
 			Volumes: []computev1alpha1.Volume{
 				{
-					Name: "root",
+					Name:   "root",
+					Device: &device,
 					VolumeSource: computev1alpha1.VolumeSource{
-						LocalDisk: &computev1alpha1.LocalDiskVolumeSource{
-							Image: image,
+						Ephemeral: &computev1alpha1.EphemeralVolumeSource{
+							VolumeTemplate: &storagev1alpha1.VolumeTemplateSpec{
+								Spec: storagev1alpha1.VolumeSpec{
+									VolumeClassRef: &corev1.LocalObjectReference{Name: bootVolumeClass},
+									Resources: corev1alpha1.ResourceList{
+										corev1alpha1.ResourceStorage: resource.MustParse(bootDiskSize),
+									},
+									Image: image,
+									DataSource: storagev1alpha1.VolumeDataSource{
+										OSImage: &storagev1alpha1.OSDataSource{Image: image},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -138,30 +164,47 @@ func CreateMachine(
 // DeleteByVM deletes the Machine, NetworkInterface, VirtualIP, and ignition
 // Secret that belong to the given VM labels. NotFound errors are ignored.
 func DeleteByVM(ctx context.Context, c *Clients, labels map[string]string) error {
-	if err := deleteAllOf(ctx, c, &computev1alpha1.Machine{}, labels); err != nil {
+	if err := deleteByLabels(ctx, c, &computev1alpha1.MachineList{}, labels); err != nil {
 		return fmt.Errorf("delete Machines: %w", err)
 	}
-	if err := deleteAllOf(ctx, c, &networkingv1alpha1.NetworkInterface{}, labels); err != nil {
+	if err := deleteByLabels(ctx, c, &networkingv1alpha1.NetworkInterfaceList{}, labels); err != nil {
 		return fmt.Errorf("delete NetworkInterfaces: %w", err)
 	}
-	if err := deleteAllOf(ctx, c, &networkingv1alpha1.VirtualIP{}, labels); err != nil {
+	if err := deleteByLabels(ctx, c, &networkingv1alpha1.VirtualIPList{}, labels); err != nil {
 		return fmt.Errorf("delete VirtualIPs: %w", err)
 	}
-	if err := deleteAllOf(ctx, c, &corev1.Secret{}, labels); err != nil {
+	if err := deleteByLabels(ctx, c, &corev1.SecretList{}, labels); err != nil {
 		return fmt.Errorf("delete ignition Secrets: %w", err)
 	}
 	return nil
 }
 
-// deleteAllOf deletes all resources of a given type matching the labels.
+// deleteByLabels lists objects matching the labels in the client namespace and
+// deletes each individually. Per-object Delete (rather than DeleteAllOf) needs
+// only the list+delete verbs, avoiding the deletecollection permission.
 // NotFound is treated as success.
-func deleteAllOf(ctx context.Context, c *Clients, obj client.Object, labels map[string]string) error {
-	err := c.Client.DeleteAllOf(ctx, obj,
+func deleteByLabels(ctx context.Context, c *Clients, list client.ObjectList, labels map[string]string) error {
+	if err := c.Client.List(ctx, list,
 		client.InNamespace(c.Namespace),
 		client.MatchingLabels(labels),
-	)
-	if err != nil && !apierrors.IsNotFound(err) {
+	); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
 		return err
+	}
+	items, err := apimeta.ExtractList(list)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		obj, ok := item.(client.Object)
+		if !ok {
+			continue
+		}
+		if err := c.Client.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
 	}
 	return nil
 }
