@@ -16,6 +16,6 @@ spec:
       cpu: 4
       memory: 8Gi
   providerConfigRefs:
-    - gardener-sap-openstack
-    #- gardener-sap-ironcore
+    - sap-gardener-openstack
+    #- sap-gardener-ironcore
 
