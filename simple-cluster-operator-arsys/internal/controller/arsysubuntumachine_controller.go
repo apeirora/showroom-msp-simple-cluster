@@ -106,11 +106,15 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 	aum.Status.Address = server.PrimaryIP()
 	aum.Status.MachineRef = machineName(&aum)
 	aum.Status.ObservedGeneration = aum.Generation
+	readyMsg := fmt.Sprintf("server %s up at %s; UbuntuMachine %q registered", server.ID, server.PrimaryIP(), machineName(&aum))
+	if aum.Status.BaremetalModelID != "" {
+		readyMsg += fmt.Sprintf("; baremetal model %s", aum.Status.BaremetalModelID)
+	}
 	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
 		Type:    arsysv1alpha1.ConditionReady,
 		Status:  metav1.ConditionTrue,
 		Reason:  "Ready",
-		Message: fmt.Sprintf("server %s up at %s; UbuntuMachine %q registered", server.ID, server.PrimaryIP(), machineName(&aum)),
+		Message: readyMsg,
 	})
 	apimeta.RemoveStatusCondition(&aum.Status.Conditions, arsysv1alpha1.ConditionError)
 	if err := r.Status().Patch(ctx, &aum, patch); err != nil {
@@ -135,6 +139,8 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		PublicKey:    aum.Spec.Server.PublicKeys,
 		PowerOn:      true,
 	}
+	// selected is non-nil only when we auto-pick a dedicated model below.
+	var selected *arsys.BaremetalModel
 	if aum.Spec.Server.Type == arsysv1alpha1.ServerTypeCloud {
 		req.Hardware = arsys.Hardware{
 			VCore:             aum.Spec.Server.VCore,
@@ -143,9 +149,26 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 			HDDs:              []arsys.HDD{{Size: aum.Spec.Server.Disk, IsMain: true}},
 		}
 	} else {
-		// dedicated (default): bare-metal model, no vcore/ram/hdds.
+		// dedicated (default): bare-metal model, no vcore/ram/hdds. With no
+		// model pinned, pick the smallest one meeting vcore/ram in the DC.
 		req.ServerType = arsys.ServerTypeBaremetal
-		req.Hardware = arsys.Hardware{BaremetalModelID: aum.Spec.Server.BaremetalModelID}
+		modelID := aum.Spec.Server.BaremetalModelID
+		if modelID == "" {
+			models, err := cl.ListBaremetalModels(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("list baremetal models: %w", err)
+			}
+			selected = arsys.SmallestModel(models, aum.Spec.Server.DatacenterID, aum.Spec.Server.VCore, aum.Spec.Server.RAM)
+			if selected == nil {
+				return nil, fmt.Errorf("no enabled baremetal model with >=%d cores and >=%d GB RAM available in datacenter %s",
+					aum.Spec.Server.VCore, aum.Spec.Server.RAM, aum.Spec.Server.DatacenterID)
+			}
+			modelID = selected.ID
+			logf.FromContext(ctx).Info("auto-selected baremetal model",
+				"model", selected.Name, "id", selected.ID,
+				"cores", selected.Hardware.TotalCores(), "ramGB", selected.Hardware.RAMGB())
+		}
+		req.Hardware = arsys.Hardware{BaremetalModelID: modelID}
 	}
 	server, err := cl.CreateServer(ctx, req)
 	if err != nil {
@@ -163,6 +186,13 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 	patch := client.MergeFrom(aum.DeepCopy())
 	aum.Status.ServerID = server.ID
 	aum.Status.Phase = arsysv1alpha1.PhaseProvisioning
+	if aum.Spec.Server.Type != arsysv1alpha1.ServerTypeCloud {
+		aum.Status.BaremetalModelID = req.Hardware.BaremetalModelID
+		if selected != nil {
+			aum.Status.SelectedCores = selected.Hardware.TotalCores()
+			aum.Status.SelectedRAMGB = selected.Hardware.RAMGB()
+		}
+	}
 	if err := r.Status().Patch(ctx, aum, patch); err != nil {
 		return nil, fmt.Errorf("record server id %s: %w", server.ID, err)
 	}
@@ -225,12 +255,19 @@ func (r *ArsysUbuntuMachineReconciler) ensureUbuntuMachine(ctx context.Context, 
 			SSH:             ssh,
 		},
 	}
-	// Capacity is only known for cloud orders (vcore/ram); dedicated models
-	// leave it unconstrained.
-	if aum.Spec.Server.Type == arsysv1alpha1.ServerTypeCloud {
+	// Advertise capacity from the requested cloud size, or from an
+	// auto-selected dedicated model's real size (GB). An explicitly pinned
+	// dedicated model leaves it unconstrained.
+	switch {
+	case aum.Spec.Server.Type == arsysv1alpha1.ServerTypeCloud:
 		desired.Spec.Capacity = umv1alpha1.NodeResources{
 			CPU:    resource.MustParse(fmt.Sprintf("%d", aum.Spec.Server.VCore)),
 			Memory: resource.MustParse(fmt.Sprintf("%dGi", aum.Spec.Server.RAM)),
+		}
+	case aum.Status.SelectedCores > 0:
+		desired.Spec.Capacity = umv1alpha1.NodeResources{
+			CPU:    resource.MustParse(fmt.Sprintf("%d", aum.Status.SelectedCores)),
+			Memory: resource.MustParse(fmt.Sprintf("%dG", aum.Status.SelectedRAMGB)),
 		}
 	}
 	if err := controllerutil.SetControllerReference(aum, desired, r.Scheme); err != nil {
