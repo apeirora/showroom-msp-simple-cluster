@@ -2,14 +2,14 @@
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: gardener-sap-kubeconfig
+  name: sap-gardener-kubeconfig
 spec:
   refreshInterval: 15m0s
   secretStoreRef:
     kind: ClusterSecretStore
     name: vault-msp
   target:
-    name: gardener-sap-kubeconfig
+    name: sap-gardener-kubeconfig
     creationPolicy: Owner
   data:
     - secretKey: kubeconfig
@@ -23,7 +23,7 @@ spec:
 {{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
-  name: gardener-sap-ironcore
+  name: sap-gardener-ironcore
   labels:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
@@ -31,7 +31,7 @@ spec:
   target:
     namespace: garden-pm-cc-d2
     kubeconfigSecretRef:
-      name: gardener-sap-kubeconfig
+      name: sap-gardener-kubeconfig
       namespace: simple-cluster-system-scpc-configs
   inputs:
     - { name: cloudProfile, type: string,   default: ironcore,                    description: "Gardener CloudProfile name" }
@@ -103,7 +103,7 @@ spec:
 {{ `apiVersion: showroom.apeirora.eu/v1alpha1
 kind: SimpleClusterProviderConfig
 metadata:
-  name: gardener-sap-openstack
+  name: sap-gardener-openstack
   labels:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
@@ -111,7 +111,7 @@ spec:
   target:
     namespace: garden-pm-cc-d2
     kubeconfigSecretRef:
-      name: gardener-sap-kubeconfig
+      name: sap-gardener-kubeconfig
       namespace: simple-cluster-system-scpc-configs
   inputs:
     - { name: cloudProfile, type: string,   default: converged-cloud-ora-fp,      description: "Gardener CloudProfile name" }
