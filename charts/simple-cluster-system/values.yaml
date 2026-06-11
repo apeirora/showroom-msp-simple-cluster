@@ -33,3 +33,12 @@ simple-cluster-operator-ubuntu:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-ubuntu
         tag: "0.5.2"
+
+simple-cluster-operator-ironcore:
+  metrics:
+    enable: false
+  controllerManager:
+    container:
+      image:
+        repository: ghcr.io/apeirora/simple-cluster-operator-ironcore
+        tag: "0.5.2"

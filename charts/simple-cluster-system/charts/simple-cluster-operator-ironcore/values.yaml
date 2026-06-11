@@ -7,9 +7,7 @@ controllerManager:
       tag: latest
     imagePullPolicy: IfNotPresent
     args:
-      # Single-replica operator — leader election off (matches config/manager
-      # and avoids needing coordination.k8s.io/leases RBAC).
-      - "--leader-elect=false"
+      - "--leader-elect"
       - "--metrics-bind-address=:8443"
       - "--health-probe-bind-address=:8081"
     resources:
@@ -41,7 +39,7 @@ controllerManager:
     seccompProfile:
       type: RuntimeDefault
   terminationGracePeriodSeconds: 10
-  serviceAccountName: simple-cluster-ironcore-operator-controller-manager
+  serviceAccountName: simple-cluster-operator-ironcore-controller-manager
 
 # [RBAC]: To enable RBAC (Permissions) configurations
 rbac:
