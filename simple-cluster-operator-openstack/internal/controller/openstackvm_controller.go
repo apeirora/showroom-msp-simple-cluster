@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	requeueReady   = 2 * time.Minute
-	requeueWorking = 20 * time.Second
+	requeueReady    = 2 * time.Minute
+	requeueWorking  = 20 * time.Second
+	requeueDeleting = 10 * time.Second
 
 	sshSecretSuffix = "-ssh"
 )
@@ -231,24 +232,28 @@ func (r *OpenStackVMReconciler) reconcileDelete(ctx context.Context, vm *opensta
 	clients, err := r.openstackClients(ctx, vm)
 	if err != nil {
 		log.Error(err, "openstack auth during delete; retrying")
-		return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 	}
 
 	vmKey := openstack.VMKey(vm.Namespace, vm.Name)
 	server, err := openstack.FindByVM(ctx, clients.Compute, vmKey)
 	if err != nil {
 		log.Error(err, "find server during delete; retrying")
-		return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 	}
 	if server != nil {
-		if err := openstack.ReleaseFloatingIPsForServer(ctx, clients, server); err != nil {
-			log.Error(err, "release fips during delete; retrying", "server", server.Name)
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		if server.Status != "DELETING" {
+			if err := openstack.ReleaseFloatingIPsForServer(ctx, clients, server); err != nil {
+				log.Error(err, "release fips during delete; retrying", "server", server.Name)
+				return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+			}
+			if err := openstack.DeleteServer(ctx, clients.Compute, server.ID); err != nil {
+				log.Error(err, "delete server during delete; retrying", "server", server.Name)
+				return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+			}
 		}
-		if err := openstack.DeleteServer(ctx, clients.Compute, server.ID); err != nil {
-			log.Error(err, "delete server during delete; retrying", "server", server.Name)
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
-		}
+		// Server still present on Nova; wait until it is fully removed.
+		return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 	}
 
 	// Note: Nova keypair cleanup happens on Secret deletion via the
