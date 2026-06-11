@@ -68,12 +68,12 @@ func (in *SSHAuth) DeepCopyInto(out *SSHAuth) {
 	*out = *in
 	if in.PrivateKeySecretRef != nil {
 		in, out := &in.PrivateKeySecretRef, &out.PrivateKeySecretRef
-		*out = new(corev1.LocalObjectReference)
+		*out = new(corev1.SecretReference)
 		**out = **in
 	}
 	if in.PasswordSecretRef != nil {
 		in, out := &in.PasswordSecretRef, &out.PasswordSecretRef
-		*out = new(corev1.LocalObjectReference)
+		*out = new(corev1.SecretReference)
 		**out = **in
 	}
 }
