@@ -5,8 +5,15 @@ kind: ClusterRole
 metadata:
   labels:
     {{- include "chart.labels" . | nindent 4 }}
-  name: arsys-ubuntu-machine-operator-manager-role
+  name: simple-cluster-operator-ironcore-manager-role
 rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -20,9 +27,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - arsys.apeirora.eu
+  - ironcore.apeirora.eu
   resources:
-  - arsysubuntumachines
+  - ironcorevms
   verbs:
   - create
   - delete
@@ -32,29 +39,17 @@ rules:
   - update
   - watch
 - apiGroups:
-  - arsys.apeirora.eu
+  - ironcore.apeirora.eu
   resources:
-  - arsysubuntumachines/finalizers
+  - ironcorevms/finalizers
   verbs:
   - update
 - apiGroups:
-  - arsys.apeirora.eu
+  - ironcore.apeirora.eu
   resources:
-  - arsysubuntumachines/status
+  - ironcorevms/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - ubuntumachines.apeirora.eu
-  resources:
-  - ubuntumachines
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 {{- end -}}

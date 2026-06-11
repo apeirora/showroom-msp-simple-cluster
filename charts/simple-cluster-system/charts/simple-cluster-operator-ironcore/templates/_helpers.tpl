@@ -5,10 +5,10 @@
   {{- else if .Values.nameOverride }}
     {{ .Values.nameOverride | trunc 63 | trimSuffix "-" }}
   {{- else }}
-    arsys-ubuntu-machine-operator
+    simple-cluster-operator-ironcore
   {{- end }}
 {{- else }}
-  arsys-ubuntu-machine-operator
+  simple-cluster-operator-ironcore
 {{- end }}
 {{- end }}
 

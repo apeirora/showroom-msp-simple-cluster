@@ -8,7 +8,8 @@
 #     ├── simple-cluster-operator/
 #     ├── kind-cluster-operator/
 #     ├── simple-cluster-operator-openstack/
-#     └── simple-cluster-operator-ubuntu/
+#     ├── simple-cluster-operator-ubuntu/
+#     └── simple-cluster-operator-ironcore/
 #   charts/ubuntu-machines-operator/
 #
 # Usage:
@@ -25,6 +26,7 @@ declare -A REST_OPERATORS=(
   [simple-cluster-operator-kind]=simple-cluster-system/charts/kind-cluster-operator
   [simple-cluster-operator-openstack]=simple-cluster-system/charts/simple-cluster-operator-openstack
   [simple-cluster-operator-ubuntu]=simple-cluster-system/charts/simple-cluster-operator-ubuntu
+  [simple-cluster-operator-ironcore]=simple-cluster-system/charts/simple-cluster-operator-ironcore
 )
 
 regenerate_one() {
@@ -48,6 +50,6 @@ regenerate_one simple-cluster-operator-arsys arsys-ubuntu-machine-operator
 
 echo
 echo "OK. Charts regenerated:"
-echo "  charts/simple-cluster-system   (umbrella for the 4 simple-cluster-system operators)"
+echo "  charts/simple-cluster-system   (umbrella for the 5 simple-cluster-system operators)"
 echo "  charts/ubuntu-machines-operator"
 echo "  charts/arsys-ubuntu-machine-operator"
