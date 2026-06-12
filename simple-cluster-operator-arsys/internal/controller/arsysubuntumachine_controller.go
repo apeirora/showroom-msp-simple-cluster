@@ -22,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -34,6 +35,7 @@ import (
 
 const (
 	requeueReady        = 5 * time.Minute
+	requeueFailed       = 10 * time.Minute
 	requeueProvisioning = 20 * time.Second
 	requeueWorking      = 20 * time.Second
 	requeueDeleting     = 10 * time.Second
@@ -43,7 +45,8 @@ const (
 // CloudBuilder and registers each as a cluster-scoped UbuntuMachine it owns.
 type ArsysUbuntuMachineReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=arsys.apeirora.eu,resources=arsysubuntumachines,verbs=get;list;watch;create;update;patch;delete
@@ -51,6 +54,7 @@ type ArsysUbuntuMachineReconciler struct {
 // +kubebuilder:rbac:groups=arsys.apeirora.eu,resources=arsysubuntumachines/finalizers,verbs=update
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -102,7 +106,7 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	patch := client.MergeFrom(aum.DeepCopy())
-	aum.Status.Phase = arsysv1alpha1.PhaseReady
+	r.setPhase(&aum, arsysv1alpha1.PhaseReady)
 	aum.Status.ServerID = server.ID
 	aum.Status.Address = server.PrimaryIP()
 	aum.Status.MachineRef = machineName(&aum)
@@ -132,8 +136,41 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		return cl.GetServer(ctx, aum.Status.ServerID)
 	}
 
+	// Persist the intended server name once so it stays stable across retries.
+	name := aum.Status.ServerName
+	if name == "" {
+		name = serverName(aum)
+		patch := client.MergeFrom(aum.DeepCopy())
+		aum.Status.ServerName = name
+		if err := r.Status().Patch(ctx, aum, patch); err != nil {
+			return nil, fmt.Errorf("record server name: %w", err)
+		}
+	}
+
+	// Check whether a server with this name already exists before ordering.
+	// This recovers from a prior reconcile that created the server but failed
+	// to persist the status (avoiding REPEATED_PUBLIC_NAME on retry).
+	existing, err := cl.ListServers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list servers: %w", err)
+	}
+	for i := range existing {
+		if existing[i].Name == name {
+			log := logf.FromContext(ctx)
+			log.Info("adopting existing server by name", "id", existing[i].ID)
+			patch := client.MergeFrom(aum.DeepCopy())
+			aum.Status.ServerID = existing[i].ID
+			r.setPhase(aum, arsysv1alpha1.PhaseProvisioning)
+			if err := r.Status().Patch(ctx, aum, patch); err != nil {
+				return nil, fmt.Errorf("adopt server %s: %w", existing[i].ID, err)
+			}
+			return cl.GetServer(ctx, existing[i].ID)
+		}
+	}
+
+	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "CreatingServer", "ordering Arsys server %q", name)
 	req := arsys.CreateRequest{
-		Name:         serverName(aum),
+		Name:         name,
 		ApplianceID:  aum.Spec.Server.ApplianceID,
 		DatacenterID: aum.Spec.Server.DatacenterID,
 		SSHPassword:  true,
@@ -186,7 +223,7 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 
 	patch := client.MergeFrom(aum.DeepCopy())
 	aum.Status.ServerID = server.ID
-	aum.Status.Phase = arsysv1alpha1.PhaseProvisioning
+	r.setPhase(aum, arsysv1alpha1.PhaseProvisioning)
 	if aum.Spec.Server.Type != arsysv1alpha1.ServerTypeCloud {
 		aum.Status.BaremetalModelID = req.Hardware.BaremetalModelID
 		if selected != nil {
@@ -296,7 +333,7 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 	}
 	if aum.Status.Phase != arsysv1alpha1.PhaseDeleting {
 		patch := client.MergeFrom(aum.DeepCopy())
-		aum.Status.Phase = arsysv1alpha1.PhaseDeleting
+		r.setPhase(aum, arsysv1alpha1.PhaseDeleting)
 		_ = r.Status().Patch(ctx, aum, patch)
 	}
 
@@ -325,6 +362,7 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 			// 404 — server is already gone, proceed
 		} else {
 			if server.Status.State != arsys.StateRemoving {
+				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeletingServer", "deleting Arsys server %s", aum.Status.ServerID)
 				if err := cl.DeleteServer(ctx, aum.Status.ServerID); err != nil {
 					log.Error(err, "delete arsys server; retrying", "id", aum.Status.ServerID)
 					return ctrl.Result{RequeueAfter: requeueDeleting}, nil
@@ -361,7 +399,7 @@ func (r *ArsysUbuntuMachineReconciler) arsysClient(ctx context.Context, aum *ars
 
 func (r *ArsysUbuntuMachineReconciler) setProvisioning(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, server *arsys.Server) error {
 	patch := client.MergeFrom(aum.DeepCopy())
-	aum.Status.Phase = arsysv1alpha1.PhaseProvisioning
+	r.setPhase(aum, arsysv1alpha1.PhaseProvisioning)
 	aum.Status.ServerID = server.ID
 	aum.Status.Address = server.PrimaryIP()
 	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
@@ -375,7 +413,7 @@ func (r *ArsysUbuntuMachineReconciler) setProvisioning(ctx context.Context, aum 
 
 func (r *ArsysUbuntuMachineReconciler) fail(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, reason, msg string) (ctrl.Result, error) {
 	patch := client.MergeFrom(aum.DeepCopy())
-	aum.Status.Phase = arsysv1alpha1.PhaseFailed
+	r.setPhase(aum, arsysv1alpha1.PhaseFailed)
 	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
 		Type:    arsysv1alpha1.ConditionError,
 		Status:  metav1.ConditionTrue,
@@ -385,7 +423,21 @@ func (r *ArsysUbuntuMachineReconciler) fail(ctx context.Context, aum *arsysv1alp
 	if err := r.Status().Patch(ctx, aum, patch); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: requeueWorking}, nil
+	return ctrl.Result{RequeueAfter: requeueFailed}, nil
+}
+
+// setPhase updates aum.Status.Phase and emits a PhaseTransition event if the
+// phase actually changed. Call before the status patch that persists the change.
+func (r *ArsysUbuntuMachineReconciler) setPhase(aum *arsysv1alpha1.ArsysUbuntuMachine, p arsysv1alpha1.Phase) {
+	if aum.Status.Phase == p {
+		return
+	}
+	eventType := corev1.EventTypeNormal
+	if p == arsysv1alpha1.PhaseFailed {
+		eventType = corev1.EventTypeWarning
+	}
+	r.Recorder.Eventf(aum, eventType, "PhaseTransition", "%s -> %s", aum.Status.Phase, p)
+	aum.Status.Phase = p
 }
 
 // machineName is the 1:1 name of the UbuntuMachine for this CR.
@@ -393,12 +445,23 @@ func machineName(aum *arsysv1alpha1.ArsysUbuntuMachine) string {
 	return aum.Name
 }
 
-// serverName is the Arsys server name (spec override or CR name).
+// serverName is the Arsys server name. When spec.server.name is set the caller
+// controls uniqueness; otherwise the CR name is combined with the first 8
+// characters of the UID so that recreating a CR with the same name produces a
+// distinct Arsys server name.
 func serverName(aum *arsysv1alpha1.ArsysUbuntuMachine) string {
 	if aum.Spec.Server.Name != "" {
 		return aum.Spec.Server.Name
 	}
-	return aum.Name
+	base := aum.Name
+	if len(base) > 41 {
+		base = base[:41]
+	}
+	uid := string(aum.UID)
+	if len(uid) > 8 {
+		uid = uid[:8]
+	}
+	return base + "-" + uid
 }
 
 // copyLabels duplicates the CR's labels onto the UbuntuMachine.
@@ -414,6 +477,7 @@ func copyLabels(in map[string]string) map[string]string {
 }
 
 func (r *ArsysUbuntuMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.Recorder = mgr.GetEventRecorderFor("arsysubuntumachine-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&arsysv1alpha1.ArsysUbuntuMachine{}).
 		Owns(&umv1alpha1.UbuntuMachine{}).
