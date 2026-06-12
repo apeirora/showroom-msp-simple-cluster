@@ -202,6 +202,15 @@ type HDD struct {
 	IsMain bool  `json:"is_main"`
 }
 
+// ListServers returns all servers in the account (GET /servers).
+func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
+	var out []Server
+	if err := c.do(ctx, http.MethodGet, "/servers", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CreateServer orders a dedicated server (POST /servers). The returned
 // Server carries the id and first_password; provisioning is asynchronous.
 func (c *Client) CreateServer(ctx context.Context, req CreateRequest) (*Server, error) {

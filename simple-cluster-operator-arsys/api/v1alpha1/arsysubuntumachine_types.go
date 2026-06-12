@@ -145,6 +145,11 @@ type ArsysUbuntuMachineStatus struct {
 	// +optional
 	ServerID string `json:"serverID,omitempty"`
 
+	// ServerName is the Arsys server name used for this CR. Written once before
+	// the first create attempt so it remains stable across retries.
+	// +optional
+	ServerName string `json:"serverName,omitempty"`
+
 	// BaremetalModelID is the dedicated model the server was ordered with.
 	// When spec.server.baremetalModelID was empty this is the auto-selected
 	// smallest model that met vcore/ram in the datacenter.
