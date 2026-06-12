@@ -26,7 +26,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
 spec:
   target:
-    namespace: project_placeholder
+    namespace: garden-sap
     kubeconfigSecretRef:
       name: dati-kubeconfig
       namespace: simple-cluster-system-scpc-configs
