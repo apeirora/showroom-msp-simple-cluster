@@ -13,6 +13,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -89,6 +91,11 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 	// Order the server once, then poll it to readiness.
 	server, err := r.ensureServer(ctx, &aum, cl)
 	if err != nil {
+		if isTransientServerError(err) {
+			log.Info("transient server error, will retry", "err", err)
+			r.Recorder.Eventf(&aum, corev1.EventTypeWarning, "TransientError", err.Error())
+			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		}
 		return r.fail(ctx, &aum, "ServerError", err.Error())
 	}
 
@@ -425,6 +432,20 @@ func (r *ArsysUbuntuMachineReconciler) setProvisioning(ctx context.Context, aum 
 		Message: fmt.Sprintf("server %s state=%s (%d%%)", server.ID, server.Status.State, server.Status.Percent),
 	})
 	return r.Status().Patch(ctx, aum, patch)
+}
+
+// isTransientServerError returns true for API errors that should be retried
+// without transitioning to Failed: 429 rate-limit and 400 REPEATED_PUBLIC_NAME
+// (name collision from a prior reconcile that lost its status write).
+func isTransientServerError(err error) bool {
+	apiErr, ok := err.(*arsys.APIError)
+	if !ok {
+		return false
+	}
+	if apiErr.StatusCode == http.StatusTooManyRequests {
+		return true
+	}
+	return apiErr.StatusCode == http.StatusBadRequest && strings.Contains(apiErr.Body, "REPEATED_PUBLIC_NAME")
 }
 
 func (r *ArsysUbuntuMachineReconciler) fail(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, reason, msg string) (ctrl.Result, error) {
