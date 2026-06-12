@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.3...v0.10.4) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: dati config fix ([6cc79a6](https://github.com/apeirora/showroom-simple-cluster/commit/6cc79a64b5cbc40c28fc92f6ec31a824dc3d69f8))
+* SimpleCluster: update status ([5603178](https://github.com/apeirora/showroom-simple-cluster/commit/56031783fe46aad27b19b9e6dad692176ec89c4c))
+
 ## [0.10.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.2...v0.10.3) (2026-06-12)
 
 
