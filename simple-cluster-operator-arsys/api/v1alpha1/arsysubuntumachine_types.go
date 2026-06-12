@@ -177,6 +177,12 @@ type ArsysUbuntuMachineStatus struct {
 	// +optional
 	MachineRef string `json:"machineRef,omitempty"`
 
+	// TransientErrors counts consecutive transient errors (e.g. REPEATED_PUBLIC_NAME).
+	// Reset to zero on the first successful reconcile; escalates to Failed once it
+	// reaches the failure threshold.
+	// +optional
+	TransientErrors int `json:"transientErrors,omitempty"`
+
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
