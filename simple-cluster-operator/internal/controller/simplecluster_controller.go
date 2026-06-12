@@ -440,13 +440,6 @@ func setResourceCondition(sc *showroomv1alpha1.SimpleCluster, name string, statu
 func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	if !controllerutil.ContainsFinalizer(sc, showroomv1alpha1.FinalizerName) {
-		return ctrl.Result{}, nil
-	}
-
-	// Mark every tracked resource as Deleting so observers can see the
-	// cascade in flight. Best-effort: if the patch fails the deletion
-	// proceeds anyway.
 	if sc.Status.Phase != showroomv1alpha1.PhaseDeleting {
 		patch := client.MergeFrom(sc.DeepCopy())
 		sc.Status.Phase = showroomv1alpha1.PhaseDeleting
@@ -457,6 +450,10 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 		if err := r.Status().Patch(ctx, sc, patch); err != nil {
 			log.Error(err, "patch SC status to Deleting failed; proceeding")
 		}
+	}
+
+	if !controllerutil.ContainsFinalizer(sc, showroomv1alpha1.FinalizerName) {
+		return ctrl.Result{}, nil
 	}
 
 	scpcRef := sc.Status.ProviderConfigRef
