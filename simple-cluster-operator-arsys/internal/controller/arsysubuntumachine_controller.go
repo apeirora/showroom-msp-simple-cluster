@@ -116,6 +116,7 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 	r.setPhase(&aum, arsysv1alpha1.PhaseReady)
 	aum.Status.ServerID = server.ID
 	aum.Status.Address = server.PrimaryIP()
+	aum.Status.ProvisioningPercent = 0
 	aum.Status.MachineRef = machineName(&aum)
 	aum.Status.ObservedGeneration = aum.Generation
 	readyMsg := fmt.Sprintf("server %s up at %s; UbuntuMachine %q registered", server.ID, server.PrimaryIP(), machineName(&aum))
@@ -375,20 +376,39 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 	}
 
 	// Cancel the dedicated server and wait until it is confirmed removed from Arsys.
-	if aum.Status.ServerID != "" {
-		server, err := cl.GetServer(ctx, aum.Status.ServerID)
+	// If ServerID is missing but ServerName is known, resolve the ID via ListServers.
+	serverID := aum.Status.ServerID
+	if serverID == "" && aum.Status.ServerName != "" {
+		servers, err := cl.ListServers(ctx)
+		if err != nil {
+			log.Error(err, "list servers during delete; retrying")
+			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+		}
+		for i := range servers {
+			if servers[i].Name == aum.Status.ServerName {
+				serverID = servers[i].ID
+				break
+			}
+		}
+	}
+	if serverID != "" {
+		server, err := cl.GetServer(ctx, serverID)
 		if err != nil {
 			if apiErr, ok := err.(*arsys.APIError); !ok || apiErr.StatusCode != 404 {
-				log.Error(err, "get arsys server during delete; retrying", "id", aum.Status.ServerID)
+				log.Error(err, "get arsys server during delete; retrying", "id", serverID)
 				return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 			}
 			// 404 — server is already gone, proceed
 		} else {
 			if server.Status.State != arsys.StateRemoving {
-				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeletingServer", "deleting Arsys server %s", aum.Status.ServerID)
-				if err := cl.DeleteServer(ctx, aum.Status.ServerID); err != nil {
-					log.Error(err, "delete arsys server; retrying", "id", aum.Status.ServerID)
-					return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeletingServer", "deleting Arsys server %s", serverID)
+				if err := cl.DeleteServer(ctx, serverID); err != nil {
+					if apiErr, ok := err.(*arsys.APIError); !ok || apiErr.StatusCode != 404 {
+						log.Error(err, "delete arsys server; retrying", "id", serverID)
+						return ctrl.Result{RequeueAfter: requeueDeleting}, nil
+					}
+					// 404 — already gone, requeue so GetServer 404 path proceeds to finalizer removal
+					return ctrl.Result{Requeue: true}, nil
 				}
 			}
 			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
@@ -425,6 +445,7 @@ func (r *ArsysUbuntuMachineReconciler) setProvisioning(ctx context.Context, aum 
 	r.setPhase(aum, arsysv1alpha1.PhaseProvisioning)
 	aum.Status.ServerID = server.ID
 	aum.Status.Address = server.PrimaryIP()
+	aum.Status.ProvisioningPercent = server.Status.Percent
 	apimeta.SetStatusCondition(&aum.Status.Conditions, metav1.Condition{
 		Type:    arsysv1alpha1.ConditionReady,
 		Status:  metav1.ConditionFalse,

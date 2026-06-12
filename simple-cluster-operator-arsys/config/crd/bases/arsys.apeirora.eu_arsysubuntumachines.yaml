@@ -23,6 +23,9 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .status.provisioningPercent
+      name: Progress
+      type: integer
     - jsonPath: .status.serverID
       name: Server
       type: string
@@ -149,8 +152,10 @@ spec:
                 - datacenterID
                 type: object
                 x-kubernetes-validations:
-                - message: dedicated requires baremetalModelID, or vcore and ram to auto-select the smallest model
-                  rule: self.type != 'dedicated' || (has(self.baremetalModelID) && self.baremetalModelID != '') || (has(self.vcore) && has(self.ram))
+                - message: dedicated requires baremetalModelID, or vcore and ram to
+                    auto-select the smallest model
+                  rule: self.type != 'dedicated' || (has(self.baremetalModelID) &&
+                    self.baremetalModelID != '') || (has(self.vcore) && has(self.ram))
                 - message: vcore, ram and disk are required when type is cloud
                   rule: self.type != 'cloud' || (has(self.vcore) && has(self.ram)
                     && has(self.disk))
@@ -273,6 +278,11 @@ spec:
                 - Failed
                 - Deleting
                 type: string
+              provisioningPercent:
+                description: |-
+                  ProvisioningPercent is the server build progress reported by the Arsys API (0-100).
+                  Cleared once the server reaches Ready.
+                type: integer
               selectedCores:
                 description: |-
                   SelectedCores and SelectedRAMGB are the auto-selected model's actual
@@ -286,6 +296,11 @@ spec:
               serverID:
                 description: ServerID is the Arsys server id, set once the order is
                   accepted.
+                type: string
+              serverName:
+                description: |-
+                  ServerName is the Arsys server name used for this CR. Written once before
+                  the first create attempt so it remains stable across retries.
                 type: string
             type: object
         required:
