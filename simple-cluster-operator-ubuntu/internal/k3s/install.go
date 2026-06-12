@@ -45,6 +45,12 @@ type InstallOptions struct {
 	// kube-apiserver and kubelet to the host's internal address so
 	// they don't fall back to localhost or the default route IP.
 	NodeIP string
+	// NodeExternalIP, when non-empty, becomes `--node-external-ip=<value>`
+	// (server and agent). Registers the host's public address on the Node
+	// so k3s ServiceLB advertises it in LoadBalancer Service status —
+	// without it, Services on hosts with floating IPs publish only the
+	// private address and stay unreachable from outside the provider network.
+	NodeExternalIP string
 }
 
 // InstallServerBootstrap runs `k3s server --cluster-init` on the first
@@ -199,7 +205,8 @@ func runInstallScript(ctx context.Context, c *ssh.Client, opts InstallOptions, a
 }
 
 // serverArgs builds the k3s server flag tail: user's ExtraArgs +
-// --tls-san + --node-ip + --advertise-address when each is set.
+// --tls-san + --node-ip + --advertise-address + --node-external-ip
+// when each is set.
 func serverArgs(opts InstallOptions) []string {
 	out := append([]string{}, opts.ExtraArgs...)
 	if opts.TLSSAN != "" {
@@ -208,15 +215,21 @@ func serverArgs(opts InstallOptions) []string {
 	if opts.NodeIP != "" {
 		out = append(out, "--node-ip="+opts.NodeIP, "--advertise-address="+opts.NodeIP)
 	}
+	if opts.NodeExternalIP != "" {
+		out = append(out, "--node-external-ip="+opts.NodeExternalIP)
+	}
 	return out
 }
 
 // agentArgs builds the k3s agent flag tail: user's ExtraArgs +
-// --node-ip when set.
+// --node-ip + --node-external-ip when each is set.
 func agentArgs(opts InstallOptions) []string {
 	out := append([]string{}, opts.ExtraArgs...)
 	if opts.NodeIP != "" {
 		out = append(out, "--node-ip="+opts.NodeIP)
+	}
+	if opts.NodeExternalIP != "" {
+		out = append(out, "--node-external-ip="+opts.NodeExternalIP)
 	}
 	return out
 }
