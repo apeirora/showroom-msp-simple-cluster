@@ -41,7 +41,12 @@ const (
 	requeueFailed       = 10 * time.Minute
 	requeueProvisioning = 20 * time.Second
 	requeueWorking      = 20 * time.Second
+	requeueTransient    = 1 * time.Minute
 	requeueDeleting     = 10 * time.Second
+
+	// transientFailureThreshold is the number of consecutive transient errors
+	// after which the machine is moved to Failed rather than silently retried.
+	transientFailureThreshold = 5
 )
 
 // ArsysUbuntuMachineReconciler orders dedicated servers from Arsys
@@ -93,9 +98,17 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 	server, err := r.ensureServer(ctx, &aum, cl)
 	if err != nil {
 		if isTransientServerError(err) {
-			log.Info("transient server error, will retry", "err", err)
-			r.Recorder.Eventf(&aum, corev1.EventTypeWarning, "TransientError", err.Error())
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+			patch := client.MergeFrom(aum.DeepCopy())
+			aum.Status.TransientErrors++
+			log.Info("transient server error", "err", err, "attempt", aum.Status.TransientErrors)
+			r.Recorder.Eventf(&aum, corev1.EventTypeWarning, "TransientError",
+				"attempt %d: %s", aum.Status.TransientErrors, err.Error())
+			if aum.Status.TransientErrors >= transientFailureThreshold {
+				return r.fail(ctx, &aum, "TooManyRetries",
+					fmt.Sprintf("giving up after %d transient errors: %v", aum.Status.TransientErrors, err))
+			}
+			_ = r.Status().Patch(ctx, &aum, patch)
+			return ctrl.Result{RequeueAfter: requeueTransient}, nil
 		}
 		return r.fail(ctx, &aum, "ServerError", err.Error())
 	}
@@ -118,6 +131,7 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 	aum.Status.ServerID = server.ID
 	aum.Status.Address = server.PrimaryIP()
 	aum.Status.ProvisioningPercent = 0
+	aum.Status.TransientErrors = 0
 	aum.Status.MachineRef = machineName(&aum)
 	aum.Status.ObservedGeneration = aum.Generation
 	readyMsg := fmt.Sprintf("server %s up at %s; UbuntuMachine %q registered", server.ID, server.PrimaryIP(), machineName(&aum))
@@ -144,8 +158,11 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 	if aum.Status.ServerID != "" {
 		server, err := cl.GetServer(ctx, aum.Status.ServerID)
 		if err == nil {
+			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "GetServer",
+				"server %s state=%s progress=%d%%", server.ID, server.Status.State, server.Status.Percent)
 			return server, nil
 		}
+		r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "GetServer %s: %v", aum.Status.ServerID, err)
 		// If the server is gone in Arsys (404), clear the ID and fall through to
 		// the name-based lookup so we can detect a re-ordered server or create
 		// a new one rather than looping on 404 forever.
@@ -177,9 +194,11 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 	// to persist the status (avoiding REPEATED_PUBLIC_NAME on retry).
 	existing, err := cl.ListServers(ctx)
 	if err != nil {
+		r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "ListServers: %v", err)
 		return nil, fmt.Errorf("list servers: %w", err)
 	}
 	log := logf.FromContext(ctx)
+	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "ListServers", "listed %d servers", len(existing))
 	log.Info("pre-create server name check", "lookingFor", name, "crName", aum.Name, "found", len(existing))
 	for i := range existing {
 		// Primary match: the name we computed (includes UID suffix). Secondary
@@ -187,6 +206,8 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		// that did not append the UID suffix.
 		if existing[i].Name == name || (existing[i].Name == aum.Name && aum.Spec.Server.Name == "") {
 			log.Info("adopting existing server by name", "id", existing[i].ID, "serverName", existing[i].Name)
+			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "AdoptServer",
+				"adopting existing server %s (id=%s)", existing[i].Name, existing[i].ID)
 			patch := client.MergeFrom(aum.DeepCopy())
 			aum.Status.ServerID = existing[i].ID
 			aum.Status.ServerName = existing[i].Name
@@ -194,11 +215,19 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 			if err := r.Status().Patch(ctx, aum, patch); err != nil {
 				return nil, fmt.Errorf("adopt server %s: %w", existing[i].ID, err)
 			}
-			return cl.GetServer(ctx, existing[i].ID)
+			srv, err := cl.GetServer(ctx, existing[i].ID)
+			if err != nil {
+				r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError",
+					"GetServer %s: %v", existing[i].ID, err)
+				return nil, err
+			}
+			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "GetServer",
+				"server %s state=%s progress=%d%%", srv.ID, srv.Status.State, srv.Status.Percent)
+			return srv, nil
 		}
 	}
 
-	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "CreatingServer", "ordering Arsys server %q", name)
+	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "CreateServer", "ordering Arsys server %q", name)
 	req := arsys.CreateRequest{
 		Name:         name,
 		ApplianceID:  aum.Spec.Server.ApplianceID,
@@ -240,8 +269,11 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 	}
 	server, err := cl.CreateServer(ctx, req)
 	if err != nil {
+		r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "CreateServer %q: %v", name, err)
 		return nil, fmt.Errorf("create server: %w", err)
 	}
+	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "CreateServer", "server %q created: id=%s state=%s",
+		name, server.ID, server.Status.State)
 
 	// first_password is only returned on create — write it to the
 	// password Secret now, before the status write, so a crash can't lose it.
@@ -407,8 +439,9 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 			// 404 — server is already gone, proceed
 		} else {
 			if server.Status.State != arsys.StateRemoving {
-				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeletingServer", "deleting Arsys server %s", serverID)
+				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "deleting Arsys server %s", serverID)
 				if err := cl.DeleteServer(ctx, serverID); err != nil {
+					r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "DeleteServer %s: %v", serverID, err)
 					if apiErr, ok := err.(*arsys.APIError); !ok || apiErr.StatusCode != 404 {
 						log.Error(err, "delete arsys server; retrying", "id", serverID)
 						return ctrl.Result{RequeueAfter: requeueDeleting}, nil
