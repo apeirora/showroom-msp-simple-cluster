@@ -109,6 +109,12 @@ spec:
         apiVersion: ubuntu.apeirora.eu/v1alpha1
         kind: UbuntuCluster
         spec:
+          # Register the bootstrap CP's floating IP on its k3s node so
+          # ServiceLB advertises a publicly reachable address for
+          # LoadBalancer Services (PrivateLLM BYOC endpoint). Single-CP
+          # assumption: only vmcp[0] carries the address.
+          k3sServerArgs:
+            - --node-external-ip={{ (index .Resources.vmcp 0).status.externalAddress }}
           ssh:
             user: eouser
             privateKeySecretRef:
