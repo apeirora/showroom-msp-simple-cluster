@@ -164,6 +164,11 @@ type ArsysUbuntuMachineStatus struct {
 	// +optional
 	SelectedRAMGB int32 `json:"selectedRAMGB,omitempty"`
 
+	// ProvisioningPercent is the server build progress reported by the Arsys API (0-100).
+	// Cleared once the server reaches Ready.
+	// +optional
+	ProvisioningPercent int `json:"provisioningPercent,omitempty"`
+
 	// Address is the server's public IP once assigned.
 	// +optional
 	Address string `json:"address,omitempty"`
@@ -186,6 +191,7 @@ type ArsysUbuntuMachineStatus struct {
 // +kubebuilder:resource:scope=Cluster,shortName=aum
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.server.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Progress",type=integer,JSONPath=`.status.provisioningPercent`
 // +kubebuilder:printcolumn:name="Server",type=string,JSONPath=`.status.serverID`
 // +kubebuilder:printcolumn:name="Address",type=string,JSONPath=`.status.address`
 // +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.status.machineRef`
