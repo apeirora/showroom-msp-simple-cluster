@@ -162,11 +162,10 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"installing k3s server (bootstrap) on %s", bootstrap.Name)
 		log.Info("installing k3s server (bootstrap)", "host", bootstrap.Name)
 		if err := k3s.InstallServerBootstrap(ctx, bootstrapClient, k3s.InstallOptions{
-			Version:        k3sVer,
-			ExtraArgs:      cluster.Spec.K3sServerArgs,
-			TLSSAN:         hostOnly(endpoint),
-			NodeIP:         bootstrap.Address,
-			NodeExternalIP: bootstrap.ExternalAddress,
+			Version:   k3sVer,
+			ExtraArgs: cluster.Spec.K3sServerArgs,
+			TLSSAN:    hostOnly(endpoint),
+			NodeIP:    bootstrap.Address,
 		}); err != nil {
 			failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
 			return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
@@ -221,11 +220,10 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"control-plane join %s (%s)", h.Name, h.Address)
 		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, cred, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
 			return k3s.InstallServerJoin(ctx, c, k3s.InstallOptions{
-				Version:        k3sVer,
-				ExtraArgs:      cluster.Spec.K3sServerArgs,
-				TLSSAN:         hostOnly(endpoint),
-				NodeIP:         h.Address,
-				NodeExternalIP: h.ExternalAddress,
+				Version:   k3sVer,
+				ExtraArgs: cluster.Spec.K3sServerArgs,
+				TLSSAN:    hostOnly(endpoint),
+				NodeIP:    h.Address,
 			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
@@ -245,10 +243,9 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"worker join %s (%s)", h.Name, h.Address)
 		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, cred, ubuntuv1alpha1.RoleWorker, func(c *sshpkg.Client) error {
 			return k3s.InstallAgent(ctx, c, k3s.InstallOptions{
-				Version:        k3sVer,
-				ExtraArgs:      cluster.Spec.K3sAgentArgs,
-				NodeIP:         h.Address,
-				NodeExternalIP: h.ExternalAddress,
+				Version:   k3sVer,
+				ExtraArgs: cluster.Spec.K3sAgentArgs,
+				NodeIP:    h.Address,
 			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{

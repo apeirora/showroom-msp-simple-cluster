@@ -12,14 +12,14 @@ You may obtain a copy of the License at
 // Ubuntu host into a working k3s server or agent. Everything goes
 // through one of:
 //
-//	InstallServerBootstrap  — first CP, `k3s server --cluster-init`
-//	InstallServerJoin       — additional CP, joins via the bootstrap CP
-//	InstallAgent            — workers
-//	FetchToken              — read /var/lib/rancher/k3s/server/node-token
-//	FetchKubeconfig         — read /etc/rancher/k3s/k3s.yaml + rewrite the API URL
-//	UninstallServer / UninstallAgent — k3s-uninstall.sh / k3s-agent-uninstall.sh
-//	IsInstalled             — `which k3s` probe
-//	ReportedVersion         — `k3s --version` parsed
+//   InstallServerBootstrap  — first CP, `k3s server --cluster-init`
+//   InstallServerJoin       — additional CP, joins via the bootstrap CP
+//   InstallAgent            — workers
+//   FetchToken              — read /var/lib/rancher/k3s/server/node-token
+//   FetchKubeconfig         — read /etc/rancher/k3s/k3s.yaml + rewrite the API URL
+//   UninstallServer / UninstallAgent — k3s-uninstall.sh / k3s-agent-uninstall.sh
+//   IsInstalled             — `which k3s` probe
+//   ReportedVersion         — `k3s --version` parsed
 package k3s
 
 import (
@@ -45,13 +45,6 @@ type InstallOptions struct {
 	// kube-apiserver and kubelet to the host's internal address so
 	// they don't fall back to localhost or the default route IP.
 	NodeIP string
-	// NodeExternalIP, when non-empty, becomes
-	// `--node-external-ip=<value>` (server and agent). Registers the
-	// host's public address on the Node so k3s ServiceLB advertises it
-	// in LoadBalancer Service status — without it, Services on hosts
-	// with floating IPs publish only the private address and stay
-	// unreachable from outside the provider network.
-	NodeExternalIP string
 }
 
 // InstallServerBootstrap runs `k3s server --cluster-init` on the first
@@ -206,8 +199,7 @@ func runInstallScript(ctx context.Context, c *ssh.Client, opts InstallOptions, a
 }
 
 // serverArgs builds the k3s server flag tail: user's ExtraArgs +
-// --tls-san + --node-ip + --advertise-address + --node-external-ip
-// when each is set.
+// --tls-san + --node-ip + --advertise-address when each is set.
 func serverArgs(opts InstallOptions) []string {
 	out := append([]string{}, opts.ExtraArgs...)
 	if opts.TLSSAN != "" {
@@ -216,21 +208,15 @@ func serverArgs(opts InstallOptions) []string {
 	if opts.NodeIP != "" {
 		out = append(out, "--node-ip="+opts.NodeIP, "--advertise-address="+opts.NodeIP)
 	}
-	if opts.NodeExternalIP != "" {
-		out = append(out, "--node-external-ip="+opts.NodeExternalIP)
-	}
 	return out
 }
 
 // agentArgs builds the k3s agent flag tail: user's ExtraArgs +
-// --node-ip + --node-external-ip when each is set.
+// --node-ip when set.
 func agentArgs(opts InstallOptions) []string {
 	out := append([]string{}, opts.ExtraArgs...)
 	if opts.NodeIP != "" {
 		out = append(out, "--node-ip="+opts.NodeIP)
-	}
-	if opts.NodeExternalIP != "" {
-		out = append(out, "--node-external-ip="+opts.NodeExternalIP)
 	}
 	return out
 }
