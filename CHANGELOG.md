@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.2...v0.10.3) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: arsys update status from API to resource ([7bf8a9c](https://github.com/apeirora/showroom-simple-cluster/commit/7bf8a9c8e37a18be911e63fd75c0542c15d3c19b))
+
 ## [0.10.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.1...v0.10.2) (2026-06-12)
 
 
