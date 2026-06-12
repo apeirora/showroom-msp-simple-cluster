@@ -101,14 +101,14 @@ spec:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
               - name: cp-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
-                externalAddress: {{ $vm.status.externalAddress }}
+                address: {{ $vm.status.address }}
+                externalAddress: {{ $vm.status.address }}
               {{- end }}
           workers:
             hosts:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
+                address: {{ $vm.status.address }}
               {{- end }}
 
   kubeconfigSource:
@@ -206,14 +206,14 @@ spec:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
               - name: cp-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
-                externalAddress: {{ $vm.status.externalAddress }}
+                address: {{ $vm.status.address }}
+                externalAddress: {{ $vm.status.address }}
               {{- end }}
           workers:
             hosts:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
+                address: {{ $vm.status.address }}
               {{- end }}
 
   kubeconfigSource:
