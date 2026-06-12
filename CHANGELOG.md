@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.5...v0.11.0) (2026-06-12)
+
+
+### Features
+
+* **controller:** register host external IPs on k3s nodes ([#26](https://github.com/apeirora/showroom-simple-cluster/issues/26)) ([271f5b1](https://github.com/apeirora/showroom-simple-cluster/commit/271f5b155d5222480a7f18a473a913f615a7e4de))
+
+
+### Bug Fixes
+
+* SimpleCluster: arsysubuntumachine with progress ([f21e001](https://github.com/apeirora/showroom-simple-cluster/commit/f21e001c52e1f21980c77283d1131fdc90d6ea27))
+
 ## [0.10.5](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.4...v0.10.5) (2026-06-12)
 
 
