@@ -133,7 +133,23 @@ func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.R
 // its current state.
 func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine, cl *arsys.Client) (*arsys.Server, error) {
 	if aum.Status.ServerID != "" {
-		return cl.GetServer(ctx, aum.Status.ServerID)
+		server, err := cl.GetServer(ctx, aum.Status.ServerID)
+		if err == nil {
+			return server, nil
+		}
+		// If the server is gone in Arsys (404), clear the ID and fall through to
+		// the name-based lookup so we can detect a re-ordered server or create
+		// a new one rather than looping on 404 forever.
+		if apiErr, ok := err.(*arsys.APIError); !ok || apiErr.StatusCode != 404 {
+			return nil, err
+		}
+		log := logf.FromContext(ctx)
+		log.Info("server not found by ID, clearing and retrying by name", "id", aum.Status.ServerID)
+		patch := client.MergeFrom(aum.DeepCopy())
+		aum.Status.ServerID = ""
+		if err := r.Status().Patch(ctx, aum, patch); err != nil {
+			return nil, fmt.Errorf("clear stale server id: %w", err)
+		}
 	}
 
 	// Persist the intended server name once so it stays stable across retries.
