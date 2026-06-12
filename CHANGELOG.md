@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.5](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.4...v0.10.5) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: config version ([dd985cf](https://github.com/apeirora/showroom-simple-cluster/commit/dd985cff80975c51d84bed0134e1e849d098623f))
+* SimpleCluster: too many request should not change state to field. ([9c317e4](https://github.com/apeirora/showroom-simple-cluster/commit/9c317e4985f7bc4848d557268201f04a1979cfbf))
+
 ## [0.10.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.3...v0.10.4) (2026-06-12)
 
 
