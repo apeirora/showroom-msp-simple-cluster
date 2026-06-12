@@ -12,6 +12,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -178,12 +179,17 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 	if err != nil {
 		return nil, fmt.Errorf("list servers: %w", err)
 	}
+	log := logf.FromContext(ctx)
+	log.Info("pre-create server name check", "lookingFor", name, "crName", aum.Name, "found", len(existing))
 	for i := range existing {
-		if existing[i].Name == name {
-			log := logf.FromContext(ctx)
-			log.Info("adopting existing server by name", "id", existing[i].ID)
+		// Primary match: the name we computed (includes UID suffix). Secondary
+		// match: bare CR name, for servers created by an older operator version
+		// that did not append the UID suffix.
+		if existing[i].Name == name || (existing[i].Name == aum.Name && aum.Spec.Server.Name == "") {
+			log.Info("adopting existing server by name", "id", existing[i].ID, "serverName", existing[i].Name)
 			patch := client.MergeFrom(aum.DeepCopy())
 			aum.Status.ServerID = existing[i].ID
+			aum.Status.ServerName = existing[i].Name
 			r.setPhase(aum, arsysv1alpha1.PhaseProvisioning)
 			if err := r.Status().Patch(ctx, aum, patch); err != nil {
 				return nil, fmt.Errorf("adopt server %s: %w", existing[i].ID, err)
@@ -459,8 +465,8 @@ func (r *ArsysUbuntuMachineReconciler) setProvisioning(ctx context.Context, aum 
 // without transitioning to Failed: 429 rate-limit and 400 REPEATED_PUBLIC_NAME
 // (name collision from a prior reconcile that lost its status write).
 func isTransientServerError(err error) bool {
-	apiErr, ok := err.(*arsys.APIError)
-	if !ok {
+	var apiErr *arsys.APIError
+	if !errors.As(err, &apiErr) {
 		return false
 	}
 	if apiErr.StatusCode == http.StatusTooManyRequests {
