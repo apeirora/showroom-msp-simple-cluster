@@ -47,6 +47,10 @@ done
 
 regenerate_one ubuntu-machines ubuntu-machines-operator
 regenerate_one simple-cluster-operator-arsys arsys-ubuntu-machine-operator
+# The kubebuilder helm plugin produces a metrics service name that is 64 chars
+# (one over the Kubernetes 63-char limit). Shorten it by dropping "-controller-manager".
+find charts/arsys-ubuntu-machine-operator/templates -name "*.yaml" -exec \
+  sed -i 's/arsys-ubuntu-machine-operator-controller-manager-metrics-service/arsys-ubuntu-machine-operator-metrics-service/g' {} +
 
 echo
 echo "OK. Charts regenerated:"
