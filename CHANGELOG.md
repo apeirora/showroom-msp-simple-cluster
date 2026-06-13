@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.14.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.2...v0.14.0) (2026-06-13)
+
+
+### Features
+
+* inject SSH public key from Secret into Arsys server at order time ([ab9cc89](https://github.com/apeirora/showroom-simple-cluster/commit/ab9cc89a4d6340c34d80f27fb3c98654913d8d58))
+
+
+### Bug Fixes
+
+* add leases and events RBAC to arsys-ubuntu-machine-operator ([15d4b07](https://github.com/apeirora/showroom-simple-cluster/commit/15d4b078a2bcc1bf623eb872ee9ec662c7b58ee9))
+* add leases RBAC to ubuntu-machines-operator ([4f3fb99](https://github.com/apeirora/showroom-simple-cluster/commit/4f3fb9963e7fce0ea1497c8821f083f57d51ccd7))
+* cloudferro - workers public IP ([f317562](https://github.com/apeirora/showroom-simple-cluster/commit/f3175626647378e71b8552a7b5d2ec927780034e))
+* machine name CRD ([a3b3653](https://github.com/apeirora/showroom-simple-cluster/commit/a3b3653d17204bcb52b7d24f291378cb0393cb08))
+* MACHINE printcolumn shows status.serverName ([f2be041](https://github.com/apeirora/showroom-simple-cluster/commit/f2be0413fb0292556f55f60b99cf5944782d20d6))
+* remove AUM finalizer when Arsys server is already REMOVING ([9b9959c](https://github.com/apeirora/showroom-simple-cluster/commit/9b9959c6d4b5e9dba4be47ea0f182a43e84eff27))
+* skip externalAddress for vmworker when floatingIP is false ([17cfab6](https://github.com/apeirora/showroom-simple-cluster/commit/17cfab6daf139323f886e54d149cfa57f3b9fa77))
+* UI all fields required ([debf106](https://github.com/apeirora/showroom-simple-cluster/commit/debf1060239d40acde216aab9c1a6169ff8d1fea))
+
 ## [0.13.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.1...v0.13.2) (2026-06-13)
 
 
