@@ -44,7 +44,7 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
   const [workerNodes, setWorkerNodes] = useState(config.workers.default);
   const [workerCpu, setWorkerCpu] = useState(config.cpu[0] ?? '');
   const [workerMemory, setWorkerMemory] = useState(config.memory[0] ?? '');
-  const [controlPlaneNodes, setControlPlaneNodes] = useState(0);
+  const [controlPlaneNodes, setControlPlaneNodes] = useState(config.controlPlane.default);
   const [controlPlaneCpu, setControlPlaneCpu] = useState(config.cpu[0] ?? '');
   const [controlPlaneMemory, setControlPlaneMemory] = useState(config.memory[0] ?? '');
   const [nameTouched, setNameTouched] = useState(false);
@@ -55,7 +55,10 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
     Boolean(provider) &&
     workerNodes >= 1 &&
     Boolean(workerCpu) &&
-    Boolean(workerMemory);
+    Boolean(workerMemory) &&
+    controlPlaneNodes >= 1 &&
+    Boolean(controlPlaneCpu) &&
+    Boolean(controlPlaneMemory);
 
   const reset = () => {
     setName('');
@@ -64,7 +67,7 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
     setWorkerNodes(config.workers.default);
     setWorkerCpu(config.cpu[0] ?? '');
     setWorkerMemory(config.memory[0] ?? '');
-    setControlPlaneNodes(0);
+    setControlPlaneNodes(config.controlPlane.default);
     setControlPlaneCpu(config.cpu[0] ?? '');
     setControlPlaneMemory(config.memory[0] ?? '');
   };
@@ -111,8 +114,7 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
     >
       <FlexBox direction={FlexBoxDirection.Column} style={{ gap: '1rem', minWidth: 420, padding: '0.5rem 0' }}>
         <MessageStrip design="Information" hideCloseButton>
-          The cluster is provisioned from the selected SimpleClusterProviderConfig. Leave control
-          plane nodes at 0 for providers that manage the control plane themselves (e.g. Gardener).
+          The cluster is provisioned from the selected SimpleClusterProviderConfig.
         </MessageStrip>
 
         <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
@@ -190,26 +192,22 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
           </FlexBox>
         </FlexBox>
 
-        <Label>Control plane (optional)</Label>
+        <Label>Control plane</Label>
         <FlexBox style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
           <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-cp-nodes">Nodes (0 = provider-managed)</Label>
+            <Label for="sc-cp-nodes" required>Nodes</Label>
             <StepInput
               id="sc-cp-nodes"
               value={controlPlaneNodes}
-              min={0}
+              min={config.controlPlane.min}
               max={config.controlPlane.max}
               step={1}
               onChange={(e) => setControlPlaneNodes(Number((e.target as unknown as HTMLInputElement).value))}
             />
           </FlexBox>
           <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-cp-cpu">CPU / node</Label>
-            <Select
-              id="sc-cp-cpu"
-              disabled={controlPlaneNodes < 1}
-              onChange={(e) => setControlPlaneCpu(selectValue(e))}
-            >
+            <Label for="sc-cp-cpu" required>CPU / node</Label>
+            <Select id="sc-cp-cpu" onChange={(e) => setControlPlaneCpu(selectValue(e))}>
               {config.cpu.map((v) => (
                 <Option key={v} value={v} selected={v === controlPlaneCpu}>
                   {v}
@@ -218,12 +216,8 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
             </Select>
           </FlexBox>
           <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-cp-mem">Memory / node</Label>
-            <Select
-              id="sc-cp-mem"
-              disabled={controlPlaneNodes < 1}
-              onChange={(e) => setControlPlaneMemory(selectValue(e))}
-            >
+            <Label for="sc-cp-mem" required>Memory / node</Label>
+            <Select id="sc-cp-mem" onChange={(e) => setControlPlaneMemory(selectValue(e))}>
               {config.memory.map((v) => (
                 <Option key={v} value={v} selected={v === controlPlaneMemory}>
                   {v}
