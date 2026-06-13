@@ -204,7 +204,7 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		// Primary match: the name we computed (includes UID suffix). Secondary
 		// match: bare CR name, for servers created by an older operator version
 		// that did not append the UID suffix.
-		if existing[i].Name == name || (existing[i].Name == aum.Name && aum.Spec.Server.Name == "") {
+		if existing[i].Name == name || (aum.Spec.Server.Name == "" && (existing[i].Name == aum.Name || strings.HasPrefix(existing[i].Name, aum.Name+"-"))) {
 			log.Info("adopting existing server by name", "id", existing[i].ID, "serverName", existing[i].Name)
 			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "AdoptServer",
 				"adopting existing server %s (id=%s)", existing[i].Name, existing[i].ID)
@@ -253,8 +253,10 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		if modelID == "" {
 			models, err := cl.ListBaremetalModels(ctx)
 			if err != nil {
+				r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "ListBaremetalModels: %v", err)
 				return nil, fmt.Errorf("list baremetal models: %w", err)
 			}
+			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "ListBaremetalModels", "listed %d models", len(models))
 			selected = arsys.SmallestModel(models, aum.Spec.Server.DatacenterID, aum.Spec.Server.VCore, aum.Spec.Server.RAM)
 			if selected == nil {
 				return nil, fmt.Errorf("no enabled baremetal model with >=%d cores and >=%d GB RAM available in datacenter %s",
@@ -285,6 +287,7 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 
 	patch := client.MergeFrom(aum.DeepCopy())
 	aum.Status.ServerID = server.ID
+	aum.Status.ServerName = server.Name
 	r.setPhase(aum, arsysv1alpha1.PhaseProvisioning)
 	if aum.Spec.Server.Type != arsysv1alpha1.ServerTypeCloud {
 		aum.Status.BaremetalModelID = req.Hardware.BaremetalModelID
@@ -419,9 +422,11 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 	if serverID == "" && aum.Status.ServerName != "" {
 		servers, err := cl.ListServers(ctx)
 		if err != nil {
+			r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "ListServers: %v", err)
 			log.Error(err, "list servers during delete; retrying")
 			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 		}
+		r.Recorder.Eventf(aum, corev1.EventTypeNormal, "ListServers", "listed %d servers", len(servers))
 		for i := range servers {
 			if servers[i].Name == aum.Status.ServerName {
 				serverID = servers[i].ID
@@ -433,11 +438,14 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 		server, err := cl.GetServer(ctx, serverID)
 		if err != nil {
 			if apiErr, ok := err.(*arsys.APIError); !ok || apiErr.StatusCode != 404 {
+				r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "GetServer %s: %v", serverID, err)
 				log.Error(err, "get arsys server during delete; retrying", "id", serverID)
 				return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 			}
 			// 404 — server is already gone, proceed
 		} else {
+			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "GetServer",
+				"server %s state=%s progress=%d%%", server.ID, server.Status.State, server.Status.Percent)
 			if server.Status.State != arsys.StateRemoving {
 				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "deleting Arsys server %s", serverID)
 				if err := cl.DeleteServer(ctx, serverID); err != nil {
@@ -449,6 +457,7 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 					// 404 — already gone, requeue so GetServer 404 path proceeds to finalizer removal
 					return ctrl.Result{Requeue: true}, nil
 				}
+				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "Arsys server %s delete requested", serverID)
 			}
 			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 		}
