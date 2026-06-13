@@ -38,7 +38,7 @@ spec:
     - jsonPath: .status.address
       name: Address
       type: string
-    - jsonPath: .status.machineRef
+    - jsonPath: .status.serverName
       name: Machine
       type: string
     - jsonPath: .metadata.creationTimestamp
