@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.1...v0.13.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* make sure that charts version X always deploy docker images in version X. ([22bccc0](https://github.com/apeirora/showroom-simple-cluster/commit/22bccc013f3864d644dd88f0ce150c5b976a92cc))
+
 ## [0.13.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.0...v0.13.1) (2026-06-13)
 
 
