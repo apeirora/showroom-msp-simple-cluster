@@ -227,13 +227,25 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		}
 	}
 
+	publicKeys := append([]string(nil), aum.Spec.Server.PublicKeys...)
+	if ref := aum.Spec.Server.PublicKeySecretRef; ref != nil {
+		var sec corev1.Secret
+		if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &sec); err != nil {
+			r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "publicKeySecretRef %s/%s: %v", ref.Namespace, ref.Name, err)
+			return nil, fmt.Errorf("get publicKeySecretRef %s/%s: %w", ref.Namespace, ref.Name, err)
+		}
+		for _, v := range sec.Data {
+			publicKeys = append(publicKeys, string(v))
+		}
+	}
+
 	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "CreateServer", "ordering Arsys server %q", name)
 	req := arsys.CreateRequest{
 		Name:         name,
 		ApplianceID:  aum.Spec.Server.ApplianceID,
 		DatacenterID: aum.Spec.Server.DatacenterID,
 		SSHPassword:  true,
-		PublicKey:    aum.Spec.Server.PublicKeys,
+		PublicKey:    publicKeys,
 		PowerOn:      true,
 	}
 	// selected is non-nil only when we auto-pick a dedicated model below.

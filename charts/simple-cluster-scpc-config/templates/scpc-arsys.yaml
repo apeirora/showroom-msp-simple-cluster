@@ -55,6 +55,9 @@ spec:
             datacenterID: "{{ .Inputs.datacenterID }}"
             vcore: {{ .SC.controlPlane.requested.cpu }}
             ram: {{ .SC.controlPlane.requested.memory | trimSuffix "Gi" }}
+            publicKeySecretRef:
+              name: scpc-single-ssh
+              namespace: simple-cluster-system-scpc-configs
           ssh:
             user: root
 
@@ -78,6 +81,9 @@ spec:
             datacenterID: "{{ .Inputs.datacenterID }}"
             vcore: {{ .SC.workers.requested.cpu }}
             ram: {{ .SC.workers.requested.memory | trimSuffix "Gi" }}
+            publicKeySecretRef:
+              name: scpc-single-ssh
+              namespace: simple-cluster-system-scpc-configs
           ssh:
             user: root
 
@@ -159,6 +165,9 @@ spec:
             coresPerProcessor: 2
             ram: 8
             disk: 50
+            publicKeySecretRef:
+              name: scpc-single-ssh
+              namespace: simple-cluster-system-scpc-configs
           ssh:
             user: root
 
@@ -184,6 +193,9 @@ spec:
             coresPerProcessor: 2
             ram: 8
             disk: 50
+            publicKeySecretRef:
+              name: scpc-single-ssh
+              namespace: simple-cluster-system-scpc-configs
           ssh:
             user: root
 
