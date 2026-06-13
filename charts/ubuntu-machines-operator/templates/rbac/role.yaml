@@ -27,6 +27,16 @@ rules:
   - patch
   - delete
 - apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - ubuntumachines.apeirora.eu
   resources:
   - ubuntumachines
