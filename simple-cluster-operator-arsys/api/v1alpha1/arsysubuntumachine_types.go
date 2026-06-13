@@ -126,6 +126,13 @@ type ServerSpec struct {
 	// Usually empty — keys are managed in the Arsys CloudPanel.
 	// +optional
 	PublicKeys []string `json:"publicKeys,omitempty"`
+
+	// PublicKeySecretRef points at a Secret whose keys are read as SSH public
+	// key strings and injected into the server at order time. Each data key
+	// in the Secret is treated as one public key entry (the key name is
+	// ignored; only the value is used). Mutually usable with PublicKeys.
+	// +optional
+	PublicKeySecretRef *corev1.SecretReference `json:"publicKeySecretRef,omitempty"`
 }
 
 // SSHSpec is the login the UbuntuMachine advertises to consumers.
