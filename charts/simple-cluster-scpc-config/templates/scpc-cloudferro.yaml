@@ -126,7 +126,9 @@ spec:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
                 address: {{ $vm.status.internalAddress }}
+                {{- if $vm.status.externalAddress }}
                 externalAddress: {{ $vm.status.externalAddress }}
+                {{- end }}
               {{- end }}
 
   kubeconfigSource:
