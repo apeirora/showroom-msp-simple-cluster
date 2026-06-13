@@ -122,15 +122,17 @@ type ServerSpec struct {
 	// +optional
 	Disk int32 `json:"disk,omitempty"`
 
-	// PublicKeys are SSH public keys pushed to the server at order time.
-	// Usually empty — keys are managed in the Arsys CloudPanel.
+	// PublicKeys are SSH public keys offered for injection at order time.
+	// Arsys only accepts a single inline key (rsa_key), so just the first
+	// non-empty key is injected; any extras are ignored (a warning event is
+	// emitted). Usually empty — keys are managed in the Arsys CloudPanel.
 	// +optional
 	PublicKeys []string `json:"publicKeys,omitempty"`
 
-	// PublicKeySecretRef points at a Secret whose keys are read as SSH public
-	// key strings and injected into the server at order time. Each data key
-	// in the Secret is treated as one public key entry (the key name is
-	// ignored; only the value is used). Mutually usable with PublicKeys.
+	// PublicKeySecretRef points at a Secret whose values are read as SSH public
+	// key strings. Values are considered after PublicKeys, ordered by data key
+	// name; private-key material is skipped. As with PublicKeys, only one key
+	// is injected (Arsys' inline rsa_key takes a single key).
 	// +optional
 	PublicKeySecretRef *corev1.SecretReference `json:"publicKeySecretRef,omitempty"`
 }
