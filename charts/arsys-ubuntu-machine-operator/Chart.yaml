@@ -1,7 +1,7 @@
 apiVersion: v2
 name: arsys-ubuntu-machine-operator
-description: Operator that orders Arsys CloudBuilder dedicated servers and registers them as UbuntuMachines
+description: A Helm chart to distribute the project arsys-ubuntu-machine-operator
 type: application
-version: 0.7.0
+version: 0.1.0
 appVersion: "0.1.0"
 icon: "https://example.com/icon.png"
