@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.0...v0.13.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* name too long ([adc5b16](https://github.com/apeirora/showroom-simple-cluster/commit/adc5b16bc155ea78bfa31e5513bae9f60ffe5808))
+
 ## [0.13.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.12.0...v0.13.0) (2026-06-13)
 
 
