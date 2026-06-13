@@ -1,3 +1,6 @@
+global:
+  imageTag: ""
+
 simple-cluster-operator:
   metrics:
     enable: false
@@ -5,7 +8,6 @@ simple-cluster-operator:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator
-        tag: "0.5.2"
 
 kind-cluster-operator:
   metrics:
@@ -14,7 +16,6 @@ kind-cluster-operator:
     container:
       image:
         repository: ghcr.io/apeirora/kind-cluster-operator
-        tag: "0.5.2"
 
 simple-cluster-operator-openstack:
   metrics:
@@ -23,7 +24,6 @@ simple-cluster-operator-openstack:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-openstack
-        tag: "0.5.2"
 
 simple-cluster-operator-ubuntu:
   metrics:
@@ -32,7 +32,6 @@ simple-cluster-operator-ubuntu:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-ubuntu
-        tag: "0.5.2"
 
 simple-cluster-operator-ironcore:
   metrics:
@@ -41,4 +40,3 @@ simple-cluster-operator-ironcore:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-ironcore
-        tag: "0.5.2"
