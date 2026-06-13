@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.12.0...v0.13.0) (2026-06-13)
+
+
+### Features
+
+* arsys server name with prefix ([a63a4f9](https://github.com/apeirora/showroom-simple-cluster/commit/a63a4f9f2bed7f842b7aa587925469dea6d29459))
+* External IP for arsys workers ([94a026c](https://github.com/apeirora/showroom-simple-cluster/commit/94a026c78e407a745fb3e070033a318530d034c1))
+
 ## [0.12.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.11.0...v0.12.0) (2026-06-12)
 
 
