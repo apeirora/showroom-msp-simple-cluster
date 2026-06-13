@@ -48,17 +48,7 @@ jobs:
       - name: Stamp release version into operator image tags
         run: |
           set -euo pipefail
-          V="${VERSION}"
-          # Umbrella sub-chart operator images (all built by publish-images at $V).
-          yq -i "
-            .[\"simple-cluster-operator\"].controllerManager.container.image.tag = \"$V\" |
-            .[\"kind-cluster-operator\"].controllerManager.container.image.tag = \"$V\" |
-            .[\"simple-cluster-operator-openstack\"].controllerManager.container.image.tag = \"$V\" |
-            .[\"simple-cluster-operator-ubuntu\"].controllerManager.container.image.tag = \"$V\" |
-            .[\"simple-cluster-operator-ironcore\"].controllerManager.container.image.tag = \"$V\"
-          " charts/simple-cluster-system/values.yaml
-          # Micro-frontend image.
-          yq -i ".ui.image.tag = \"$V\"" charts/simple-cluster-ui/values.yaml
+          yq -i ".global.imageTag = \"${VERSION}\"" charts/simple-cluster-system/values.yaml
 
       - name: Package and push charts at the release version
         run: |

@@ -25,7 +25,6 @@ ui:
   # specific version per environment via the GitOps overlay.
   image:
     repository: ghcr.io/apeirora/simple-cluster-ui
-    tag: "0.5.2"
     pullPolicy: IfNotPresent
   resources: {}
   service:
