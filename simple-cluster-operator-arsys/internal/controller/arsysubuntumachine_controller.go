@@ -446,7 +446,10 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 		} else {
 			r.Recorder.Eventf(aum, corev1.EventTypeNormal, "GetServer",
 				"server %s state=%s progress=%d%%", server.ID, server.Status.State, server.Status.Percent)
-			if server.Status.State != arsys.StateRemoving {
+			if server.Status.State == arsys.StateRemoving {
+				// Server is being removed (by us or externally) — proceed to finalizer removal.
+				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "Arsys server %s is removing", serverID)
+			} else {
 				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "deleting Arsys server %s", serverID)
 				if err := cl.DeleteServer(ctx, serverID); err != nil {
 					r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "DeleteServer %s: %v", serverID, err)
@@ -454,12 +457,12 @@ func (r *ArsysUbuntuMachineReconciler) reconcileDelete(ctx context.Context, aum 
 						log.Error(err, "delete arsys server; retrying", "id", serverID)
 						return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 					}
-					// 404 — already gone, requeue so GetServer 404 path proceeds to finalizer removal
-					return ctrl.Result{Requeue: true}, nil
+					// 404 — already gone, fall through to finalizer removal
+				} else {
+					r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "Arsys server %s delete requested", serverID)
+					return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 				}
-				r.Recorder.Eventf(aum, corev1.EventTypeNormal, "DeleteServer", "Arsys server %s delete requested", serverID)
 			}
-			return ctrl.Result{RequeueAfter: requeueDeleting}, nil
 		}
 	}
 
