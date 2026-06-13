@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -227,16 +228,9 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		}
 	}
 
-	publicKeys := append([]string(nil), aum.Spec.Server.PublicKeys...)
-	if ref := aum.Spec.Server.PublicKeySecretRef; ref != nil {
-		var sec corev1.Secret
-		if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &sec); err != nil {
-			r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "publicKeySecretRef %s/%s: %v", ref.Namespace, ref.Name, err)
-			return nil, fmt.Errorf("get publicKeySecretRef %s/%s: %w", ref.Namespace, ref.Name, err)
-		}
-		for _, v := range sec.Data {
-			publicKeys = append(publicKeys, string(v))
-		}
+	rsaKey, err := r.collectSSHPublicKey(ctx, aum)
+	if err != nil {
+		return nil, err
 	}
 
 	r.Recorder.Eventf(aum, corev1.EventTypeNormal, "CreateServer", "ordering Arsys server %q", name)
@@ -245,7 +239,7 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		ApplianceID:  aum.Spec.Server.ApplianceID,
 		DatacenterID: aum.Spec.Server.DatacenterID,
 		SSHPassword:  true,
-		PublicKey:    publicKeys,
+		RSAKey:       rsaKey,
 		PowerOn:      true,
 	}
 	// selected is non-nil only when we auto-pick a dedicated model below.
@@ -312,6 +306,47 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		return nil, fmt.Errorf("record server id %s: %w", server.ID, err)
 	}
 	return server, nil
+}
+
+// collectSSHPublicKey returns the single SSH public key to inject at order
+// time via the Arsys rsa_key field. Candidates are spec.server.publicKeys (in
+// order) then the publicKeySecretRef Secret values (ordered by data key, for
+// determinism). Blank and private-key entries are skipped. Arsys' inline
+// rsa_key accepts only one key; if several are found the first is used and a
+// warning event records the rest were dropped.
+func (r *ArsysUbuntuMachineReconciler) collectSSHPublicKey(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine) (string, error) {
+	var keys []string
+	add := func(v string) {
+		if v = strings.TrimSpace(v); v != "" && !strings.Contains(v, "PRIVATE KEY") {
+			keys = append(keys, v)
+		}
+	}
+	for _, k := range aum.Spec.Server.PublicKeys {
+		add(k)
+	}
+	if ref := aum.Spec.Server.PublicKeySecretRef; ref != nil {
+		var sec corev1.Secret
+		if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &sec); err != nil {
+			r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "publicKeySecretRef %s/%s: %v", ref.Namespace, ref.Name, err)
+			return "", fmt.Errorf("get publicKeySecretRef %s/%s: %w", ref.Namespace, ref.Name, err)
+		}
+		names := make([]string, 0, len(sec.Data))
+		for name := range sec.Data {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			add(string(sec.Data[name]))
+		}
+	}
+	if len(keys) == 0 {
+		return "", nil
+	}
+	if len(keys) > 1 {
+		r.Recorder.Eventf(aum, corev1.EventTypeWarning, "MultipleSSHKeys",
+			"%d SSH public keys provided but Arsys rsa_key accepts only one; using the first", len(keys))
+	}
+	return keys[0], nil
 }
 
 // writePasswordSecret writes the server's root password into the Secret named
