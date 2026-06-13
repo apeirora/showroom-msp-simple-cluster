@@ -47,7 +47,7 @@ spec:
             name: arsys-token
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
-            name: aum-dedicated-password
+            name: "{{ printf "%s-%s-cp-%d" .SC.namespace .SC.name .Index }}"
             namespace: default
           server:
             type: dedicated
@@ -73,7 +73,7 @@ spec:
             name: arsys-token
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
-            name: aum-dedicated-password
+            name: "{{ printf "%s-%s-worker-%d" .SC.namespace .SC.name .Index }}"
             namespace: default
           server:
             type: dedicated
@@ -155,7 +155,7 @@ spec:
             name: arsys-token
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
-            name: aum-dedicated-password
+            name: "{{ printf "%s-%s-cp-%d" .SC.namespace .SC.name .Index }}"
             namespace: default
           server:
             type: cloud
@@ -183,7 +183,7 @@ spec:
             name: arsys-token
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
-            name: aum-dedicated-password
+            name: "{{ printf "%s-%s-worker-%d" .SC.namespace .SC.name .Index }}"
             namespace: default
           server:
             type: cloud

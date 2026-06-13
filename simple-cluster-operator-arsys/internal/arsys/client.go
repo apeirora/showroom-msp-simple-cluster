@@ -88,8 +88,11 @@ type CreateRequest struct {
 	ApplianceID  string   `json:"appliance_id"`
 	DatacenterID string   `json:"datacenter_id"`
 	SSHPassword  bool     `json:"ssh_password"`
-	PublicKey    []string `json:"public_key,omitempty"`
-	PowerOn      bool     `json:"power_on"`
+	// RSAKey is a single inline public SSH key copied into the server at order
+	// time. Note: the API's public_key field is NOT this — it takes IDs of
+	// pre-registered SSH keys, not inline key material.
+	RSAKey  string `json:"rsa_key,omitempty"`
+	PowerOn bool   `json:"power_on"`
 }
 
 // Hardware is the order's compute/storage shape. For a dedicated order set
