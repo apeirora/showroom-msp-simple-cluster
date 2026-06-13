@@ -85,7 +85,8 @@ spec:
             name: cloudferro-openstack-creds
             namespace: simple-cluster-system-scpc-configs
           network: {{ .Inputs.network }}
-          floatingIP: false
+          floatingIPPool: {{ .Inputs.floatingIPPool }}
+          floatingIP: true
           securityGroups:
             - default
           resources:
