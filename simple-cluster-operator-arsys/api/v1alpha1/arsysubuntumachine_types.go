@@ -200,7 +200,7 @@ type ArsysUbuntuMachineStatus struct {
 // +kubebuilder:printcolumn:name="Progress",type=integer,JSONPath=`.status.provisioningPercent`
 // +kubebuilder:printcolumn:name="Server",type=string,JSONPath=`.status.serverID`
 // +kubebuilder:printcolumn:name="Address",type=string,JSONPath=`.status.address`
-// +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.status.machineRef`
+// +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.status.serverName`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // ArsysUbuntuMachine orders a dedicated server from Arsys CloudBuilder and
