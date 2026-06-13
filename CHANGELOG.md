@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.14.0...v0.14.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* Chart version ([f64bb56](https://github.com/apeirora/showroom-simple-cluster/commit/f64bb56155449134ef18e5ee373f6ad02c2107a8))
+* public key ([6f4f78d](https://github.com/apeirora/showroom-simple-cluster/commit/6f4f78d93ba4ce110e94b0e4bb63c5e9a364ae92))
+
 ## [0.14.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.2...v0.14.0) (2026-06-13)
 
 
