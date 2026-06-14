@@ -51,6 +51,13 @@ type InstallOptions struct {
 	// without it, Services on hosts with floating IPs publish only the
 	// private address and stay unreachable from outside the provider network.
 	NodeExternalIP string
+	// NodeName, when non-empty, becomes `--node-name=<value>` (server and
+	// agent). Pins the Kubernetes Node name to the host's logical name
+	// instead of letting k3s fall back to the OS hostname — some provider
+	// images default every VM's hostname to "localhost", which makes the
+	// second node fail to register ("duplicate hostname, node password
+	// rejected").
+	NodeName string
 }
 
 // InstallServerBootstrap runs `k3s server --cluster-init` on the first
@@ -218,11 +225,14 @@ func serverArgs(opts InstallOptions) []string {
 	if opts.NodeExternalIP != "" {
 		out = append(out, "--node-external-ip="+opts.NodeExternalIP)
 	}
+	if opts.NodeName != "" {
+		out = append(out, "--node-name="+opts.NodeName)
+	}
 	return out
 }
 
 // agentArgs builds the k3s agent flag tail: user's ExtraArgs +
-// --node-ip + --node-external-ip when each is set.
+// --node-ip + --node-external-ip + --node-name when each is set.
 func agentArgs(opts InstallOptions) []string {
 	out := append([]string{}, opts.ExtraArgs...)
 	if opts.NodeIP != "" {
@@ -230,6 +240,9 @@ func agentArgs(opts InstallOptions) []string {
 	}
 	if opts.NodeExternalIP != "" {
 		out = append(out, "--node-external-ip="+opts.NodeExternalIP)
+	}
+	if opts.NodeName != "" {
+		out = append(out, "--node-name="+opts.NodeName)
 	}
 	return out
 }
