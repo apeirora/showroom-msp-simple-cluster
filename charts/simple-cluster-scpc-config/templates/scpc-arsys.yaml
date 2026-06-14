@@ -1,4 +1,9 @@
 {{- if or .Values.enable.arsys.dedicated .Values.enable.arsys.virtual }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: simple-cluster-arsys
+---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -48,7 +53,7 @@ spec:
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: "{{ printf "%s-%s-cp-%d" .SC.namespace .SC.name .Index }}"
-            namespace: default
+            namespace: simple-cluster-arsys
           server:
             type: dedicated
             applianceID: "{{ .Inputs.applianceID }}"
@@ -74,7 +79,7 @@ spec:
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: "{{ printf "%s-%s-worker-%d" .SC.namespace .SC.name .Index }}"
-            namespace: default
+            namespace: simple-cluster-arsys
           server:
             type: dedicated
             applianceID: "{{ .Inputs.applianceID }}"
@@ -102,7 +107,7 @@ spec:
             user: root
             passwordSecretRef:
               name: "{{ printf "%s-%s-cp-0" .SC.namespace .SC.name }}"
-              namespace: default
+              namespace: simple-cluster-arsys
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
@@ -111,7 +116,7 @@ spec:
                 externalAddress: {{ $vm.status.address }}
                 passwordSecretRef:
                   name: "{{ printf "%s-%s-cp-%d" $.SC.namespace $.SC.name $i }}"
-                  namespace: default
+                  namespace: simple-cluster-arsys
               {{- end }}
           workers:
             hosts:
@@ -121,7 +126,7 @@ spec:
                 externalAddress: {{ $vm.status.address }}
                 passwordSecretRef:
                   name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
-                  namespace: default
+                  namespace: simple-cluster-arsys
               {{- end }}
 
   kubeconfigSource:
@@ -162,7 +167,7 @@ spec:
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: "{{ printf "%s-%s-cp-%d" .SC.namespace .SC.name .Index }}"
-            namespace: default
+            namespace: simple-cluster-arsys
           server:
             type: cloud
             applianceID: "{{ .Inputs.applianceID }}"
@@ -190,7 +195,7 @@ spec:
             namespace: simple-cluster-system-scpc-configs
           passwordSecretRef:
             name: "{{ printf "%s-%s-worker-%d" .SC.namespace .SC.name .Index }}"
-            namespace: default
+            namespace: simple-cluster-arsys
           server:
             type: cloud
             applianceID: "{{ .Inputs.applianceID }}"
@@ -220,7 +225,7 @@ spec:
             user: root
             passwordSecretRef:
               name: "{{ printf "%s-%s-cp-0" .SC.namespace .SC.name }}"
-              namespace: default
+              namespace: simple-cluster-arsys
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
@@ -229,7 +234,7 @@ spec:
                 externalAddress: {{ $vm.status.address }}
                 passwordSecretRef:
                   name: "{{ printf "%s-%s-cp-%d" $.SC.namespace $.SC.name $i }}"
-                  namespace: default
+                  namespace: simple-cluster-arsys
               {{- end }}
           workers:
             hosts:
@@ -238,7 +243,7 @@ spec:
                 address: {{ $vm.status.address }}
                 passwordSecretRef:
                   name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
-                  namespace: default
+                  namespace: simple-cluster-arsys
               {{- end }}
 
   kubeconfigSource:
