@@ -22,6 +22,11 @@ import (
 
 func (in *Host) DeepCopyInto(out *Host) {
 	*out = *in
+	if in.PasswordSecretRef != nil {
+		in, out := &in.PasswordSecretRef, &out.PasswordSecretRef
+		*out = new(corev1.SecretReference)
+		**out = **in
+	}
 }
 
 func (in *Host) DeepCopy() *Host {
@@ -38,7 +43,9 @@ func (in *HostPool) DeepCopyInto(out *HostPool) {
 	if in.Hosts != nil {
 		in, out := &in.Hosts, &out.Hosts
 		*out = make([]Host, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 
