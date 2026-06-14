@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.1...v0.15.2) (2026-06-14)
+
+
+### Bug Fixes
+
+* arsys firewall ([6e3d270](https://github.com/apeirora/showroom-simple-cluster/commit/6e3d2703d86f8a0723ad4cf1527e9bba0cfb425d))
+
 ## [0.15.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.0...v0.15.1) (2026-06-14)
 
 
