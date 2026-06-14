@@ -93,6 +93,11 @@ type CreateRequest struct {
 	// pre-registered SSH keys, not inline key material.
 	RSAKey  string `json:"rsa_key,omitempty"`
 	PowerOn bool   `json:"power_on"`
+	// FirewallPolicyID assigns an existing firewall policy at order time.
+	// When empty the API auto-creates a restrictive default (SSH only),
+	// which blocks intra-cluster k3s traffic (6443/10250/8472) — so the
+	// operator always sets this to a policy that opens the k3s ports.
+	FirewallPolicyID string `json:"firewall_policy_id,omitempty"`
 }
 
 // Hardware is the order's compute/storage shape. For a dedicated order set
@@ -241,6 +246,47 @@ func (c *Client) DeleteServer(ctx context.Context, id string) error {
 		return nil
 	}
 	return err
+}
+
+// FirewallPolicy is the subset of a firewall policy object the operator uses.
+type FirewallPolicy struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// FirewallRule is one inbound rule. Source is a CIDR/IP; empty means any.
+type FirewallRule struct {
+	Protocol string `json:"protocol"`
+	PortFrom int32  `json:"port_from,omitempty"`
+	PortTo   int32  `json:"port_to,omitempty"`
+	Source   string `json:"source,omitempty"`
+}
+
+// FirewallPolicyCreate is the POST /firewall_policies body.
+type FirewallPolicyCreate struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Rules       []FirewallRule `json:"rules"`
+}
+
+// ListFirewallPolicies returns all firewall policies in the account
+// (GET /firewall_policies).
+func (c *Client) ListFirewallPolicies(ctx context.Context) ([]FirewallPolicy, error) {
+	var out []FirewallPolicy
+	if err := c.do(ctx, http.MethodGet, "/firewall_policies", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CreateFirewallPolicy creates a firewall policy with the given rules
+// (POST /firewall_policies).
+func (c *Client) CreateFirewallPolicy(ctx context.Context, req FirewallPolicyCreate) (*FirewallPolicy, error) {
+	var out FirewallPolicy
+	if err := c.do(ctx, http.MethodPost, "/firewall_policies", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // APIError is a non-2xx response from the API.
