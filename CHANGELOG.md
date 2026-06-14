@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.0...v0.15.1) (2026-06-14)
+
+
+### Bug Fixes
+
+* force set node name ([6068e30](https://github.com/apeirora/showroom-simple-cluster/commit/6068e30ba493cf65ba7611cff10b79ed4b99d21e))
+
 ## [0.15.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.14.1...v0.15.0) (2026-06-14)
 
 
