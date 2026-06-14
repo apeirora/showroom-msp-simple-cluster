@@ -167,6 +167,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			TLSSAN:         hostOnly(endpoint),
 			NodeIP:         bootstrap.Address,
 			NodeExternalIP: bootstrap.ExternalAddress,
+			NodeName:       bootstrap.Name,
 		}); err != nil {
 			failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
 			return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
@@ -226,6 +227,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				TLSSAN:         hostOnly(endpoint),
 				NodeIP:         h.Address,
 				NodeExternalIP: h.ExternalAddress,
+				NodeName:       h.Name,
 			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
@@ -249,6 +251,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				ExtraArgs:      cluster.Spec.K3sAgentArgs,
 				NodeIP:         h.Address,
 				NodeExternalIP: h.ExternalAddress,
+				NodeName:       h.Name,
 			}, internalEndpointURL, token)
 		})
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
