@@ -157,6 +157,15 @@ type Host struct {
 	// bootstrap CP as a ProxyJump bastion.
 	// +optional
 	ExternalAddress string `json:"externalAddress,omitempty"`
+
+	// PasswordSecretRef overrides spec.ssh for THIS host with password
+	// login: a `kubernetes.io/basic-auth` Secret read for the password
+	// ("password" key) and, when present, the login ("username" key,
+	// else spec.ssh.User). Use when each host has its own password — e.g.
+	// per-server root passwords from a provider that can't inject SSH keys.
+	// When unset the cluster-wide spec.ssh credential applies.
+	// +optional
+	PasswordSecretRef *corev1.SecretReference `json:"passwordSecretRef,omitempty"`
 }
 
 // UbuntuClusterStatus is the observed state.

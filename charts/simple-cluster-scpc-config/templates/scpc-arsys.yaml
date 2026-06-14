@@ -100,15 +100,18 @@ spec:
         spec:
           ssh:
             user: root
-            privateKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+            passwordSecretRef:
+              name: "{{ printf "%s-%s-cp-0" .SC.namespace .SC.name }}"
+              namespace: default
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
               - name: cp-{{ $i }}
                 address: {{ $vm.status.address }}
                 externalAddress: {{ $vm.status.address }}
+                passwordSecretRef:
+                  name: "{{ printf "%s-%s-cp-%d" $.SC.namespace $.SC.name $i }}"
+                  namespace: default
               {{- end }}
           workers:
             hosts:
@@ -116,6 +119,9 @@ spec:
               - name: worker-{{ $i }}
                 address: {{ $vm.status.address }}
                 externalAddress: {{ $vm.status.address }}
+                passwordSecretRef:
+                  name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
+                  namespace: default
               {{- end }}
 
   kubeconfigSource:
@@ -212,21 +218,27 @@ spec:
         spec:
           ssh:
             user: root
-            privateKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+            passwordSecretRef:
+              name: "{{ printf "%s-%s-cp-0" .SC.namespace .SC.name }}"
+              namespace: default
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
               - name: cp-{{ $i }}
                 address: {{ $vm.status.address }}
                 externalAddress: {{ $vm.status.address }}
+                passwordSecretRef:
+                  name: "{{ printf "%s-%s-cp-%d" $.SC.namespace $.SC.name $i }}"
+                  namespace: default
               {{- end }}
           workers:
             hosts:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
                 address: {{ $vm.status.address }}
+                passwordSecretRef:
+                  name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
+                  namespace: default
               {{- end }}
 
   kubeconfigSource:

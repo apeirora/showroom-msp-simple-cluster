@@ -112,6 +112,15 @@ spec:
                           type: string
                         externalAddress:
                           type: string
+                        passwordSecretRef:
+                          description: PasswordSecretRef overrides spec.ssh for this host with password login from a basic-auth Secret (`password`, optional `username`). Namespace is optional; defaults to the UbuntuCluster namespace.
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
                       required:
                       - address
                       - name
@@ -136,6 +145,15 @@ spec:
                           type: string
                         externalAddress:
                           type: string
+                        passwordSecretRef:
+                          description: PasswordSecretRef overrides spec.ssh for this host with password login from a basic-auth Secret (`password`, optional `username`). Namespace is optional; defaults to the UbuntuCluster namespace.
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
                       required:
                       - address
                       - name

@@ -311,32 +311,42 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // success/failure events so operators can spot auth or network issues
 // from `kubectl describe`.
 func (r *UbuntuClusterReconciler) dialBootstrap(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, cred sshpkg.Credential) (*sshpkg.Client, error) {
+	user, hostCred, err := r.hostCredential(ctx, cluster, h, cred)
+	if err != nil {
+		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed", "host %s: %s", h.Name, err.Error())
+		return nil, err
+	}
 	target := h.ExternalAddress
 	if target == "" {
 		target = h.Address
 	}
-	c, err := sshpkg.Dial(ctx, target, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, cred)
+	c, err := sshpkg.Dial(ctx, target, int(cluster.Spec.SSH.Port), user, hostCred)
 	if err != nil {
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
-			"ssh %s@%s: %s", cluster.Spec.SSH.User, target, err.Error())
+			"ssh %s@%s: %s", user, target, err.Error())
 		return nil, err
 	}
 	r.eventf(cluster, corev1.EventTypeNormal, "SSHLoginSucceeded",
-		"ssh %s@%s ok (host %s)", cluster.Spec.SSH.User, target, h.Name)
+		"ssh %s@%s ok (host %s)", user, target, h.Name)
 	return c, nil
 }
 
 // dialVia dials a non-bootstrap host through the bootstrap CP as a
 // ProxyJump bastion — uses the host's internal Address.
 func (r *UbuntuClusterReconciler) dialVia(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, bastion *sshpkg.Client, h ubuntuv1alpha1.Host, cred sshpkg.Credential) (*sshpkg.Client, error) {
-	c, err := sshpkg.DialVia(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), cluster.Spec.SSH.User, cred)
+	user, hostCred, err := r.hostCredential(ctx, cluster, h, cred)
+	if err != nil {
+		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed", "host %s: %s", h.Name, err.Error())
+		return nil, err
+	}
+	c, err := sshpkg.DialVia(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), user, hostCred)
 	if err != nil {
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
-			"ssh %s@%s via bastion: %s", cluster.Spec.SSH.User, h.Address, err.Error())
+			"ssh %s@%s via bastion: %s", user, h.Address, err.Error())
 		return nil, err
 	}
 	r.eventf(cluster, corev1.EventTypeNormal, "SSHLoginSucceeded",
-		"ssh %s@%s ok via bastion (host %s)", cluster.Spec.SSH.User, h.Address, h.Name)
+		"ssh %s@%s ok via bastion (host %s)", user, h.Address, h.Name)
 	return c, nil
 }
 
@@ -482,6 +492,31 @@ func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster
 	default:
 		return sshpkg.Credential{}, fmt.Errorf("spec.ssh has neither privateKeySecretRef nor passwordSecretRef")
 	}
+}
+
+// hostCredential resolves the SSH login for host h. When the host sets its
+// own PasswordSecretRef it wins: password auth, with the user taken from the
+// secret's "username" key (or spec.ssh.User when absent). This lets each host
+// carry a distinct password — e.g. per-server root passwords. Otherwise the
+// cluster-wide user and credential apply.
+func (r *UbuntuClusterReconciler) hostCredential(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, clusterCred sshpkg.Credential) (string, sshpkg.Credential, error) {
+	if h.PasswordSecretRef == nil {
+		return cluster.Spec.SSH.User, clusterCred, nil
+	}
+	ns := refNamespace(h.PasswordSecretRef.Namespace, cluster.Namespace)
+	var sec corev1.Secret
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: h.PasswordSecretRef.Name}, &sec); err != nil {
+		return "", sshpkg.Credential{}, fmt.Errorf("read host %s passwordSecretRef %s/%s: %w", h.Name, ns, h.PasswordSecretRef.Name, err)
+	}
+	pw := sec.Data[ubuntuv1alpha1.SSHSecretPasswordKey]
+	if len(pw) == 0 {
+		return "", sshpkg.Credential{}, fmt.Errorf("host %s passwordSecretRef %s/%s missing %q", h.Name, ns, h.PasswordSecretRef.Name, ubuntuv1alpha1.SSHSecretPasswordKey)
+	}
+	user := cluster.Spec.SSH.User
+	if u := strings.TrimSpace(string(sec.Data[corev1.BasicAuthUsernameKey])); u != "" {
+		user = u
+	}
+	return user, sshpkg.Credential{Password: string(pw)}, nil
 }
 
 // refNamespace returns ns when set, otherwise the fallback (the referring
