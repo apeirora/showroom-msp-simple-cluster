@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.14.1...v0.15.0) (2026-06-14)
+
+
+### Features
+
+* keep arsys password secret in dedicated namespace ([2ed0369](https://github.com/apeirora/showroom-simple-cluster/commit/2ed0369bae340f4da0bb42ef73c970cd9c6dd604))
+* ubuntuCluster user/password support ([4831793](https://github.com/apeirora/showroom-simple-cluster/commit/4831793b9661462893f3bd372f32e2495de2f85e))
+
 ## [0.14.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.14.0...v0.14.1) (2026-06-13)
 
 
