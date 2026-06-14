@@ -275,6 +275,17 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		}
 		req.Hardware = arsys.Hardware{BaremetalModelID: modelID}
 	}
+
+	// Assign a firewall policy that opens the k3s ports. Without it the API
+	// auto-creates an SSH-only default, which drops intra-cluster traffic on
+	// 6443/10250/8472 and leaves workers unable to join the control plane.
+	fwID, err := r.ensureK3sFirewallPolicy(ctx, cl)
+	if err != nil {
+		r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "ensureK3sFirewallPolicy: %v", err)
+		return nil, err
+	}
+	req.FirewallPolicyID = fwID
+
 	server, err := cl.CreateServer(ctx, req)
 	if err != nil {
 		r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "CreateServer %q: %v", name, err)
@@ -306,6 +317,47 @@ func (r *ArsysUbuntuMachineReconciler) ensureServer(ctx context.Context, aum *ar
 		return nil, fmt.Errorf("record server id %s: %w", server.ID, err)
 	}
 	return server, nil
+}
+
+// k3sFirewallPolicyName is the shared policy the operator find-or-creates so
+// every ordered server opens the ports k3s needs between nodes.
+const k3sFirewallPolicyName = "simple-cluster-k3s"
+
+// k3sFirewallRules opens SSH plus the k3s control-plane/data-plane ports.
+// Source is left empty (any): 6443 must stay reachable from the management
+// cluster and kubeconfig users, and sibling node IPs aren't known at order
+// time. The API server is still protected by TLS + node token.
+func k3sFirewallRules() []arsys.FirewallRule {
+	return []arsys.FirewallRule{
+		{Protocol: "TCP", PortFrom: 22, PortTo: 22},       // SSH (operator access)
+		{Protocol: "TCP", PortFrom: 6443, PortTo: 6443},   // kube-apiserver
+		{Protocol: "TCP", PortFrom: 10250, PortTo: 10250}, // kubelet
+		{Protocol: "TCP", PortFrom: 2379, PortTo: 2380},   // etcd (HA control plane)
+		{Protocol: "UDP", PortFrom: 8472, PortTo: 8472},   // flannel VXLAN
+	}
+}
+
+// ensureK3sFirewallPolicy returns the ID of the shared k3s firewall policy,
+// creating it on first use. Idempotent: matches by name.
+func (r *ArsysUbuntuMachineReconciler) ensureK3sFirewallPolicy(ctx context.Context, cl *arsys.Client) (string, error) {
+	policies, err := cl.ListFirewallPolicies(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list firewall policies: %w", err)
+	}
+	for _, p := range policies {
+		if p.Name == k3sFirewallPolicyName {
+			return p.ID, nil
+		}
+	}
+	created, err := cl.CreateFirewallPolicy(ctx, arsys.FirewallPolicyCreate{
+		Name:        k3sFirewallPolicyName,
+		Description: "SSH + k3s ports for simple-cluster nodes",
+		Rules:       k3sFirewallRules(),
+	})
+	if err != nil {
+		return "", fmt.Errorf("create firewall policy: %w", err)
+	}
+	return created.ID, nil
 }
 
 // collectSSHPublicKey returns the single SSH public key to inject at order
