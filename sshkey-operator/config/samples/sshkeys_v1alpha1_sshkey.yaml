@@ -1,0 +1,16 @@
+apiVersion: sshkeys.apeirora.eu/v1alpha1
+kind: SSHKey
+metadata:
+  labels:
+    app.kubernetes.io/name: sshkey-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: sshkey-sample
+spec:
+  keyType: ed25519
+  keyFormat: PEM
+  # expire: "720h"        # optional; key lifetime relative to creation
+  # autoRotate: true      # regenerate 24h before expiration
+  # passPhaseSecret:      # optional; secret with the passphrase under the "password" key
+  #   name: sshkey-passphrase
+  exportToSecret:
+    name: sshkey-sample-keypair
