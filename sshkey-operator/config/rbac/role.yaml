@@ -1,0 +1,43 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sshkeys.apeirora.eu
+  resources:
+  - sshkeys
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sshkeys.apeirora.eu
+  resources:
+  - sshkeys/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sshkeys.apeirora.eu
+  resources:
+  - sshkeys/status
+  verbs:
+  - get
+  - patch
+  - update
