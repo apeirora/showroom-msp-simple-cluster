@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- sshkeys_v1alpha1_sshkey.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples
