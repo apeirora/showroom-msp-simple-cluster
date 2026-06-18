@@ -137,13 +137,7 @@
                                         },
                                         {
                                             "label": "Nodes",
-                                            "property": "status.nodesSummary",
-                                            "uiSettings": {
-                                                "cssCustomization": {
-                                                    "whiteSpace": "pre-line",
-                                                    "fontFamily": "monospace"
-                                                }
-                                            }
+                                            "property": "status.nodes"
                                         },
                                         {
                                             "label": "Kubeconfig Secret",
