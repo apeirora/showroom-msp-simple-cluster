@@ -91,12 +91,12 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// (Re)generate the key pair when missing, when the key-defining spec changed, or when due for rotation.
 	hash := specHash(&key)
-	validTill := nextValidTill(&key)
+	expires := nextExpires(&key)
 	if key.PrivateKey == "" || key.PublicKey == "" || key.Status.KeyHash != hash || rotationDue(&key) {
 		if err := generateKeyPair(&key, passphrase); err != nil {
 			return r.markNotReady(ctx, &key, "key generation failed: "+err.Error())
 		}
-		validTill = nextValidTill(&key)
+		expires = nextExpires(&key)
 		if err := r.Update(ctx, &key); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -118,7 +118,7 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	key.Status.Ready = true
 	key.Status.Message = "key ready"
-	key.Status.ValidTill = validTill
+	key.Status.Expires = expires
 	key.Status.KeyHash = hash
 	if err := r.Status().Update(ctx, &key); err != nil {
 		return ctrl.Result{}, err
@@ -277,8 +277,8 @@ func effectiveKeyType(key *sshkeysv1alpha1.SSHKey) sshkeysv1alpha1.KeyType {
 	return key.Spec.KeyType
 }
 
-// nextValidTill returns the expiration time derived from spec.expire, or zero when no expiration.
-func nextValidTill(key *sshkeysv1alpha1.SSHKey) metav1.Time {
+// nextExpires returns the expiration time derived from spec.expire, or zero when no expiration.
+func nextExpires(key *sshkeysv1alpha1.SSHKey) metav1.Time {
 	if key.Spec.Expire.Duration == 0 {
 		return metav1.Time{}
 	}
@@ -292,7 +292,7 @@ func nextValidTill(key *sshkeysv1alpha1.SSHKey) metav1.Time {
 // rotationDue reports whether an existing key must be regenerated because it expired,
 // or is within the rotation window when auto-rotation is enabled.
 func rotationDue(key *sshkeysv1alpha1.SSHKey) bool {
-	till := nextValidTill(key)
+	till := nextExpires(key)
 	if till.IsZero() {
 		return false
 	}
@@ -304,7 +304,7 @@ func rotationDue(key *sshkeysv1alpha1.SSHKey) bool {
 
 // requeueAfter schedules the next reconcile at the rotation/expiration boundary.
 func requeueAfter(key *sshkeysv1alpha1.SSHKey) time.Duration {
-	till := nextValidTill(key)
+	till := nextExpires(key)
 	if till.IsZero() {
 		return 0
 	}
