@@ -100,10 +100,6 @@ spec:
             timeWindow:
               begin: "220000+0000"
               end: "230000+0000"
-          dns:
-            providers:
-             - type: unmanaged
-               primary: true
           hibernation:
             enabled: false
   kubeconfigSource:
