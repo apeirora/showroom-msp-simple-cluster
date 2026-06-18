@@ -308,6 +308,51 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              nodes:
+                description: |-
+                  Nodes lists the control-plane and worker nodes of the provisioned
+                  cluster (NC) with their addresses, read live over the synced kubeconfig.
+                  Populated best-effort once the kubeconfig is available; empty until then
+                  and never affects Phase.
+                items:
+                  description: |-
+                    NodeStatus is one node of the provisioned cluster (NC), read live over the
+                    synced kubeconfig. Surfaced so users can see the cluster's machines and how
+                    to reach them without fetching the kubeconfig themselves.
+                  properties:
+                    externalIP:
+                      description: |-
+                        ExternalIP is the node's ExternalIP address. Empty when the cluster does
+                        not advertise one (e.g. nodes only reachable on a private network).
+                      type: string
+                    internalIP:
+                      description: InternalIP is the node's InternalIP address.
+                      type: string
+                    name:
+                      description: Name is the Kubernetes node name.
+                      type: string
+                    ready:
+                      description: Ready reflects the node's Ready condition.
+                      type: boolean
+                    role:
+                      description: Role is "control-plane" or "worker", derived from
+                        the node's role labels.
+                      type: string
+                  required:
+                  - name
+                  - ready
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              nodesSummary:
+                description: |-
+                  NodesSummary is a human-readable, one-line-per-node rendering of Nodes.
+                  It exists only because the Platform Mesh generic detail view can render
+                  a scalar string field but not an array of objects; the structured data
+                  lives in Nodes. Derived from Nodes every reconcile.
+                type: string
               observedGeneration:
                 format: int64
                 type: integer
