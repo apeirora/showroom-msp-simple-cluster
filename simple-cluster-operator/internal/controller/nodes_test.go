@@ -11,7 +11,6 @@ You may obtain a copy of the License at
 package controller
 
 import (
-	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -87,32 +86,6 @@ func TestSortNodes(t *testing.T) {
 		if n.Name != want[i] {
 			t.Fatalf("sortNodes order = %v, want %v", names(nodes), want)
 		}
-	}
-}
-
-func TestNodesSummary(t *testing.T) {
-	if s := nodesSummary(nil); s != "" {
-		t.Errorf("empty nodes should yield empty summary, got %q", s)
-	}
-	nodes := []showroomv1alpha1.NodeStatus{
-		{Name: "cp-0", Role: "control-plane", ExternalIP: "1.2.3.4", InternalIP: "10.0.0.5", Ready: true},
-		{Name: "w-0", Role: "worker", InternalIP: "10.0.0.21", Ready: false},
-	}
-	s := nodesSummary(nodes)
-	lines := strings.Split(s, "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected one line per node, got %d: %q", len(lines), s)
-	}
-	// Each line is self-delimiting and carries name + addresses + readiness.
-	if !strings.HasPrefix(lines[0], "• cp-0") ||
-		!strings.Contains(lines[0], "ext=1.2.3.4") ||
-		!strings.Contains(lines[0], "int=10.0.0.5") ||
-		!strings.Contains(lines[0], "Ready") {
-		t.Errorf("cp line malformed: %q", lines[0])
-	}
-	// Missing external IP renders as "-"; not-ready renders as "NotReady".
-	if !strings.Contains(lines[1], "ext=-") || !strings.Contains(lines[1], "NotReady") {
-		t.Errorf("worker line malformed: %q", lines[1])
 	}
 }
 

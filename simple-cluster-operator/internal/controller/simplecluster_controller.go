@@ -465,34 +465,6 @@ func (r *SimpleClusterReconciler) collectNodes(ctx context.Context, sc *showroom
 	}
 	sortNodes(nodes)
 	sc.Status.Nodes = nodes
-	sc.Status.NodesSummary = nodesSummary(nodes)
-}
-
-// nodesSummary renders Nodes as one line per node for the Platform Mesh
-// generic detail view, which can show a scalar string but not an array. Each
-// line is self-delimiting (leading "• ") so it stays readable whether the
-// portal preserves newlines or collapses them onto one line.
-func nodesSummary(nodes []showroomv1alpha1.NodeStatus) string {
-	if len(nodes) == 0 {
-		return ""
-	}
-	lines := make([]string, 0, len(nodes))
-	for _, n := range nodes {
-		ext, intl := n.ExternalIP, n.InternalIP
-		if ext == "" {
-			ext = "-"
-		}
-		if intl == "" {
-			intl = "-"
-		}
-		ready := "NotReady"
-		if n.Ready {
-			ready = "Ready"
-		}
-		lines = append(lines, fmt.Sprintf("• %s  %s  ext=%s  int=%s  %s",
-			n.Name, n.Role, ext, intl, ready))
-	}
-	return strings.Join(lines, "\n")
 }
 
 // nodeStatusOf projects a core/v1 Node onto a NodeStatus.
