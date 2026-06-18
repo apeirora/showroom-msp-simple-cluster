@@ -40,10 +40,24 @@ spec:
     - { name: datacenterID,  type: string, default: '9B94281B5B67A755F2B76165E25F6A65',           description: "arsys datacenterID" }
 
   resources:
+    - name: sshkey
+      apiVersion: sshkeys.apeirora.eu/v1alpha1
+      kind: SSHKey
+      readiness:
+        phasePath: status.ready
+        phaseReadyValue: "true"
+      template: |
+        apiVersion: sshkeys.apeirora.eu/v1alpha1
+        kind: SSHKey
+        spec:
+          keyType: ed25519
+
     - name: vmcp
       apiVersion: arsys.apeirora.eu/v1alpha1
       kind: ArsysUbuntuMachine
       repeat: "{{ .SC.controlPlane.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: arsys.apeirora.eu/v1alpha1
         kind: ArsysUbuntuMachine
@@ -60,9 +74,10 @@ spec:
             datacenterID: "{{ .Inputs.datacenterID }}"
             vcore: {{ .SC.controlPlane.requested.cpu }}
             ram: {{ .SC.controlPlane.requested.memory | trimSuffix "Gi" }}
-            publicKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+            sshKeyRef:
+              apiGroup: sshkeys.apeirora.eu
+              kind: SSHKey
+              name: {{ .Resources.sshkey.metadata.name }}
           ssh:
             user: root
 
@@ -70,6 +85,8 @@ spec:
       apiVersion: arsys.apeirora.eu/v1alpha1
       kind: ArsysUbuntuMachine
       repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: arsys.apeirora.eu/v1alpha1
         kind: ArsysUbuntuMachine
@@ -86,9 +103,10 @@ spec:
             datacenterID: "{{ .Inputs.datacenterID }}"
             vcore: {{ .SC.workers.requested.cpu }}
             ram: {{ .SC.workers.requested.memory | trimSuffix "Gi" }}
-            publicKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+            sshKeyRef:
+              apiGroup: sshkeys.apeirora.eu
+              kind: SSHKey
+              name: {{ .Resources.sshkey.metadata.name }}
           ssh:
             user: root
 
@@ -154,10 +172,24 @@ spec:
     - { name: datacenterID,  type: string, default: '9B94281B5B67A755F2B76165E25F6A65',           description: "arsys datacenterID" }
 
   resources:
+    - name: sshkey
+      apiVersion: sshkeys.apeirora.eu/v1alpha1
+      kind: SSHKey
+      readiness:
+        phasePath: status.ready
+        phaseReadyValue: "true"
+      template: |
+        apiVersion: sshkeys.apeirora.eu/v1alpha1
+        kind: SSHKey
+        spec:
+          keyType: ed25519
+
     - name: vmcp
       apiVersion: arsys.apeirora.eu/v1alpha1
       kind: ArsysUbuntuMachine
       repeat: "{{ .SC.controlPlane.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: arsys.apeirora.eu/v1alpha1
         kind: ArsysUbuntuMachine
@@ -176,9 +208,10 @@ spec:
             coresPerProcessor: 2
             ram: 8
             disk: 50
-            publicKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+            sshKeyRef:
+              apiGroup: sshkeys.apeirora.eu
+              kind: SSHKey
+              name: {{ .Resources.sshkey.metadata.name }}
           ssh:
             user: root
 
@@ -186,6 +219,8 @@ spec:
       apiVersion: arsys.apeirora.eu/v1alpha1
       kind: ArsysUbuntuMachine
       repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: arsys.apeirora.eu/v1alpha1
         kind: ArsysUbuntuMachine
@@ -204,9 +239,10 @@ spec:
             coresPerProcessor: 2
             ram: 8
             disk: 50
-            publicKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+            sshKeyRef:
+              apiGroup: sshkeys.apeirora.eu
+              kind: SSHKey
+              name: {{ .Resources.sshkey.metadata.name }}
           ssh:
             user: root
 

@@ -60,6 +60,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - sshkeys.apeirora.eu
+  resources:
+  - sshkeys
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - ubuntumachines.apeirora.eu
   resources:
   - ubuntumachines

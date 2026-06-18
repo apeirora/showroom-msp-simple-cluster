@@ -9,7 +9,8 @@
 #     ├── kind-cluster-operator/
 #     ├── simple-cluster-operator-openstack/
 #     ├── simple-cluster-operator-ubuntu/
-#     └── simple-cluster-operator-ironcore/
+#     ├── simple-cluster-operator-ironcore/
+#     └── sshkey-operator/
 #   charts/ubuntu-machines-operator/
 #
 # Usage:
@@ -27,6 +28,7 @@ declare -A REST_OPERATORS=(
   [simple-cluster-operator-openstack]=simple-cluster-system/charts/simple-cluster-operator-openstack
   [simple-cluster-operator-ubuntu]=simple-cluster-system/charts/simple-cluster-operator-ubuntu
   [simple-cluster-operator-ironcore]=simple-cluster-system/charts/simple-cluster-operator-ironcore
+  [sshkey-operator]=simple-cluster-system/charts/sshkey-operator
 )
 
 regenerate_one() {

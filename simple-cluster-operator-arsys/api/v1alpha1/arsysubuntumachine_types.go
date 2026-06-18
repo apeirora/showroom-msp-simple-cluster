@@ -24,6 +24,12 @@ const (
 	// TokenSecretKey is the data key in spec.tokenSecretRef holding the
 	// Arsys CloudBuilder API token (sent as the X-TOKEN header).
 	TokenSecretKey = "token"
+
+	// SSHKeyAPIGroup / SSHKeyKind / SSHKeyVersion identify the SSHKey custom
+	// resource that spec.server.sshKeyRef may point at instead of a Secret.
+	SSHKeyAPIGroup = "sshkeys.apeirora.eu"
+	SSHKeyKind     = "SSHKey"
+	SSHKeyVersion  = "v1alpha1"
 )
 
 // +kubebuilder:validation:Enum=Pending;Provisioning;Ready;Failed;Deleting
@@ -129,12 +135,15 @@ type ServerSpec struct {
 	// +optional
 	PublicKeys []string `json:"publicKeys,omitempty"`
 
-	// PublicKeySecretRef points at a Secret whose values are read as SSH public
-	// key strings. Values are considered after PublicKeys, ordered by data key
-	// name; private-key material is skipped. As with PublicKeys, only one key
-	// is injected (Arsys' inline rsa_key takes a single key).
+	// SSHKeyRef points at the SSH public key source, considered after PublicKeys.
+	// It accepts either an SSHKey custom resource (apiGroup sshkeys.apeirora.eu,
+	// kind SSHKey) — whose public key is used — or a Secret (core apiGroup, kind
+	// Secret) whose values are read as public-key strings (ordered by data key
+	// name; private-key material is skipped). As with PublicKeys, only one key is
+	// injected (Arsys' inline rsa_key takes a single key). namespace is optional
+	// and defaults to the machine's namespace.
 	// +optional
-	PublicKeySecretRef *corev1.SecretReference `json:"publicKeySecretRef,omitempty"`
+	SSHKeyRef *corev1.TypedObjectReference `json:"sshKeyRef,omitempty"`
 }
 
 // SSHSpec is the login the UbuntuMachine advertises to consumers.

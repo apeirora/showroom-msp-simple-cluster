@@ -47,10 +47,26 @@ spec:
     - { name: flavorPattern,  type: string, default: '^eo[12]a\.',       description: "Regex narrowing Nova flavor candidates" }
 
   resources:
+    - name: sshkey
+      apiVersion: sshkeys.apeirora.eu/v1alpha1
+      kind: SSHKey
+      readiness:
+        phasePath: status.ready
+        phaseReadyValue: "true"
+      template: |
+        apiVersion: sshkeys.apeirora.eu/v1alpha1
+        kind: SSHKey
+        spec:
+          keyType: ed25519
+          exportToSecret:
+            name: cloudferro-ssh
+
     - name: vmcp
       apiVersion: openstack.apeirora.eu/v1alpha1
       kind: OpenStackVM
       repeat: "{{ .SC.controlPlane.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: openstack.apeirora.eu/v1alpha1
         kind: OpenStackVM
@@ -71,12 +87,14 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkenFJqdAGaOOrrUas/BsuaL6oCUKP5//hYXXdDPY+L ubuntu-cluster@sample.com"
+              - "{{ .Resources.sshkey.publicKey }}"
 
     - name: vmworker
       apiVersion: openstack.apeirora.eu/v1alpha1
       kind: OpenStackVM
       repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: openstack.apeirora.eu/v1alpha1
         kind: OpenStackVM
@@ -97,12 +115,13 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkenFJqdAGaOOrrUas/BsuaL6oCUKP5//hYXXdDPY+L ubuntu-cluster@sample.com"
+              - "{{ .Resources.sshkey.publicKey }}"
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
       kind: UbuntuCluster
       dependsOn:
+        - sshkey
         - vmcp
         - vmworker
       forceCleanupOnCascade: true
@@ -113,8 +132,7 @@ spec:
           ssh:
             user: eouser
             privateKeySecretRef:
-              name: scpc-single-ssh
-              namespace: simple-cluster-system-scpc-configs
+              name: cloudferro-ssh
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
