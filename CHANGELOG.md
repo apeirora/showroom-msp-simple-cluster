@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.0...v0.16.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* build ([b2a4a23](https://github.com/apeirora/showroom-simple-cluster/commit/b2a4a23560f9b343b095261e4097e8baf58e5965))
+
 ## [0.16.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.2...v0.16.0) (2026-06-18)
 
 
