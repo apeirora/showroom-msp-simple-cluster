@@ -201,6 +201,26 @@ type InstanceStatus struct {
 	LastError string `json:"lastError,omitempty"`
 }
 
+// NodeStatus is one node of the provisioned cluster (NC), read live over the
+// synced kubeconfig. Surfaced so users can see the cluster's machines and how
+// to reach them without fetching the kubeconfig themselves.
+type NodeStatus struct {
+	// Name is the Kubernetes node name.
+	Name string `json:"name"`
+	// Role is "control-plane" or "worker", derived from the node's role labels.
+	// +optional
+	Role string `json:"role,omitempty"`
+	// ExternalIP is the node's ExternalIP address. Empty when the cluster does
+	// not advertise one (e.g. nodes only reachable on a private network).
+	// +optional
+	ExternalIP string `json:"externalIP,omitempty"`
+	// InternalIP is the node's InternalIP address.
+	// +optional
+	InternalIP string `json:"internalIP,omitempty"`
+	// Ready reflects the node's Ready condition.
+	Ready bool `json:"ready"`
+}
+
 // SimpleClusterStatus defines the observed state of SimpleCluster.
 type SimpleClusterStatus struct {
 	// ProviderConfigRef is locked at first reconcile so SCPC changes do not
@@ -257,6 +277,22 @@ type SimpleClusterStatus struct {
 	// WKR printer column (e.g. "0/2").
 	// +optional
 	WKR string `json:"wkr,omitempty"`
+
+	// Nodes lists the control-plane and worker nodes of the provisioned
+	// cluster (NC) with their addresses, read live over the synced kubeconfig.
+	// Populated best-effort once the kubeconfig is available; empty until then
+	// and never affects Phase.
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	Nodes []NodeStatus `json:"nodes,omitempty"`
+
+	// NodesSummary is a human-readable, one-line-per-node rendering of Nodes.
+	// It exists only because the Platform Mesh generic detail view can render
+	// a scalar string field but not an array of objects; the structured data
+	// lives in Nodes. Derived from Nodes every reconcile.
+	// +optional
+	NodesSummary string `json:"nodesSummary,omitempty"`
 
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
