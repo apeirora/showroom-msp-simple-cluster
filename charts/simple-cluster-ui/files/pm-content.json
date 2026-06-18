@@ -133,6 +133,16 @@
                                             "property": "status.wkr"
                                         },
                                         {
+                                            "label": "Nodes",
+                                            "property": "status.nodesSummary",
+                                            "uiSettings": {
+                                                "cssCustomization": {
+                                                    "whiteSpace": "pre-line",
+                                                    "fontFamily": "monospace"
+                                                }
+                                            }
+                                        },
+                                        {
                                             "label": "Kubeconfig Secret",
                                             "property": "status.kubeconfigSecretRef.name"
                                         },
