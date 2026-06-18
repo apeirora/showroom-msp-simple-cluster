@@ -352,13 +352,6 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
-              nodesSummary:
-                description: |-
-                  NodesSummary is a human-readable, one-line-per-node rendering of Nodes.
-                  It exists only because the Platform Mesh generic detail view can render
-                  a scalar string field but not an array of objects; the structured data
-                  lives in Nodes. Derived from Nodes every reconcile.
-                type: string
               observedGeneration:
                 format: int64
                 type: integer
