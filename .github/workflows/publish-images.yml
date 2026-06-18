@@ -46,6 +46,9 @@ jobs:
           - context: ubuntu-machines
             image: ubuntu-machines
             platforms: linux/amd64,linux/arm64
+          - context: sshkey-operator
+            image: sshkey-operator
+            platforms: linux/amd64,linux/arm64
           # arsys builds from the repo root: its go.mod has a
           # `replace => ../ubuntu-machines`, so the Dockerfile COPYs that sibling.
           - context: .
