@@ -76,9 +76,9 @@ type SSHKeySpec struct {
 
 // SSHKeyStatus defines the observed state of SSHKey.
 type SSHKeyStatus struct {
-	// ValidTill is the time the key expires, set when spec.expire is provided.
+	// Expires is the time the key expires, set when spec.expire is provided.
 	// +optional
-	ValidTill metav1.Time `json:"validTill,omitempty"`
+	Expires metav1.Time `json:"expires,omitempty"`
 
 	// Ready is true once the key is generated and (if requested) exported.
 	Ready bool `json:"ready"`
@@ -103,7 +103,7 @@ type SSHKeyStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.keyType`
 // +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
-// +kubebuilder:printcolumn:name="ValidTill",type=date,JSONPath=`.status.validTill`
+// +kubebuilder:printcolumn:name="Expires",type=date,JSONPath=`.status.expires`
 
 // SSHKey is the Schema for generating sshkeys API
 type SSHKey struct {
