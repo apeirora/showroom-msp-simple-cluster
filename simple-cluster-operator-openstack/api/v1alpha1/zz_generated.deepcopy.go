@@ -106,10 +106,10 @@ func (in *OpenStackVMSpec) DeepCopyInto(out *OpenStackVMSpec) {
 		copy(*out, *in)
 	}
 	in.Resources.DeepCopyInto(&out.Resources)
-	if in.SSHKeySecretRef != nil {
-		in, out := &in.SSHKeySecretRef, &out.SSHKeySecretRef
-		*out = new(v1.SecretReference)
-		**out = **in
+	if in.SSHKeyRef != nil {
+		in, out := &in.SSHKeyRef, &out.SSHKeyRef
+		*out = new(v1.TypedObjectReference)
+		(*in).DeepCopyInto(*out)
 	}
 }
 

@@ -1,7 +1,7 @@
 # Standalone OpenStackVM example.
 #
 # All four VMs share one SSH keypair Secret (`openstack-vm-instances-ssh`)
-# via spec.sshKeySecretRef. simple-cluster-operator-openstack generates
+# via spec.sshKeyRef (kind: Secret). simple-cluster-operator-openstack generates
 # the keypair into that Secret on first reconcile and registers a single
 # Nova keypair `default-openstack-vm-instances-ssh` (name derived from
 # the Secret's <ns>-<name>).
@@ -12,7 +12,8 @@ metadata:
 spec:
   credentialsRef:
     name: openstack-creds
-  sshKeySecretRef:
+  sshKeyRef:
+    kind: Secret
     name: openstack-vm-instances-ssh
   network: cloud_080745_1
   floatingIPPool: external
@@ -33,7 +34,8 @@ metadata:
 spec:
   credentialsRef:
     name: openstack-creds
-  sshKeySecretRef:
+  sshKeyRef:
+    kind: Secret
     name: openstack-vm-instances-ssh
   network: cloud_080745_1
   floatingIPPool: external
@@ -54,7 +56,8 @@ metadata:
 spec:
   credentialsRef:
     name: openstack-creds
-  sshKeySecretRef:
+  sshKeyRef:
+    kind: Secret
     name: openstack-vm-instances-ssh
   network: cloud_080745_1
   securityGroups:
@@ -73,7 +76,8 @@ metadata:
 spec:
   credentialsRef:
     name: openstack-creds
-  sshKeySecretRef:
+  sshKeyRef:
+    kind: Secret
     name: openstack-vm-instances-ssh
   network: cloud_080745_1
   securityGroups:

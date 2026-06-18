@@ -1,5 +1,4 @@
 enable:
-  singleSSH: true
   cloudferro: true
   dati: true
   kind: true

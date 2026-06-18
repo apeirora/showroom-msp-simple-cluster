@@ -88,10 +88,10 @@ func (in *IronCoreVMSpec) DeepCopyInto(out *IronCoreVMSpec) {
 		*out = new(NodeResources)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.SSHKeySecretRef != nil {
-		in, out := &in.SSHKeySecretRef, &out.SSHKeySecretRef
-		*out = new(v1.SecretReference)
-		**out = **in
+	if in.SSHKeyRef != nil {
+		in, out := &in.SSHKeyRef, &out.SSHKeyRef
+		*out = new(v1.TypedObjectReference)
+		(*in).DeepCopyInto(*out)
 	}
 }
 

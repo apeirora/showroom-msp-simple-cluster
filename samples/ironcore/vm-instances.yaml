@@ -13,7 +13,8 @@ spec:
   image: ghcr.io/ironcore-dev/gardenlinux/gardener:2150.0.0-kvm
   cloudProfile: memory-intel1-2cpu   # pick a MachineClass by name
   publicIP: true
-  sshKeySecretRef:
+  sshKeyRef:
+    kind: Secret
     name: ironcore-vm-instances-ssh
   userData: |
     #!/bin/bash
@@ -39,7 +40,8 @@ spec:
     cpu: "1"
     memory: 8Gi
   publicIP: false
-  sshKeySecretRef:
+  sshKeyRef:
+    kind: Secret
     name: ironcore-vm-instances-ssh
   userData: |
     #!/bin/bash

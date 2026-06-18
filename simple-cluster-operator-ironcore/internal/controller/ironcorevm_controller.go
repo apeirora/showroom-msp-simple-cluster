@@ -13,13 +13,16 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -51,6 +54,7 @@ type IronCoreVMReconciler struct {
 // +kubebuilder:rbac:groups=ironcore.apeirora.eu,resources=ironcorevms/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch
 
 func (r *IronCoreVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -317,20 +321,57 @@ func ironCoreKubeconfigRef(vm *ironcorev1alpha1.IronCoreVM) types.NamespacedName
 	return types.NamespacedName{Name: vm.Spec.IronCoreKubeconfig.Name, Namespace: ns}
 }
 
-func effectiveSSHKeyRef(vm *ironcorev1alpha1.IronCoreVM) types.NamespacedName {
-	if vm.Spec.SSHKeySecretRef != nil && vm.Spec.SSHKeySecretRef.Name != "" {
-		ns := vm.Spec.SSHKeySecretRef.Namespace
-		if ns == "" {
-			ns = vm.Namespace
-		}
-		return types.NamespacedName{Name: vm.Spec.SSHKeySecretRef.Name, Namespace: ns}
+// isSSHKeyResourceRef reports whether ref points at an SSHKey custom resource
+// (as opposed to a core Secret).
+func isSSHKeyResourceRef(ref *corev1.TypedObjectReference) bool {
+	return ref != nil && ref.Kind == ironcorev1alpha1.SSHKeyKind &&
+		ref.APIGroup != nil && *ref.APIGroup == ironcorev1alpha1.SSHKeyAPIGroup
+}
+
+func refNamespace(ns *string, fallback string) string {
+	if ns != nil && *ns != "" {
+		return *ns
 	}
-	return types.NamespacedName{Name: vm.Name + sshSecretSuffix, Namespace: vm.Namespace}
+	return fallback
+}
+
+// secretKeyRef resolves the Secret holding (or to hold) the keypair, for the
+// Secret/unset path. shared is true when the VM names an explicit Secret.
+func secretKeyRef(vm *ironcorev1alpha1.IronCoreVM) (nn types.NamespacedName, shared bool) {
+	if ref := vm.Spec.SSHKeyRef; ref != nil && ref.Name != "" {
+		return types.NamespacedName{Name: ref.Name, Namespace: refNamespace(ref.Namespace, vm.Namespace)}, true
+	}
+	return types.NamespacedName{Name: vm.Name + sshSecretSuffix, Namespace: vm.Namespace}, false
+}
+
+// resolveSSHKeyResource reads the public key from a referenced SSHKey custom
+// resource. The returned name is the SSHKey's exported Secret (for status), or
+// the SSHKey name when it exports none.
+func (r *IronCoreVMReconciler) resolveSSHKeyResource(ctx context.Context, vm *ironcorev1alpha1.IronCoreVM) (types.NamespacedName, string, error) {
+	ref := vm.Spec.SSHKeyRef
+	ns := refNamespace(ref.Namespace, vm.Namespace)
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: ironcorev1alpha1.SSHKeyAPIGroup, Version: ironcorev1alpha1.SSHKeyVersion, Kind: ironcorev1alpha1.SSHKeyKind})
+	if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ns}, u); err != nil {
+		return types.NamespacedName{}, "", fmt.Errorf("get SSHKey %s/%s: %w", ns, ref.Name, err)
+	}
+	pub, _, _ := unstructured.NestedString(u.Object, "publicKey")
+	if strings.TrimSpace(pub) == "" {
+		return types.NamespacedName{}, "", fmt.Errorf("SSHKey %s/%s has no public key yet", ns, ref.Name)
+	}
+	name, _, _ := unstructured.NestedString(u.Object, "spec", "exportToSecret", "name")
+	if name == "" {
+		name = ref.Name
+	}
+	return types.NamespacedName{Name: name, Namespace: ns}, pub, nil
 }
 
 func (r *IronCoreVMReconciler) ensureSSHKeypair(ctx context.Context, vm *ironcorev1alpha1.IronCoreVM) (types.NamespacedName, string, error) {
-	ref := effectiveSSHKeyRef(vm)
-	shared := vm.Spec.SSHKeySecretRef != nil && vm.Spec.SSHKeySecretRef.Name != ""
+	if isSSHKeyResourceRef(vm.Spec.SSHKeyRef) {
+		return r.resolveSSHKeyResource(ctx, vm)
+	}
+	ref, shared := secretKeyRef(vm)
 
 	var existing corev1.Secret
 	err := r.Get(ctx, ref, &existing)

@@ -28,6 +28,12 @@ const (
 	SSHSecretPrivateKeyKey = "ssh-privatekey"
 	SSHSecretPublicKeyKey  = "ssh-publickey"
 
+	// SSHKeyAPIGroup / SSHKeyKind / SSHKeyVersion identify the SSHKey custom
+	// resource that spec.sshKeyRef may point at instead of a Secret.
+	SSHKeyAPIGroup = "sshkeys.apeirora.eu"
+	SSHKeyKind     = "SSHKey"
+	SSHKeyVersion  = "v1alpha1"
+
 	CredentialsKubeconfigKey = "kubeconfig"
 	IgnitionSecretKey        = "ignition.yaml"
 
@@ -111,11 +117,14 @@ type IronCoreVMSpec struct {
 	// +optional
 	UserData string `json:"userData,omitempty"`
 
-	// SSHKeySecretRef opts the VM into a shared SSH keypair. When set the operator
-	// looks up or creates the named Secret. If unset, a per-VM Secret
-	// `<vm-name>-ssh` is used.
+	// SSHKeyRef selects the SSH key material for the VM. It accepts either an
+	// SSHKey custom resource (apiGroup sshkeys.apeirora.eu, kind SSHKey) — whose
+	// public key is read directly — or a kubernetes.io/ssh-auth Secret (core
+	// apiGroup, kind Secret) whose ssh-publickey is used (looked up, or generated
+	// and stored when absent). namespace is optional and defaults to the VM's
+	// namespace. When unset, a per-VM Secret `<vm-name>-ssh` is generated.
 	// +optional
-	SSHKeySecretRef *corev1.SecretReference `json:"sshKeySecretRef,omitempty"`
+	SSHKeyRef *corev1.TypedObjectReference `json:"sshKeyRef,omitempty"`
 }
 
 // NodeResources is the per-VM CPU/memory floor used for MachineClass selection.
