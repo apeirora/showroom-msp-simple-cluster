@@ -13,13 +13,16 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,6 +57,7 @@ type OpenStackVMReconciler struct {
 // +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvms/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch
 
 func (r *OpenStackVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -301,19 +305,51 @@ func credentialsRef(vm *openstackv1alpha1.OpenStackVM) types.NamespacedName {
 	return types.NamespacedName{Name: vm.Spec.CredentialsRef.Name, Namespace: ns}
 }
 
-// effectiveSSHKeyRef computes which Secret carries this VM's keypair.
-// When spec.sshKeySecretRef is set we use that (with namespace defaulted
-// to the VM's namespace); otherwise we fall back to the per-VM Secret
-// `<vm-name>-ssh` in vm.Namespace.
-func effectiveSSHKeyRef(vm *openstackv1alpha1.OpenStackVM) types.NamespacedName {
-	if vm.Spec.SSHKeySecretRef != nil && vm.Spec.SSHKeySecretRef.Name != "" {
-		ns := vm.Spec.SSHKeySecretRef.Namespace
-		if ns == "" {
-			ns = vm.Namespace
-		}
-		return types.NamespacedName{Name: vm.Spec.SSHKeySecretRef.Name, Namespace: ns}
+// isSSHKeyResourceRef reports whether ref points at an SSHKey custom resource
+// (as opposed to a core Secret).
+func isSSHKeyResourceRef(ref *corev1.TypedObjectReference) bool {
+	return ref != nil && ref.Kind == openstackv1alpha1.SSHKeyKind &&
+		ref.APIGroup != nil && *ref.APIGroup == openstackv1alpha1.SSHKeyAPIGroup
+}
+
+func refNamespace(ns *string, fallback string) string {
+	if ns != nil && *ns != "" {
+		return *ns
 	}
-	return types.NamespacedName{Name: vm.Name + sshSecretSuffix, Namespace: vm.Namespace}
+	return fallback
+}
+
+// secretKeyRef resolves the Secret carrying this VM's keypair for the
+// Secret/unset path. shared is true when the VM names an explicit Secret.
+func secretKeyRef(vm *openstackv1alpha1.OpenStackVM) (nn types.NamespacedName, shared bool) {
+	if ref := vm.Spec.SSHKeyRef; ref != nil && ref.Name != "" {
+		return types.NamespacedName{Name: ref.Name, Namespace: refNamespace(ref.Namespace, vm.Namespace)}, true
+	}
+	return types.NamespacedName{Name: vm.Name + sshSecretSuffix, Namespace: vm.Namespace}, false
+}
+
+// resolveSSHKeyResource reads the public key from a referenced SSHKey custom
+// resource. The returned name is the SSHKey's exported Secret (used as the Nova
+// keypair name and for cleanup bookkeeping), or the SSHKey name when it exports
+// none.
+func (r *OpenStackVMReconciler) resolveSSHKeyResource(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (types.NamespacedName, string, error) {
+	ref := vm.Spec.SSHKeyRef
+	ns := refNamespace(ref.Namespace, vm.Namespace)
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: openstackv1alpha1.SSHKeyAPIGroup, Version: openstackv1alpha1.SSHKeyVersion, Kind: openstackv1alpha1.SSHKeyKind})
+	if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ns}, u); err != nil {
+		return types.NamespacedName{}, "", fmt.Errorf("get SSHKey %s/%s: %w", ns, ref.Name, err)
+	}
+	pub, _, _ := unstructured.NestedString(u.Object, "publicKey")
+	if strings.TrimSpace(pub) == "" {
+		return types.NamespacedName{}, "", fmt.Errorf("SSHKey %s/%s has no public key yet", ns, ref.Name)
+	}
+	name, _, _ := unstructured.NestedString(u.Object, "spec", "exportToSecret", "name")
+	if name == "" {
+		name = ref.Name
+	}
+	return types.NamespacedName{Name: name, Namespace: ns}, pub, nil
 }
 
 // keypairNameFor derives a Nova keypair name from a Secret reference so
@@ -322,12 +358,14 @@ func keypairNameFor(ref types.NamespacedName) string {
 	return ref.Namespace + "-" + ref.Name
 }
 
-// ensureSSHKeypair resolves the SSH-key Secret for this VM:
-//   - if spec.sshKeySecretRef is set and the Secret exists → reuse it;
-//   - if spec.sshKeySecretRef is set and the Secret does not exist →
-//     generate the keypair into that ref;
-//   - if spec.sshKeySecretRef is unset → use/create `<vm-name>-ssh` in
-//     vm.Namespace (per-VM mode, with ownerRef back to the VM).
+// ensureSSHKeypair resolves the SSH public key for this VM:
+//   - if spec.sshKeyRef points at an SSHKey resource → read its public key and
+//     attach keypair-cleanup bookkeeping to its exported Secret;
+//   - if spec.sshKeyRef names a Secret that exists → reuse it;
+//   - if spec.sshKeyRef names a Secret that does not exist → generate the
+//     keypair into that ref;
+//   - if spec.sshKeyRef is unset → use/create `<vm-name>-ssh` in vm.Namespace
+//     (per-VM mode, with ownerRef back to the VM).
 //
 // On every reconcile the Secret is patched to carry the keypair-cleanup
 // finalizer and three annotations (credentials-name, credentials-namespace,
@@ -335,8 +373,25 @@ func keypairNameFor(ref types.NamespacedName) string {
 // the Nova keypair when the Secret is later deleted, even after the VM
 // CR is gone.
 func (r *OpenStackVMReconciler) ensureSSHKeypair(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (types.NamespacedName, string, error) {
-	ref := effectiveSSHKeyRef(vm)
-	shared := vm.Spec.SSHKeySecretRef != nil && vm.Spec.SSHKeySecretRef.Name != ""
+	if isSSHKeyResourceRef(vm.Spec.SSHKeyRef) {
+		ref, pub, err := r.resolveSSHKeyResource(ctx, vm)
+		if err != nil {
+			return ref, "", err
+		}
+		// Attach the Nova-keypair-cleanup finalizer/annotations to the SSHKey's
+		// exported Secret (without taking ownership — the SSHKey owns it) so the
+		// SSH-Secret reconciler tears down the Nova keypair when that Secret is
+		// deleted. Best-effort: skip if the exported Secret is not present.
+		var sec corev1.Secret
+		if getErr := r.Get(ctx, ref, &sec); getErr == nil {
+			if err := r.ensureSecretBookkeeping(ctx, &sec, vm, ref, false); err != nil {
+				return ref, "", err
+			}
+		}
+		return ref, pub, nil
+	}
+
+	ref, shared := secretKeyRef(vm)
 
 	var existing corev1.Secret
 	err := r.Get(ctx, ref, &existing)

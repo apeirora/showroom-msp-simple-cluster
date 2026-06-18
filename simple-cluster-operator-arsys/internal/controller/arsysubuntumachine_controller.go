@@ -24,7 +24,9 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -64,6 +66,7 @@ type ArsysUbuntuMachineReconciler struct {
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch
 
 func (r *ArsysUbuntuMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -362,10 +365,11 @@ func (r *ArsysUbuntuMachineReconciler) ensureK3sFirewallPolicy(ctx context.Conte
 
 // collectSSHPublicKey returns the single SSH public key to inject at order
 // time via the Arsys rsa_key field. Candidates are spec.server.publicKeys (in
-// order) then the publicKeySecretRef Secret values (ordered by data key, for
-// determinism). Blank and private-key entries are skipped. Arsys' inline
-// rsa_key accepts only one key; if several are found the first is used and a
-// warning event records the rest were dropped.
+// order) then spec.server.sshKeyRef — an SSHKey resource's public key, or a
+// Secret's values (ordered by data key, for determinism). Blank and
+// private-key entries are skipped. Arsys' inline rsa_key accepts only one key;
+// if several are found the first is used and a warning event records the rest
+// were dropped.
 func (r *ArsysUbuntuMachineReconciler) collectSSHPublicKey(ctx context.Context, aum *arsysv1alpha1.ArsysUbuntuMachine) (string, error) {
 	var keys []string
 	add := func(v string) {
@@ -376,19 +380,29 @@ func (r *ArsysUbuntuMachineReconciler) collectSSHPublicKey(ctx context.Context, 
 	for _, k := range aum.Spec.Server.PublicKeys {
 		add(k)
 	}
-	if ref := aum.Spec.Server.PublicKeySecretRef; ref != nil {
-		var sec corev1.Secret
-		if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &sec); err != nil {
-			r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "publicKeySecretRef %s/%s: %v", ref.Namespace, ref.Name, err)
-			return "", fmt.Errorf("get publicKeySecretRef %s/%s: %w", ref.Namespace, ref.Name, err)
-		}
-		names := make([]string, 0, len(sec.Data))
-		for name := range sec.Data {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			add(string(sec.Data[name]))
+	if ref := aum.Spec.Server.SSHKeyRef; ref != nil {
+		ns := refNamespace(ref.Namespace, aum.Namespace)
+		if isSSHKeyResourceRef(ref) {
+			pub, err := r.readSSHKeyResource(ctx, ns, ref.Name)
+			if err != nil {
+				r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "sshKeyRef %s/%s: %v", ns, ref.Name, err)
+				return "", err
+			}
+			add(pub)
+		} else {
+			var sec corev1.Secret
+			if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ns}, &sec); err != nil {
+				r.Recorder.Eventf(aum, corev1.EventTypeWarning, "APIError", "sshKeyRef %s/%s: %v", ns, ref.Name, err)
+				return "", fmt.Errorf("get sshKeyRef Secret %s/%s: %w", ns, ref.Name, err)
+			}
+			names := make([]string, 0, len(sec.Data))
+			for name := range sec.Data {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			for _, name := range names {
+				add(string(sec.Data[name]))
+			}
 		}
 	}
 	if len(keys) == 0 {
@@ -399,6 +413,36 @@ func (r *ArsysUbuntuMachineReconciler) collectSSHPublicKey(ctx context.Context, 
 			"%d SSH public keys provided but Arsys rsa_key accepts only one; using the first", len(keys))
 	}
 	return keys[0], nil
+}
+
+// isSSHKeyResourceRef reports whether ref points at an SSHKey custom resource
+// (as opposed to a core Secret).
+func isSSHKeyResourceRef(ref *corev1.TypedObjectReference) bool {
+	return ref != nil && ref.Kind == arsysv1alpha1.SSHKeyKind &&
+		ref.APIGroup != nil && *ref.APIGroup == arsysv1alpha1.SSHKeyAPIGroup
+}
+
+func refNamespace(ns *string, fallback string) string {
+	if ns != nil && *ns != "" {
+		return *ns
+	}
+	return fallback
+}
+
+// readSSHKeyResource returns the public key carried by a referenced SSHKey
+// custom resource.
+func (r *ArsysUbuntuMachineReconciler) readSSHKeyResource(ctx context.Context, ns, name string) (string, error) {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: arsysv1alpha1.SSHKeyAPIGroup, Version: arsysv1alpha1.SSHKeyVersion, Kind: arsysv1alpha1.SSHKeyKind})
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, u); err != nil {
+		return "", fmt.Errorf("get SSHKey %s/%s: %w", ns, name, err)
+	}
+	pub, _, _ := unstructured.NestedString(u.Object, "publicKey")
+	if strings.TrimSpace(pub) == "" {
+		return "", fmt.Errorf("SSHKey %s/%s has no public key yet", ns, name)
+	}
+	return pub, nil
 }
 
 // writePasswordSecret writes the server's root password into the Secret named

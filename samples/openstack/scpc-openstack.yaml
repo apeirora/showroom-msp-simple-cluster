@@ -15,10 +15,26 @@ spec:
     - { name: flavorPattern,  type: string, default: '^eo[12]a\.',       description: "Regex narrowing Nova flavor candidates" }
 
   resources:
+    - name: sshkey
+      apiVersion: sshkeys.apeirora.eu/v1alpha1
+      kind: SSHKey
+      readiness:
+        phasePath: status.ready
+        phaseReadyValue: "true"
+      template: |
+        apiVersion: sshkeys.apeirora.eu/v1alpha1
+        kind: SSHKey
+        spec:
+          keyType: ed25519
+          exportToSecret:
+            name: openstack-sample-ssh
+
     - name: vmcp
       apiVersion: openstack.apeirora.eu/v1alpha1
       kind: OpenStackVM
       repeat: "{{ .SC.controlPlane.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: openstack.apeirora.eu/v1alpha1
         kind: OpenStackVM
@@ -38,12 +54,14 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYRfmGXcSdAxBZ5pcdONfiHkR9f3Ed9yvgQM3Fe9kV2 openstack-sample-ssh@sample"
+              - "{{ .Resources.sshkey.publicKey }}"
 
     - name: vmworker
       apiVersion: openstack.apeirora.eu/v1alpha1
       kind: OpenStackVM
       repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: openstack.apeirora.eu/v1alpha1
         kind: OpenStackVM
@@ -62,12 +80,13 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYRfmGXcSdAxBZ5pcdONfiHkR9f3Ed9yvgQM3Fe9kV2 openstack-sample-ssh@sample"
+              - "{{ .Resources.sshkey.publicKey }}"
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
       kind: UbuntuCluster
       dependsOn:
+        - sshkey
         - vmcp
         - vmworker
       # k3s lives only on the VMs below. When the SC is deleted those VMs

@@ -16,10 +16,26 @@ spec:
     - { name: sshUser,             type: string, default: root,                                    description: "OS user the SSH key is injected for via ignition" }
 
   resources:
+    - name: sshkey
+      apiVersion: sshkeys.apeirora.eu/v1alpha1
+      kind: SSHKey
+      readiness:
+        phasePath: status.ready
+        phaseReadyValue: "true"
+      template: |
+        apiVersion: sshkeys.apeirora.eu/v1alpha1
+        kind: SSHKey
+        spec:
+          keyType: ed25519
+          exportToSecret:
+            name: ironcore-sample-ssh
+
     - name: vmcp
       apiVersion: ironcore.apeirora.eu/v1alpha1
       kind: IronCoreVM
       repeat: "{{ .SC.controlPlane.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: ironcore.apeirora.eu/v1alpha1
         kind: IronCoreVM
@@ -30,8 +46,10 @@ spec:
           ipPool: {{ .Inputs.ipPool }}
           image: "{{ .Inputs.image }}"
           publicIP: true
-          sshKeySecretRef:
-            name: ironcore-sample-ssh
+          sshKeyRef:
+            apiGroup: sshkeys.apeirora.eu
+            kind: SSHKey
+            name: {{ .Resources.sshkey.metadata.name }}
           sshUser: {{ .Inputs.sshUser }}
           resources:
             cpu: "{{ .SC.controlPlane.requested.cpu }}"
@@ -42,6 +60,8 @@ spec:
       apiVersion: ironcore.apeirora.eu/v1alpha1
       kind: IronCoreVM
       repeat: "{{ .SC.workers.nodes }}"
+      dependsOn:
+        - sshkey
       template: |
         apiVersion: ironcore.apeirora.eu/v1alpha1
         kind: IronCoreVM
@@ -52,8 +72,10 @@ spec:
           ipPool: {{ .Inputs.ipPool }}
           image: "{{ .Inputs.image }}"
           publicIP: false
-          sshKeySecretRef:
-            name: ironcore-sample-ssh
+          sshKeyRef:
+            apiGroup: sshkeys.apeirora.eu
+            kind: SSHKey
+            name: {{ .Resources.sshkey.metadata.name }}
           sshUser: {{ .Inputs.sshUser }}
           resources:
             cpu: "{{ .SC.workers.requested.cpu }}"
@@ -64,6 +86,7 @@ spec:
       apiVersion: ubuntu.apeirora.eu/v1alpha1
       kind: UbuntuCluster
       dependsOn:
+        - sshkey
         - vmcp
         - vmworker
       # k3s runs only on the VMs below. When the SC is deleted those VMs
