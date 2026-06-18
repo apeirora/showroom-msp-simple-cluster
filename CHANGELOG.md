@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.1...v0.16.2) (2026-06-18)
+
+
+### Bug Fixes
+
+* dati reduce shoot name length ([54cce36](https://github.com/apeirora/showroom-simple-cluster/commit/54cce36b803fa2023425a2c74610eb2b1dd66183))
+* require control plane create fields and move above workers ([36bee01](https://github.com/apeirora/showroom-simple-cluster/commit/36bee0141fe7bf12dd8b21752c79b7872cf687f0))
+* ui nodes list ([de5ebb5](https://github.com/apeirora/showroom-simple-cluster/commit/de5ebb572258ead738937796eecce0608961ab9c))
+
 ## [0.16.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.0...v0.16.1) (2026-06-18)
 
 
