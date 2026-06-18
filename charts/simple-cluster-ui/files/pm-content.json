@@ -74,6 +74,23 @@
                                             "values": {{ .Values.clusterConfig.providers | toJson }}
                                         },
                                         {
+                                            "label": "Control Plane Nodes",
+                                            "property": "spec.controlPlane.nodes",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Control Plane CPU",
+                                            "property": "spec.controlPlane.requested.cpu",
+                                            "required": true,
+                                            "values": {{ .Values.clusterConfig.cpu | toJson }}
+                                        },
+                                        {
+                                            "label": "Control Plane Memory",
+                                            "property": "spec.controlPlane.requested.memory",
+                                            "required": true,
+                                            "values": {{ .Values.clusterConfig.memory | toJson }}
+                                        },
+                                        {
                                             "label": "Worker Nodes",
                                             "property": "spec.workers.nodes",
                                             "required": true
@@ -88,20 +105,6 @@
                                             "label": "Worker Memory",
                                             "property": "spec.workers.requested.memory",
                                             "required": true,
-                                            "values": {{ .Values.clusterConfig.memory | toJson }}
-                                        },
-                                        {
-                                            "label": "Control Plane Nodes",
-                                            "property": "spec.controlPlane.nodes"
-                                        },
-                                        {
-                                            "label": "Control Plane CPU",
-                                            "property": "spec.controlPlane.requested.cpu",
-                                            "values": {{ .Values.clusterConfig.cpu | toJson }}
-                                        },
-                                        {
-                                            "label": "Control Plane Memory",
-                                            "property": "spec.controlPlane.requested.memory",
                                             "values": {{ .Values.clusterConfig.memory | toJson }}
                                         }
                                     ]

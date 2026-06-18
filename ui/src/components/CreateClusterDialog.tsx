@@ -151,6 +151,41 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
           </Select>
         </FlexBox>
 
+        <Label>Control plane</Label>
+        <FlexBox style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
+          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+            <Label for="sc-cp-nodes" required>Nodes</Label>
+            <StepInput
+              id="sc-cp-nodes"
+              value={controlPlaneNodes}
+              min={config.controlPlane.min}
+              max={config.controlPlane.max}
+              step={1}
+              onChange={(e) => setControlPlaneNodes(Number((e.target as unknown as HTMLInputElement).value))}
+            />
+          </FlexBox>
+          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+            <Label for="sc-cp-cpu" required>CPU / node</Label>
+            <Select id="sc-cp-cpu" onChange={(e) => setControlPlaneCpu(selectValue(e))}>
+              {config.cpu.map((v) => (
+                <Option key={v} value={v} selected={v === controlPlaneCpu}>
+                  {v}
+                </Option>
+              ))}
+            </Select>
+          </FlexBox>
+          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+            <Label for="sc-cp-mem" required>Memory / node</Label>
+            <Select id="sc-cp-mem" onChange={(e) => setControlPlaneMemory(selectValue(e))}>
+              {config.memory.map((v) => (
+                <Option key={v} value={v} selected={v === controlPlaneMemory}>
+                  {v}
+                </Option>
+              ))}
+            </Select>
+          </FlexBox>
+        </FlexBox>
+
         <Label>Workers</Label>
         <FlexBox style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
           <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
@@ -185,41 +220,6 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
             <Select id="sc-wkr-mem" onChange={(e) => setWorkerMemory(selectValue(e))}>
               {config.memory.map((v) => (
                 <Option key={v} value={v} selected={v === workerMemory}>
-                  {v}
-                </Option>
-              ))}
-            </Select>
-          </FlexBox>
-        </FlexBox>
-
-        <Label>Control plane</Label>
-        <FlexBox style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
-          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-cp-nodes" required>Nodes</Label>
-            <StepInput
-              id="sc-cp-nodes"
-              value={controlPlaneNodes}
-              min={config.controlPlane.min}
-              max={config.controlPlane.max}
-              step={1}
-              onChange={(e) => setControlPlaneNodes(Number((e.target as unknown as HTMLInputElement).value))}
-            />
-          </FlexBox>
-          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-cp-cpu" required>CPU / node</Label>
-            <Select id="sc-cp-cpu" onChange={(e) => setControlPlaneCpu(selectValue(e))}>
-              {config.cpu.map((v) => (
-                <Option key={v} value={v} selected={v === controlPlaneCpu}>
-                  {v}
-                </Option>
-              ))}
-            </Select>
-          </FlexBox>
-          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-cp-mem" required>Memory / node</Label>
-            <Select id="sc-cp-mem" onChange={(e) => setControlPlaneMemory(selectValue(e))}>
-              {config.memory.map((v) => (
-                <Option key={v} value={v} selected={v === controlPlaneMemory}>
                   {v}
                 </Option>
               ))}
