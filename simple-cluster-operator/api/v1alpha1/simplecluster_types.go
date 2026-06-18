@@ -287,13 +287,6 @@ type SimpleClusterStatus struct {
 	// +optional
 	Nodes []NodeStatus `json:"nodes,omitempty"`
 
-	// NodesSummary is a human-readable, one-line-per-node rendering of Nodes.
-	// It exists only because the Platform Mesh generic detail view can render
-	// a scalar string field but not an array of objects; the structured data
-	// lives in Nodes. Derived from Nodes every reconcile.
-	// +optional
-	NodesSummary string `json:"nodesSummary,omitempty"`
-
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
