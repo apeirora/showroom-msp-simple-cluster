@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -286,6 +287,10 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// per-resource conditions and never affect Phase.
 	r.applyClusterResources(ctx, &sc)
 
+	// Mirror the provisioned cluster's nodes (and their external IPs) into
+	// status. Best-effort over the same synced kubeconfig; never affects Phase.
+	r.collectNodes(ctx, &sc)
+
 	if err := r.Status().Patch(ctx, &sc, patch); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -419,6 +424,116 @@ func applyOneClusterResource(ctx context.Context, tc *target.Client, res showroo
 		metav1.PatchOptions{FieldManager: fieldManager, Force: &force},
 	)
 	return err
+}
+
+// nodeGVR is the cluster-scoped GroupVersionResource of core/v1 Node.
+var nodeGVR = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "nodes"}
+
+// collectNodes lists the provisioned cluster's nodes over its synced
+// kubeconfig and mirrors name/role/addresses into SC.Status.Nodes. It is
+// best-effort: when the cluster is not yet reachable the previous list is
+// left in place, and it never affects Phase.
+func (r *SimpleClusterReconciler) collectNodes(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) {
+	if sc.Status.KubeconfigSecretRef == nil {
+		return
+	}
+	log := logf.FromContext(ctx)
+
+	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), &corev1.SecretReference{
+		Name:      sc.Status.KubeconfigSecretRef.Name,
+		Namespace: sc.Namespace,
+	})
+	if err != nil {
+		log.Info("collect nodes: cannot reach provisioned cluster", "error", err.Error())
+		return
+	}
+
+	list, err := tc.Dynamic.Resource(nodeGVR).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.Info("collect nodes: list failed", "error", err.Error())
+		return
+	}
+
+	nodes := make([]showroomv1alpha1.NodeStatus, 0, len(list.Items))
+	for i := range list.Items {
+		var node corev1.Node
+		if cerr := runtime.DefaultUnstructuredConverter.FromUnstructured(list.Items[i].Object, &node); cerr != nil {
+			log.Info("collect nodes: decode failed", "node", list.Items[i].GetName(), "error", cerr.Error())
+			continue
+		}
+		nodes = append(nodes, nodeStatusOf(&node))
+	}
+	sortNodes(nodes)
+	sc.Status.Nodes = nodes
+	sc.Status.NodesSummary = nodesSummary(nodes)
+}
+
+// nodesSummary renders Nodes as one line per node for the Platform Mesh
+// generic detail view, which can show a scalar string but not an array. Each
+// line is self-delimiting (leading "• ") so it stays readable whether the
+// portal preserves newlines or collapses them onto one line.
+func nodesSummary(nodes []showroomv1alpha1.NodeStatus) string {
+	if len(nodes) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		ext, intl := n.ExternalIP, n.InternalIP
+		if ext == "" {
+			ext = "-"
+		}
+		if intl == "" {
+			intl = "-"
+		}
+		ready := "NotReady"
+		if n.Ready {
+			ready = "Ready"
+		}
+		lines = append(lines, fmt.Sprintf("• %s  %s  ext=%s  int=%s  %s",
+			n.Name, n.Role, ext, intl, ready))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// nodeStatusOf projects a core/v1 Node onto a NodeStatus.
+func nodeStatusOf(n *corev1.Node) showroomv1alpha1.NodeStatus {
+	ns := showroomv1alpha1.NodeStatus{Name: n.Name, Role: nodeRole(n.Labels)}
+	for _, a := range n.Status.Addresses {
+		switch a.Type {
+		case corev1.NodeExternalIP:
+			ns.ExternalIP = a.Address
+		case corev1.NodeInternalIP:
+			ns.InternalIP = a.Address
+		}
+	}
+	for _, c := range n.Status.Conditions {
+		if c.Type == corev1.NodeReady {
+			ns.Ready = c.Status == corev1.ConditionTrue
+		}
+	}
+	return ns
+}
+
+// nodeRole returns "control-plane" when the node carries a control-plane (or
+// legacy master) role label, otherwise "worker".
+func nodeRole(labels map[string]string) string {
+	for _, k := range []string{"node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master"} {
+		if _, ok := labels[k]; ok {
+			return "control-plane"
+		}
+	}
+	return "worker"
+}
+
+// sortNodes orders control-plane nodes before workers, then by name, so the
+// list is stable across reconciles.
+func sortNodes(nodes []showroomv1alpha1.NodeStatus) {
+	sort.Slice(nodes, func(i, j int) bool {
+		if nodes[i].Role != nodes[j].Role {
+			return nodes[i].Role == "control-plane"
+		}
+		return nodes[i].Name < nodes[j].Name
+	})
 }
 
 // setResourceCondition records one ClusterResource's apply outcome as a
