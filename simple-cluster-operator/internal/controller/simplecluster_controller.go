@@ -82,6 +82,7 @@ type SimpleClusterReconciler struct {
 // +kubebuilder:rbac:groups=ubuntu.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kind.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=authentication.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
 
