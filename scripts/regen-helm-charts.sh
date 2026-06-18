@@ -46,6 +46,7 @@ for op in "${!REST_OPERATORS[@]}"; do
 done
 
 regenerate_one ubuntu-machines ubuntu-machines-operator
+regenerate_one sshkey-operator sshkey-operator
 regenerate_one simple-cluster-operator-arsys arsys-ubuntu-machine-operator
 # The kubebuilder helm plugin produces a metrics service name that is 64 chars
 # (one over the Kubernetes 63-char limit). Shorten it by dropping "-controller-manager".
@@ -56,4 +57,5 @@ echo
 echo "OK. Charts regenerated:"
 echo "  charts/simple-cluster-system   (umbrella for the 5 simple-cluster-system operators)"
 echo "  charts/ubuntu-machines-operator"
+echo "  charts/sshkey-operator"
 echo "  charts/arsys-ubuntu-machine-operator"
