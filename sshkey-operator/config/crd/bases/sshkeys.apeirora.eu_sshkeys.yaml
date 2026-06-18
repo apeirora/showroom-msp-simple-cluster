@@ -21,8 +21,8 @@ spec:
     - jsonPath: .status.ready
       name: Ready
       type: boolean
-    - jsonPath: .status.validTill
-      name: ValidTill
+    - jsonPath: .status.expires
+      name: Expires
       type: date
     name: v1alpha1
     schema:
@@ -178,6 +178,11 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              expires:
+                description: Expires is the time the key expires, set when spec.expire
+                  is provided.
+                format: date-time
+                type: string
               keyHash:
                 description: |-
                   KeyHash is the hash of the key-defining spec fields the current key was generated from.
@@ -190,11 +195,6 @@ spec:
                 description: Ready is true once the key is generated and (if requested)
                   exported.
                 type: boolean
-              validTill:
-                description: ValidTill is the time the key expires, set when spec.expire
-                  is provided.
-                format: date-time
-                type: string
             required:
             - ready
             type: object
