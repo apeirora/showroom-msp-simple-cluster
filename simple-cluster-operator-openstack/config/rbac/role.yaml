@@ -49,3 +49,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - sshkeys.apeirora.eu
+  resources:
+  - sshkeys
+  verbs:
+  - get
+  - list
+  - watch

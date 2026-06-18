@@ -152,22 +152,37 @@ spec:
                 - cpu
                 - memory
                 type: object
-              sshKeySecretRef:
+              sshKeyRef:
                 description: |-
-                  SSHKeySecretRef opts the VM into a shared SSH keypair. When set the operator
-                  looks up or creates the named Secret. If unset, a per-VM Secret
-                  `<vm-name>-ssh` is used.
+                  SSHKeyRef selects the SSH key material for the VM. It accepts either an
+                  SSHKey custom resource (apiGroup sshkeys.apeirora.eu, kind SSHKey) — whose
+                  public key is read directly — or a kubernetes.io/ssh-auth Secret (core
+                  apiGroup, kind Secret) whose ssh-publickey is used (looked up, or generated
+                  and stored when absent). namespace is optional and defaults to the VM's
+                  namespace. When unset, a per-VM Secret `<vm-name>-ssh` is generated.
                 properties:
+                  apiGroup:
+                    description: |-
+                      APIGroup is the group for the resource being referenced.
+                      If APIGroup is not specified, the specified Kind must be in the core API group.
+                      For any other third-party types, APIGroup is required.
+                    type: string
+                  kind:
+                    description: Kind is the type of resource being referenced
+                    type: string
                   name:
-                    description: name is unique within a namespace to reference a
-                      secret resource.
+                    description: Name is the name of resource being referenced
                     type: string
                   namespace:
-                    description: namespace defines the space within which the secret
-                      name must be unique.
+                    description: |-
+                      Namespace is the namespace of resource being referenced
+                      Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.
+                      (Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
                     type: string
+                required:
+                - kind
+                - name
                 type: object
-                x-kubernetes-map-type: atomic
               sshUser:
                 default: root
                 description: SSHUser is the OS user the SSH key is injected for via

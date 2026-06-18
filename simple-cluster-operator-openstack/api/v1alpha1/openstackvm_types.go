@@ -43,6 +43,12 @@ const (
 	// public key is stored (OpenSSH single-line format).
 	SSHSecretPublicKeyKey = "ssh-publickey"
 
+	// SSHKeyAPIGroup / SSHKeyKind / SSHKeyVersion identify the SSHKey custom
+	// resource that spec.sshKeyRef may point at instead of a Secret.
+	SSHKeyAPIGroup = "sshkeys.apeirora.eu"
+	SSHKeyKind     = "SSHKey"
+	SSHKeyVersion  = "v1alpha1"
+
 	// CredentialsAuthURLKey is the data key holding the Keystone URL.
 	CredentialsAuthURLKey = "OS_AUTH_URL"
 	// CredentialsRegionKey is the data key holding the OpenStack region.
@@ -114,16 +120,16 @@ type OpenStackVMSpec struct {
 	// +optional
 	UserData string `json:"userData,omitempty"`
 
-	// SSHKeySecretRef opts the VM into a shared SSH keypair. When set the
-	// operator looks up the named Secret (Namespace defaults to the VM's
-	// namespace) and uses its `ssh-publickey` to register a single Nova
-	// keypair derived from the Secret's name; multiple VMs pointing at
-	// the same Secret share that Nova keypair. If the Secret does not
-	// exist the operator generates a fresh ed25519 keypair into it. When
-	// unset the operator falls back to the per-VM Secret `<vm-name>-ssh`
-	// in the VM's namespace.
+	// SSHKeyRef selects the SSH key material for the VM. It accepts either an
+	// SSHKey custom resource (apiGroup sshkeys.apeirora.eu, kind SSHKey) — whose
+	// public key is read directly — or a kubernetes.io/ssh-auth Secret (core
+	// apiGroup, kind Secret) whose ssh-publickey is used. For a Secret the
+	// operator registers a single Nova keypair derived from the Secret's name,
+	// and generates a fresh ed25519 keypair into the Secret when it does not yet
+	// exist. namespace is optional and defaults to the VM's namespace. When unset
+	// the operator falls back to the per-VM Secret `<vm-name>-ssh`.
 	// +optional
-	SSHKeySecretRef *corev1.SecretReference `json:"sshKeySecretRef,omitempty"`
+	SSHKeyRef *corev1.TypedObjectReference `json:"sshKeyRef,omitempty"`
 }
 
 // NodeResources is the per-VM CPU/memory request. The operator picks the

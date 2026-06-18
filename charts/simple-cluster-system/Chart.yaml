@@ -19,3 +19,5 @@ dependencies:
     version: 0.3.0
   - name: simple-cluster-operator-ironcore
     version: 0.1.0
+  - name: sshkey-operator
+    version: 0.1.0

@@ -15,6 +15,7 @@ You may obtain a copy of the License at
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -141,6 +142,11 @@ func (in *ServerSpec) DeepCopyInto(out *ServerSpec) {
 		in, out := &in.PublicKeys, &out.PublicKeys
 		*out = make([]string, len(*in))
 		copy(*out, *in)
+	}
+	if in.SSHKeyRef != nil {
+		in, out := &in.SSHKeyRef, &out.SSHKeyRef
+		*out = new(corev1.TypedObjectReference)
+		(*in).DeepCopyInto(*out)
 	}
 }
 

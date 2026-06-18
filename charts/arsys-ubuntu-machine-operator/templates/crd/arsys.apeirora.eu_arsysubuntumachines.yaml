@@ -139,6 +139,37 @@ spec:
                       RAM to match when auto-selecting a dedicated model.
                     format: int32
                     type: integer
+                  sshKeyRef:
+                    description: |-
+                      SSHKeyRef points at the SSH public key source, considered after
+                      PublicKeys. It accepts an SSHKey custom resource (apiGroup
+                      sshkeys.apeirora.eu, kind SSHKey) or a Secret (core apiGroup, kind
+                      Secret) whose values are read as public-key strings (private-key
+                      material skipped). Only one key is injected. namespace is optional
+                      and defaults to the machine's namespace.
+                    properties:
+                      apiGroup:
+                        description: |-
+                          APIGroup is the group for the resource being referenced.
+                          If APIGroup is not specified, the specified Kind must be in the core API group.
+                          For any other third-party types, APIGroup is required.
+                        type: string
+                      kind:
+                        description: Kind is the type of resource being referenced
+                        type: string
+                      name:
+                        description: Name is the name of resource being referenced
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace is the namespace of resource being referenced
+                          Note that when a namespace is specified, a gateway.networking.k8s.io/ReferenceGrant object is required in the referent namespace to allow that namespace's owner to accept the reference. See the ReferenceGrant documentation for details.
+                          (Alpha) This field requires the CrossNamespaceVolumeDataSource feature gate to be enabled.
+                        type: string
+                    required:
+                    - kind
+                    - name
+                    type: object
                   type:
                     default: dedicated
                     description: Type selects a dedicated (bare-metal) or cloud (virtual)
