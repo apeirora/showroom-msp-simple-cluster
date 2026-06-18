@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.16.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.2...v0.16.0) (2026-06-18)
+
+
+### Features
+
+* expose cluster nodes and IPs in SimpleCluster status and portal ([28e2683](https://github.com/apeirora/showroom-simple-cluster/commit/28e2683edbf9c500925225c96809848f91795613))
+* implement sshkey-operator ([66eed21](https://github.com/apeirora/showroom-simple-cluster/commit/66eed21e888c92f12088db7ec8d33ff1de506415))
+* use SSHKey resource for VM SSH keys via sshKeyRef ([c8e7b9a](https://github.com/apeirora/showroom-simple-cluster/commit/c8e7b9aa880ea1d242f9de61bd2840faff06b15e))
+
+
+### Bug Fixes
+
+* dati configuration ([39ad9b1](https://github.com/apeirora/showroom-simple-cluster/commit/39ad9b1041b31a5b4006dbc3c7318674cd38c945))
+
 ## [0.15.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.1...v0.15.2) (2026-06-14)
 
 
