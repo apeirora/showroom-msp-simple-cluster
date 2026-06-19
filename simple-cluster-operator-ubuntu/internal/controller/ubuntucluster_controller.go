@@ -152,12 +152,12 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	defer bootstrapClient.Close()
 
-	installed, err := k3s.IsInstalled(ctx, bootstrapClient)
+	running, err := k3s.IsServerRunning(ctx, bootstrapClient)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, "probe k3s: "+err.Error())
 		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
 	}
-	if !installed {
+	if !running {
 		r.eventf(&cluster, corev1.EventTypeNormal, "InstallingK3s",
 			"installing k3s server (bootstrap) on %s", bootstrap.Name)
 		log.Info("installing k3s server (bootstrap)", "host", bootstrap.Name)
@@ -655,11 +655,16 @@ func (r *UbuntuClusterReconciler) installRole(
 	}
 	defer c.Close()
 
-	installed, err := k3s.IsInstalled(ctx, c)
+	var running bool
+	if role == ubuntuv1alpha1.RoleControlPlane {
+		running, err = k3s.IsServerRunning(ctx, c)
+	} else {
+		running, err = k3s.IsAgentRunning(ctx, c)
+	}
 	if err != nil {
 		return false, "", "probe k3s: " + err.Error()
 	}
-	if !installed {
+	if !running {
 		r.eventf(cluster, corev1.EventTypeNormal, "InstallingK3s",
 			"installing k3s %s on %s", role, h.Name)
 		if err := apply(c); err != nil {
