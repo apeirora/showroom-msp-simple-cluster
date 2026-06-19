@@ -87,7 +87,7 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "{{ .Resources.sshkey.publicKey }}"
+              - "{{ .Resources.sshkey.publicKey | trim }}"
 
     - name: vmworker
       apiVersion: openstack.apeirora.eu/v1alpha1
@@ -115,7 +115,7 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "{{ .Resources.sshkey.publicKey }}"
+              - "{{ .Resources.sshkey.publicKey | trim }}"
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
