@@ -32,6 +32,7 @@ const CLUSTER_LIST_QUERY = `
               observedGeneration
               resources { name phase message }
               conditions { type status reason message lastTransitionTime }
+              nodes { name role externalIP internalIP ready }
             }
           }
         }
