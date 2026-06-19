@@ -18,7 +18,8 @@ You may obtain a copy of the License at
 //   FetchToken              — read /var/lib/rancher/k3s/server/node-token
 //   FetchKubeconfig         — read /etc/rancher/k3s/k3s.yaml + rewrite the API URL
 //   UninstallServer / UninstallAgent — k3s-uninstall.sh / k3s-agent-uninstall.sh
-//   IsInstalled             — `which k3s` probe
+//   IsServerRunning         — `systemctl is-active k3s` (server unit up)
+//   IsAgentRunning          — `systemctl is-active k3s-agent` (agent unit up)
 //   ReportedVersion         — `k3s --version` parsed
 package k3s
 
@@ -61,12 +62,13 @@ type InstallOptions struct {
 }
 
 // InstallServerBootstrap runs `k3s server --cluster-init` on the first
-// CP host. Idempotent: if k3s is already installed the call is a no-op
-// returning a friendly message.
+// CP host. Skipped only when the k3s server unit is already active — a
+// partial install (binary present, server never started) is re-run, since
+// get.k3s.io is idempotent and completes it.
 func InstallServerBootstrap(ctx context.Context, c *ssh.Client, opts InstallOptions) error {
-	if installed, err := IsInstalled(ctx, c); err != nil {
+	if running, err := IsServerRunning(ctx, c); err != nil {
 		return err
-	} else if installed {
+	} else if running {
 		return nil
 	}
 	args := append([]string{"server", "--cluster-init"}, serverArgs(opts)...)
@@ -74,11 +76,12 @@ func InstallServerBootstrap(ctx context.Context, c *ssh.Client, opts InstallOpti
 }
 
 // InstallServerJoin runs `k3s server --server <bootstrap>` on subsequent
-// CP hosts. Idempotent on already-installed hosts.
+// CP hosts. Skipped only when the k3s server unit is already active;
+// a partial install is re-run.
 func InstallServerJoin(ctx context.Context, c *ssh.Client, opts InstallOptions, bootstrapURL, token string) error {
-	if installed, err := IsInstalled(ctx, c); err != nil {
+	if running, err := IsServerRunning(ctx, c); err != nil {
 		return err
-	} else if installed {
+	} else if running {
 		return nil
 	}
 	args := append([]string{
@@ -91,11 +94,12 @@ func InstallServerJoin(ctx context.Context, c *ssh.Client, opts InstallOptions, 
 	return runInstallScript(ctx, c, opts, args, env)
 }
 
-// InstallAgent runs the k3s agent installer on a worker host.
+// InstallAgent runs the k3s agent installer on a worker host. Skipped only
+// when the k3s-agent unit is already active; a partial install is re-run.
 func InstallAgent(ctx context.Context, c *ssh.Client, opts InstallOptions, serverURL, token string) error {
-	if installed, err := IsInstalled(ctx, c); err != nil {
+	if running, err := IsAgentRunning(ctx, c); err != nil {
 		return err
-	} else if installed {
+	} else if running {
 		return nil
 	}
 	env := map[string]string{
@@ -155,14 +159,29 @@ func UninstallAgent(ctx context.Context, c *ssh.Client) error {
 	return nil
 }
 
-// IsInstalled probes the host for an existing k3s binary. Cheap and
-// idempotent — every reconcile calls it.
-func IsInstalled(ctx context.Context, c *ssh.Client) (bool, error) {
-	res, err := c.Run(ctx, "command -v k3s")
+// IsServerRunning reports whether the k3s server systemd unit is active.
+// This is the install-completion gate for control-plane hosts: unlike a
+// bare `command -v k3s` probe it is false for a partial/interrupted
+// install (binary on disk, unit never created or server never started),
+// so the reconciler re-runs the idempotent installer to finish the job.
+func IsServerRunning(ctx context.Context, c *ssh.Client) (bool, error) {
+	return unitActive(ctx, c, "k3s")
+}
+
+// IsAgentRunning reports whether the k3s-agent systemd unit is active —
+// the install-completion gate for worker hosts.
+func IsAgentRunning(ctx context.Context, c *ssh.Client) (bool, error) {
+	return unitActive(ctx, c, "k3s-agent")
+}
+
+// unitActive runs `systemctl is-active --quiet <unit>` (exit 0 = active).
+// No sudo: is-active is a read-only query.
+func unitActive(ctx context.Context, c *ssh.Client, unit string) (bool, error) {
+	res, err := c.Run(ctx, "systemctl is-active --quiet "+unit)
 	if err != nil {
 		return false, err
 	}
-	return res.ExitCode == 0 && strings.TrimSpace(res.Stdout) != "", nil
+	return res.ExitCode == 0, nil
 }
 
 // ReportedVersion runs `k3s --version` and parses the first numeric
