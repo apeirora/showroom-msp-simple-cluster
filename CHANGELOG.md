@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.16.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.2...v0.16.3) (2026-06-19)
+
+
+### Bug Fixes
+
+* arsys user/password ([2c079f5](https://github.com/apeirora/showroom-simple-cluster/commit/2c079f58b107a5a988ab63d2baf3694f56b44b73))
+* details UI fix ([9c93475](https://github.com/apeirora/showroom-simple-cluster/commit/9c9347531f566d3befcd878b577d01a5404a89d6))
+* rbac fix ([42ec3c5](https://github.com/apeirora/showroom-simple-cluster/commit/42ec3c522709772e3e6f24c1b835a3570a016f0e))
+* sap reduce shoot name length ([3739e78](https://github.com/apeirora/showroom-simple-cluster/commit/3739e7846408b591945a38e18e9c26f8d74e036f))
+* simple-cluster-operator memory increased ([f14bb3d](https://github.com/apeirora/showroom-simple-cluster/commit/f14bb3da4c58c82c24f420b7dfcc4c1ea176827a))
+
 ## [0.16.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.1...v0.16.2) (2026-06-18)
 
 
