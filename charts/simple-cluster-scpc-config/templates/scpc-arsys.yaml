@@ -230,6 +230,7 @@ spec:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
                 address: {{ $vm.status.address }}
+                externalAddress: {{ $vm.status.address }}
                 passwordSecretRef:
                   name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
                   namespace: simple-cluster-arsys
