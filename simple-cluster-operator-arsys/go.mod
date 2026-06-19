@@ -4,6 +4,7 @@ go 1.24.5
 
 require (
 	github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines v0.0.0-00010101000000-000000000000
+	github.com/m-szalik/goutils v0.4.0
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
 	k8s.io/client-go v0.34.0

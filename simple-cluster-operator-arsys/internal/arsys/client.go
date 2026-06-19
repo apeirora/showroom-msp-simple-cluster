@@ -21,6 +21,9 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/m-szalik/goutils"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // DefaultBaseURL is the v1 API root.
@@ -300,34 +303,53 @@ func (e *APIError) Error() string {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body, out any) error {
+	url := c.BaseURL + path
 	var rdr io.Reader
+	var payload string
 	if body != nil {
 		buf, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("marshal request: %w", err)
 		}
+		payload = string(buf)
 		rdr = bytes.NewReader(buf)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, rdr)
+
+	// logCall records one line per API call: payload, response code, summary.
+	log := logf.FromContext(ctx)
+	logCall := func(status int, start time.Time, summary string) {
+		log.Info("arsys API call",
+			"method", method,
+			"url", url,
+			"payload", payload,
+			"status", status,
+			"summary", summary)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, method, url, rdr)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 	httpReq.Header.Set("X-TOKEN", c.token)
 	httpReq.Header.Set("Accept", "application/json")
-	// Always set Content-Type — Arsys rejects bodyless requests (e.g. DELETE)
-	// without it (406 WRONG_CONTENT_TYPE).
+	// Always set Content-Type — Arsys rejects bodyless requests (e.g. DELETE) without it (406 WRONG_CONTENT_TYPE).
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	start := time.Now()
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
+		logCall(0, start, "request failed: "+err.Error())
 		return fmt.Errorf("%s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer goutils.CloseQuietly(resp.Body)
 
 	data, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logCall(resp.StatusCode, start, "error: "+string(data))
 		return &APIError{StatusCode: resp.StatusCode, Body: string(data)}
 	}
+	logCall(resp.StatusCode, start, fmt.Sprintf("%s (%d bytes)", http.StatusText(resp.StatusCode), len(data)))
+
 	if out != nil && len(data) > 0 {
 		if err := json.Unmarshal(data, out); err != nil {
 			return fmt.Errorf("decode response: %w", err)
