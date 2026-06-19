@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.3...v0.16.4) (2026-06-19)
+
+
+### Bug Fixes
+
+* trim newline on sshkey publicKey in openstack scpc ([9592ca4](https://github.com/apeirora/showroom-simple-cluster/commit/9592ca40f0ffcea438589becab08b7c83b53da35))
+
 ## [0.16.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.2...v0.16.3) (2026-06-19)
 
 
