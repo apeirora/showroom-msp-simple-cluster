@@ -40,6 +40,14 @@ export interface ResourceStatus {
   message?: string;
 }
 
+export interface NodeStatus {
+  name: string;
+  role?: string;
+  externalIP?: string;
+  internalIP?: string;
+  ready?: boolean;
+}
+
 export interface SimpleClusterStatus {
   phase?: ClusterPhase;
   cp?: string;
@@ -52,6 +60,7 @@ export interface SimpleClusterStatus {
   observedGeneration?: number;
   resources?: ResourceStatus[];
   conditions?: Condition[];
+  nodes?: NodeStatus[];
 }
 
 export interface SimpleCluster {
