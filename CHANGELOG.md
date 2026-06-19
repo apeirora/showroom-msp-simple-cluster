@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.5](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.4...v0.16.5) (2026-06-19)
+
+
+### Bug Fixes
+
+* retry partial k3s install (probe service active, not binary) ([e5b1fa7](https://github.com/apeirora/showroom-simple-cluster/commit/e5b1fa7330391ed58eddea091211e0f78ce370d0))
+
 ## [0.16.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.3...v0.16.4) (2026-06-19)
 
 
