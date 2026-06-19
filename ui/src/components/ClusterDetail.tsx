@@ -113,6 +113,44 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
           <Row label="Memory / node">{String(s.workers?.requested?.memory ?? '—')}</Row>
         </Panel>
 
+        <Panel headerText="Nodes" collapsed={!st.nodes?.length}>
+          {st.nodes?.length ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--sapContent_LabelColor)' }}>
+                  <th style={{ padding: '0.25rem 0.5rem 0.25rem 0' }}>Name</th>
+                  <th style={{ padding: '0.25rem 0.5rem' }}>Role</th>
+                  <th style={{ padding: '0.25rem 0.5rem' }}>External IP</th>
+                  <th style={{ padding: '0.25rem 0.5rem' }}>Internal IP</th>
+                  <th style={{ padding: '0.25rem 0.5rem' }}>Ready</th>
+                </tr>
+              </thead>
+              <tbody>
+                {st.nodes.map((n) => (
+                  <tr
+                    key={n.name}
+                    style={{ borderTop: '1px solid var(--sapGroup_ContentBorderColor)' }}
+                  >
+                    <td style={{ padding: '0.25rem 0.5rem 0.25rem 0', wordBreak: 'break-all' }}>
+                      {n.name}
+                    </td>
+                    <td style={{ padding: '0.25rem 0.5rem' }}>{n.role || '—'}</td>
+                    <td style={{ padding: '0.25rem 0.5rem' }}>{n.externalIP || '—'}</td>
+                    <td style={{ padding: '0.25rem 0.5rem' }}>{n.internalIP || '—'}</td>
+                    <td style={{ padding: '0.25rem 0.5rem' }}>
+                      <ObjectStatus state={n.ready ? 'Positive' : 'Negative'} inverted>
+                        {n.ready ? 'Ready' : 'NotReady'}
+                      </ObjectStatus>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div>—</div>
+          )}
+        </Panel>
+
         <Panel headerText="Kubeconfig" collapsed>
           <Row label="Secret name">{st.kubeconfigSecretRef?.name}</Row>
           <Row label="Issued at">{fmtDate(st.kubeconfigIssuedAt)}</Row>
