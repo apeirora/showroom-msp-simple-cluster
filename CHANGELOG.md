@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.5...v0.17.0) (2026-06-19)
+
+
+### Features
+
+* set worker externalAddress for arsys-virtual; bump scpc-config 0.11.2 ([efad932](https://github.com/apeirora/showroom-simple-cluster/commit/efad9320d4a44219987e87e0b462033987d3abd2))
+
+
+### Bug Fixes
+
+* sap reduce shoot name length ([7f57e48](https://github.com/apeirora/showroom-simple-cluster/commit/7f57e480dc3057a82a843e5f1566ee0d35d0187a))
+
 ## [0.16.5](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.4...v0.16.5) (2026-06-19)
 
 
