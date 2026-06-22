@@ -106,6 +106,15 @@ func (r *OpenStackVMReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.fail(ctx, &vm, "NetworkError", err.Error())
 	}
 
+	// Open workload ingress (80/443) on the referenced security groups.
+	// Idempotent and re-run every reconcile so the ports are guaranteed even
+	// on groups (e.g. "default") that pre-date this VM.
+	if len(vm.Spec.SecurityGroups) > 0 {
+		if err := openstack.EnsureIngressPorts(ctx, clients.Network, vm.Spec.SecurityGroups); err != nil {
+			return r.fail(ctx, &vm, "SecurityGroupError", err.Error())
+		}
+	}
+
 	flavor, err := openstack.PickFlavor(ctx, clients.Compute,
 		vm.Spec.Resources.CPU, vm.Spec.Resources.Memory, vm.Spec.Resources.FlavorPattern)
 	if err != nil {
