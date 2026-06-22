@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.17.0...v0.18.0) (2026-06-22)
+
+
+### Features
+
+* open pots 80 and 443 ([24aa258](https://github.com/apeirora/showroom-simple-cluster/commit/24aa258d15a8e5f88874c4aecb4479daf0bf23d2))
+
+
+### Bug Fixes
+
+* dati shoot length reduced ([0f79163](https://github.com/apeirora/showroom-simple-cluster/commit/0f79163b837bf9fa0efbca7dbcf5a6f615ee34c4))
+* sap reduce shoot name length ([aa33f98](https://github.com/apeirora/showroom-simple-cluster/commit/aa33f98101254fd3648753f1df55105edf71c75f))
+
 ## [0.17.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.5...v0.17.0) (2026-06-19)
 
 
