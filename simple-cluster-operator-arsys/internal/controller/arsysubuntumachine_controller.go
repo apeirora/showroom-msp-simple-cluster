@@ -333,6 +333,8 @@ const k3sFirewallPolicyName = "simple-cluster-k3s"
 func k3sFirewallRules() []arsys.FirewallRule {
 	return []arsys.FirewallRule{
 		{Protocol: "TCP", PortFrom: 22, PortTo: 22},       // SSH (operator access)
+		{Protocol: "TCP", PortFrom: 80, PortTo: 80},       // HTTP (workload ingress)
+		{Protocol: "TCP", PortFrom: 443, PortTo: 443},     // HTTPS (workload ingress)
 		{Protocol: "TCP", PortFrom: 6443, PortTo: 6443},   // kube-apiserver
 		{Protocol: "TCP", PortFrom: 10250, PortTo: 10250}, // kubelet
 		{Protocol: "TCP", PortFrom: 2379, PortTo: 2380},   // etcd (HA control plane)
