@@ -50,6 +50,9 @@ spec:
           region: {{ .Inputs.region }}
           kubernetes:
             version: "{{ .Inputs.k8sVersion }}"
+          addons:
+            nginxIngress:
+              enabled: true
           provider:
             type: ironcore
             workers:
