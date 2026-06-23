@@ -68,6 +68,8 @@ spec:
           addons:
             nginxIngress:
               enabled: true
+              loadBalancerSourceRanges:
+                - 0.0.0.0/0
           networking:
             type: calico
             nodes: 10.250.0.0/16
