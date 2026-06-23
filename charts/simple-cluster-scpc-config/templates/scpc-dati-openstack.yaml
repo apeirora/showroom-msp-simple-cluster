@@ -65,6 +65,9 @@ spec:
           region: {{ .Inputs.region }}
           kubernetes:
             version: "{{ .Inputs.k8sVersion }}"
+          addons:
+            nginxIngress:
+              enabled: true
           networking:
             type: calico
             nodes: 10.250.0.0/16
