@@ -47,6 +47,8 @@ spec:
           addons:
             nginxIngress:
               enabled: true
+              loadBalancerSourceRanges:
+                - 0.0.0.0/0
           provider:
             type: openstack
             infrastructureConfig:
