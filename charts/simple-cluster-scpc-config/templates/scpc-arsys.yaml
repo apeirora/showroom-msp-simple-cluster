@@ -123,6 +123,8 @@ spec:
                   name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
                   namespace: simple-cluster-arsys
               {{- end }}
+          k3sServerArgs:
+            - --disable=traefik
 
   kubeconfigSource:
     resourceName: cluster
@@ -235,6 +237,8 @@ spec:
                   name: "{{ printf "%s-%s-worker-%d" $.SC.namespace $.SC.name $i }}"
                   namespace: simple-cluster-arsys
               {{- end }}
+          k3sServerArgs:
+            - --disable=traefik
 
   kubeconfigSource:
     resourceName: cluster
