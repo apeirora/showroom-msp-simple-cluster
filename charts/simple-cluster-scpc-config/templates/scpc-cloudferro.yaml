@@ -149,6 +149,8 @@ spec:
                 externalAddress: {{ $vm.status.externalAddress }}
                 {{- end }}
               {{- end }}
+          k3sServerArgs:
+            - --disable=traefik
 
   kubeconfigSource:
     resourceName: cluster
