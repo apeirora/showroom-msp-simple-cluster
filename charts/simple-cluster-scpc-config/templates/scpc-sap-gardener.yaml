@@ -69,11 +69,6 @@ spec:
           region: {{ .Inputs.region }}
           kubernetes:
             version: "{{ .Inputs.k8sVersion }}"
-          addons:
-            nginxIngress:
-              enabled: true
-              loadBalancerSourceRanges:
-                - 0.0.0.0/0
           provider:
             type: ironcore
             workers:
