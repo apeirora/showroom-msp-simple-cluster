@@ -8,4 +8,4 @@ enable:
     ironcore: true
   arsys:
     virtual: true
-    dedicated: true
+    dedicated: false
