@@ -500,7 +500,7 @@ func (r *ArsysUbuntuMachineReconciler) ensureUbuntuMachine(ctx context.Context, 
 		Spec: umv1alpha1.UbuntuMachineSpec{
 			Address:         ip,
 			ExternalAddress: ip,
-			SSH:             ssh,
+			AdminSSH:        ssh,
 		},
 	}
 	// Advertise capacity from the requested cloud size, or from an
