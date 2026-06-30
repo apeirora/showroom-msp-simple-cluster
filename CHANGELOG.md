@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.19.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.18.0...v0.19.0) (2026-06-30)
+
+
+### Features
+
+* allow public access to nginx ingress LB ([decb6e8](https://github.com/apeirora/showroom-simple-cluster/commit/decb6e851a09fdf51be14a6f9d160a4cbd3b060c))
+* arsys dedicated servers disabled ([5de3f0d](https://github.com/apeirora/showroom-simple-cluster/commit/5de3f0d6229a441606ea20e1e682832ddbe0e6e5)), closes [#277](https://github.com/apeirora/showroom-simple-cluster/issues/277)
+* arsys dedicated servers disabled ([629a3bc](https://github.com/apeirora/showroom-simple-cluster/commit/629a3bcf74b605e25c0d624a7399b7f49a4a7c1b)), closes [#277](https://github.com/apeirora/showroom-simple-cluster/issues/277)
+* install ingress by default ([0087270](https://github.com/apeirora/showroom-simple-cluster/commit/00872706f378b321c433c7fa73ee89703d43a7ab))
+* remove ingress to release port 443 ([c8fdfee](https://github.com/apeirora/showroom-simple-cluster/commit/c8fdfeec3aa6ea0dadca123294c3e792a36acfcc))
+* remove ingress to release port 443 ([3c8edc1](https://github.com/apeirora/showroom-simple-cluster/commit/3c8edc153ca03b0155f28a8f33bcfed6ba4955a2))
+* **ubuntu-machines:** per-claim SSH key injection via sshkey-operator ([5f0c678](https://github.com/apeirora/showroom-simple-cluster/commit/5f0c678a05ff1261cc1e6cee45bd42e669958106))
+
+
+### Bug Fixes
+
+* **arsys:** rename SSH to AdminSSH in UbuntuMachine spec, tidy go.sum ([59ae020](https://github.com/apeirora/showroom-simple-cluster/commit/59ae0206f9ff68f1712c23a24bb08062882eda89))
+
 ## [0.18.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.17.0...v0.18.0) (2026-06-22)
 
 
