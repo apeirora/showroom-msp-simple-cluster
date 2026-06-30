@@ -73,7 +73,6 @@ func (in *NodeResources) DeepCopy() *NodeResources {
 
 func (in *BoundMachine) DeepCopyInto(out *BoundMachine) {
 	*out = *in
-	in.SSH.DeepCopyInto(&out.SSH)
 }
 
 func (in *BoundMachine) DeepCopy() *BoundMachine {
@@ -87,7 +86,7 @@ func (in *BoundMachine) DeepCopy() *BoundMachine {
 
 func (in *UbuntuMachineSpec) DeepCopyInto(out *UbuntuMachineSpec) {
 	*out = *in
-	in.SSH.DeepCopyInto(&out.SSH)
+	in.AdminSSH.DeepCopyInto(&out.AdminSSH)
 	in.Capacity.DeepCopyInto(&out.Capacity)
 }
 
@@ -205,6 +204,11 @@ func (in *UbuntuMachineClaimStatus) DeepCopyInto(out *UbuntuMachineClaimStatus) 
 		in, out := &in.Machine, &out.Machine
 		*out = new(BoundMachine)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.SSHSecretRef != nil {
+		in, out := &in.SSHSecretRef, &out.SSHSecretRef
+		*out = new(corev1.LocalObjectReference)
+		**out = **in
 	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions

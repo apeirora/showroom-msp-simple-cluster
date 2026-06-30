@@ -19,38 +19,16 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - sshkeys.apeirora.eu
+  resources:
+  - sshkeys
+  verbs:
   - create
-  - update
-  - patch
   - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-  - get
-  - list
-  - update
-  - watch
-- apiGroups:
-  - ubuntumachines.apeirora.eu
-  resources:
-  - ubuntumachines
-  verbs:
   - get
   - list
   - watch
-  - update
-  - patch
-- apiGroups:
-  - ubuntumachines.apeirora.eu
-  resources:
-  - ubuntumachines/status
-  verbs:
-  - get
-  - update
-  - patch
 - apiGroups:
   - ubuntumachines.apeirora.eu
   resources:
@@ -73,7 +51,18 @@ rules:
   - ubuntumachines.apeirora.eu
   resources:
   - ubuntumachineclaims/status
+  - ubuntumachines/status
   verbs:
   - get
-  - update
   - patch
+  - update
+- apiGroups:
+  - ubuntumachines.apeirora.eu
+  resources:
+  - ubuntumachines
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch

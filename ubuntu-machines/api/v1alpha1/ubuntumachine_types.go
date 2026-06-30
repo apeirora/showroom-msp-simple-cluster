@@ -55,10 +55,10 @@ type UbuntuMachineSpec struct {
 	// +optional
 	ExternalAddress string `json:"externalAddress,omitempty"`
 
-	// SSH is the credential the consumer is told to use. The operator
-	// itself never opens an SSH connection — it just hands these refs
-	// back through claim status.
-	SSH SSHAuth `json:"ssh"`
+	// AdminSSH is the operator's internal credential for managing the machine.
+	// The operator uses this to inject/remove per-claim public keys.
+	// Consumers never see this credential.
+	AdminSSH SSHAuth `json:"adminSSH"`
 
 	// Capacity advertises the resources this machine can satisfy. Used
 	// by the claim binder: a claim's `required.cpu/memory` must be
