@@ -14,13 +14,18 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
+	gossh "golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +43,12 @@ import (
 // is Bound; False with a reason while still Pending.
 const ConditionReady = "Ready"
 
+var sshKeyGVK = schema.GroupVersionKind{
+	Group:   "sshkeys.apeirora.eu",
+	Version: "v1alpha1",
+	Kind:    "SSHKey",
+}
+
 // UbuntuMachineClaimReconciler binds an UbuntuMachineClaim to one
 // eligible Available UbuntuMachine in the same namespace. PVC parity:
 // one claim → one machine.
@@ -52,8 +63,9 @@ type UbuntuMachineClaimReconciler struct {
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachineclaims/finalizers,verbs=update
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachines/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *UbuntuMachineClaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -104,8 +116,6 @@ func (r *UbuntuMachineClaimReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	if claim.Status.Phase == umv1alpha1.ClaimReady && claim.Status.Machine != nil {
-		// Already-Bound claim with no machine pointing back is stale
-		// (e.g. machine was deleted). Drop to Pending and re-bind.
 		logger.Info("bound claim has no owning machine; re-binding",
 			"previous", claim.Status.Machine.Name)
 	}
@@ -133,10 +143,6 @@ func (r *UbuntuMachineClaimReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// markBound writes the claim status. If the write fails (typically
-	// a resourceVersion conflict on the claim), release the machine
-	// we just bound — otherwise it would be orphaned. Next reconcile
-	// will retry from scratch.
 	if res, err := r.markBound(ctx, &claim, bound); err != nil {
 		if relErr := r.releaseOne(ctx, &claim, bound); relErr != nil {
 			logger.Error(relErr, "rollback after claim status update failure failed",
@@ -148,23 +154,51 @@ func (r *UbuntuMachineClaimReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 }
 
-// markBound writes status.phase=Bound + status.machine + Ready=True.
-// Used both on a fresh bind and when adopting an orphan.
+// markBound ensures a per-claim SSH key is created, injected into the machine's
+// root account, and then updates claim status to Ready.
 func (r *UbuntuMachineClaimReconciler) markBound(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
 	m umv1alpha1.UbuntuMachine,
 ) (ctrl.Result, error) {
-	if err := r.ensureCredentialSecret(ctx, claim, m); err != nil {
+	sshKey, err := r.ensureClaimSSHKey(ctx, claim)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if !sshKeyReady(sshKey) {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
+	if claim.Status.SSHSecretRef == nil {
+		claimPubKey := sshKeyPublicKey(sshKey)
+		if claimPubKey == "" {
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		adminSecret, err := r.getAdminSecret(ctx, &m)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		adminPubKey, err := adminPublicKeyLine(adminSecret, &m)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		sshClient, err := dialMachine(&m, adminSecret)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("dial machine %s: %w", m.Name, err)
+		}
+		defer sshClient.Close()
+		if err := setAuthorizedKeys(sshClient, adminPubKey, claimPubKey); err != nil {
+			return ctrl.Result{}, fmt.Errorf("set authorized_keys on %s: %w", m.Name, err)
+		}
+	}
+
 	claim.Status.Phase = umv1alpha1.ClaimReady
 	claim.Status.Machine = &umv1alpha1.BoundMachine{
 		Name:            m.Name,
 		Address:         m.Spec.Address,
 		ExternalAddress: m.Spec.ExternalAddress,
-		SSH:             m.Spec.SSH,
 	}
+	claim.Status.SSHSecretRef = &corev1.LocalObjectReference{Name: claim.Name + "-ssh"}
 	claim.Status.ObservedGeneration = claim.Generation
 	setReady(claim, metav1.ConditionTrue, "Bound",
 		fmt.Sprintf("bound to UbuntuMachine %q", m.Name))
@@ -176,56 +210,194 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 	return ctrl.Result{}, nil
 }
 
-// ensureCredentialSecret mirrors the bound machine's SSH credential Secret
-// into the claim's namespace under the claim's name, owned by the claim so
-// Kubernetes garbage-collects it when the claim is deleted. Consumers then
-// read the credential from a Secret local to their namespace, named after the
-// claim. Idempotent: re-run on every reconcile so a rotated source propagates.
-func (r *UbuntuMachineClaimReconciler) ensureCredentialSecret(
+// ensureClaimSSHKey creates the SSHKey CR in the claim's namespace if it
+// doesn't exist yet, then returns the current object.
+func (r *UbuntuMachineClaimReconciler) ensureClaimSSHKey(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
-	m umv1alpha1.UbuntuMachine,
-) error {
-	srcRef := m.Spec.SSH.PrivateKeySecretRef
-	if srcRef == nil {
-		srcRef = m.Spec.SSH.PasswordSecretRef
-	}
-	if srcRef == nil {
-		return fmt.Errorf("machine %q has no SSH credential secret reference", m.Name)
+) (*unstructured.Unstructured, error) {
+	keyName := claim.Name + "-sshkey"
+	key := types.NamespacedName{Namespace: claim.Namespace, Name: keyName}
+
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(sshKeyGVK)
+	if err := r.Get(ctx, key, obj); err == nil {
+		return obj, nil
+	} else if !apierrors.IsNotFound(err) {
+		return nil, err
 	}
 
-	var src corev1.Secret
-	srcKey := types.NamespacedName{Namespace: srcRef.Namespace, Name: srcRef.Name}
-	if err := r.Get(ctx, srcKey, &src); err != nil {
-		return fmt.Errorf("get source credential Secret %s/%s: %w", srcRef.Namespace, srcRef.Name, err)
+	obj = &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "sshkeys.apeirora.eu/v1alpha1",
+			"kind":       "SSHKey",
+			"metadata": map[string]interface{}{
+				"name":      keyName,
+				"namespace": claim.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"keyType": "ed25519",
+				"exportToSecret": map[string]interface{}{
+					"name": claim.Name + "-ssh",
+				},
+			},
+		},
+	}
+	if err := r.Create(ctx, obj); err != nil && !apierrors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("create SSHKey %s: %w", keyName, err)
 	}
 
-	copySecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: claim.Name, Namespace: claim.Namespace},
+	fresh := &unstructured.Unstructured{}
+	fresh.SetGroupVersionKind(sshKeyGVK)
+	if err := r.Get(ctx, key, fresh); err != nil {
+		return nil, err
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, copySecret, func() error {
-		if err := controllerutil.SetControllerReference(claim, copySecret, r.Scheme); err != nil {
-			return err
-		}
-		copySecret.Type = src.Type
-		copySecret.Data = src.Data
-		return nil
-	})
-	return err
+	return fresh, nil
 }
 
-// ownedBy reports whether machine m is currently bound to claim. Matches
-// on name + namespace because UbuntuMachine is cluster-scoped: two claims
-// in different namespaces may share a name.
+// removeClaimSSHKey resets /root/.ssh/authorized_keys on the bound machine to
+// contain only the operator's admin public key (or nothing for password auth),
+// removing the claim's key. This ensures only the operator can access root.
+func (r *UbuntuMachineClaimReconciler) removeClaimSSHKey(
+	ctx context.Context,
+	claim *umv1alpha1.UbuntuMachineClaim,
+) error {
+	if claim.Status.Machine == nil {
+		return nil
+	}
+
+	var machine umv1alpha1.UbuntuMachine
+	if err := r.Get(ctx, types.NamespacedName{Name: claim.Status.Machine.Name}, &machine); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	adminSecret, err := r.getAdminSecret(ctx, &machine)
+	if err != nil {
+		return err
+	}
+	adminPubKey, err := adminPublicKeyLine(adminSecret, &machine)
+	if err != nil {
+		return err
+	}
+	sshClient, err := dialMachine(&machine, adminSecret)
+	if err != nil {
+		return fmt.Errorf("dial machine %s: %w", machine.Name, err)
+	}
+	defer sshClient.Close()
+	return setAuthorizedKeys(sshClient, adminPubKey)
+}
+
+// getAdminSecret reads the admin SSH credential Secret for a machine.
+func (r *UbuntuMachineClaimReconciler) getAdminSecret(
+	ctx context.Context,
+	machine *umv1alpha1.UbuntuMachine,
+) (*corev1.Secret, error) {
+	ref := machine.Spec.AdminSSH.PrivateKeySecretRef
+	if ref == nil {
+		ref = machine.Spec.AdminSSH.PasswordSecretRef
+	}
+	if ref == nil {
+		return nil, fmt.Errorf("machine %q has no adminSSH credential reference", machine.Name)
+	}
+	var secret corev1.Secret
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, &secret); err != nil {
+		return nil, fmt.Errorf("get admin secret %s/%s: %w", ref.Namespace, ref.Name, err)
+	}
+	return &secret, nil
+}
+
+// dialMachine opens an SSH connection to the machine using adminSSH credentials.
+func dialMachine(machine *umv1alpha1.UbuntuMachine, adminSecret *corev1.Secret) (*gossh.Client, error) {
+	host := machine.Spec.Address
+	port := machine.Spec.AdminSSH.Port
+	if port == 0 {
+		port = 22
+	}
+
+	var authMethods []gossh.AuthMethod
+	if machine.Spec.AdminSSH.PrivateKeySecretRef != nil {
+		signer, err := gossh.ParsePrivateKey(adminSecret.Data[umv1alpha1.SSHSecretPrivateKeyKey])
+		if err != nil {
+			return nil, fmt.Errorf("parse admin private key: %w", err)
+		}
+		authMethods = append(authMethods, gossh.PublicKeys(signer))
+	} else {
+		authMethods = append(authMethods, gossh.Password(string(adminSecret.Data[umv1alpha1.SSHSecretPasswordKey])))
+	}
+
+	cfg := &gossh.ClientConfig{
+		User:            machine.Spec.AdminSSH.User,
+		Auth:            authMethods,
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(), //nolint:gosec
+		Timeout:         30 * time.Second,
+	}
+	return gossh.Dial("tcp", fmt.Sprintf("%s:%d", host, port), cfg)
+}
+
+// setAuthorizedKeys writes exactly the given keys to /root/.ssh/authorized_keys,
+// replacing any previous content. Empty strings are ignored. Call with no keys
+// (or only empty strings) to clear the file.
+// Keys are passed via stdin to avoid shell quoting issues.
+func setAuthorizedKeys(c *gossh.Client, keys ...string) error {
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if k = strings.TrimSpace(k); k != "" {
+			lines = append(lines, k)
+		}
+	}
+	content := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		content += "\n"
+	}
+	sess, err := c.NewSession()
+	if err != nil {
+		return err
+	}
+	defer sess.Close()
+	sess.Stdin = strings.NewReader(content)
+	return sess.Run(`
+		mkdir -p /root/.ssh && chmod 700 /root/.ssh
+		cat > /root/.ssh/authorized_keys
+		chmod 600 /root/.ssh/authorized_keys
+	`)
+}
+
+// adminPublicKeyLine derives the admin's public key line from the private key in
+// the admin secret. Returns an empty string when adminSSH uses password auth.
+func adminPublicKeyLine(adminSecret *corev1.Secret, machine *umv1alpha1.UbuntuMachine) (string, error) {
+	if machine.Spec.AdminSSH.PrivateKeySecretRef == nil {
+		return "", nil
+	}
+	signer, err := gossh.ParsePrivateKey(adminSecret.Data[umv1alpha1.SSHSecretPrivateKeyKey])
+	if err != nil {
+		return "", fmt.Errorf("parse admin private key: %w", err)
+	}
+	return strings.TrimSpace(string(gossh.MarshalAuthorizedKey(signer.PublicKey()))), nil
+}
+
+// sshKeyReady reports whether the SSHKey CR has finished generating.
+func sshKeyReady(obj *unstructured.Unstructured) bool {
+	ready, _, _ := unstructured.NestedBool(obj.Object, "status", "ready")
+	return ready
+}
+
+// sshKeyPublicKey returns the public key string from the SSHKey CR.
+func sshKeyPublicKey(obj *unstructured.Unstructured) string {
+	key, _, _ := unstructured.NestedString(obj.Object, "publicKey")
+	return strings.TrimSpace(key)
+}
+
+// ownedBy reports whether machine m is currently bound to claim.
 func ownedBy(m *umv1alpha1.UbuntuMachine, claim *umv1alpha1.UbuntuMachineClaim) bool {
 	ref := m.Status.BoundClaimRef
 	return ref != nil && ref.Name == claim.Name && ref.Namespace == claim.Namespace
 }
 
 // ownedMachines lists UbuntuMachines that already have boundClaimRef
-// pointing at this claim. Machines are cluster-scoped, so the list spans
-// all namespaces. Used at the start of every reconcile so partial-write
-// leaks self-heal.
+// pointing at this claim.
 func (r *UbuntuMachineClaimReconciler) ownedMachines(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
@@ -243,8 +415,7 @@ func (r *UbuntuMachineClaimReconciler) ownedMachines(
 	return out, nil
 }
 
-// releaseOne flips one machine back to Available. Re-Gets so the
-// status write carries a fresh resourceVersion.
+// releaseOne flips one machine back to Available.
 func (r *UbuntuMachineClaimReconciler) releaseOne(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
@@ -267,8 +438,6 @@ func (r *UbuntuMachineClaimReconciler) releaseOne(
 }
 
 // setReady writes (or refreshes) the `Ready` Condition on the claim.
-// observedGeneration carries the spec generation that produced this
-// signal so SCPC can ignore stale states.
 func setReady(claim *umv1alpha1.UbuntuMachineClaim, status metav1.ConditionStatus, reason, message string) {
 	apimeta.SetStatusCondition(&claim.Status.Conditions, metav1.Condition{
 		Type:               ConditionReady,
@@ -279,18 +448,13 @@ func setReady(claim *umv1alpha1.UbuntuMachineClaim, status metav1.ConditionStatu
 	})
 }
 
-// eligibleMachines lists Available UbuntuMachines (cluster-wide, since the
-// pool is cluster-scoped) that match the claim's label selector and satisfy
-// the externalAddressRequired flag and required.cpu/memory floor. Returned
-// slice is sorted by name (stable first-fit ordering).
+// eligibleMachines lists Available UbuntuMachines that match the claim's
+// selector and satisfy externalAddressRequired and resource floors.
 func (r *UbuntuMachineClaimReconciler) eligibleMachines(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
 ) ([]umv1alpha1.UbuntuMachine, error) {
 	var all umv1alpha1.UbuntuMachineList
-	// Selector is applied server-side; an empty selector matches the whole
-	// pool. Only eligibility is constrained — ownedMachines/releaseAll find
-	// already-bound machines by boundClaimRef regardless of their labels.
 	if err := r.List(ctx, &all, client.MatchingLabels(claim.Spec.Selector)); err != nil {
 		return nil, err
 	}
@@ -320,8 +484,7 @@ func (r *UbuntuMachineClaimReconciler) eligibleMachines(
 	return out, nil
 }
 
-// fits returns true when the machine can satisfy required. Zero capacity
-// is treated as "unconstrained" — matches any request.
+// fits returns true when capacity satisfies required. Zero capacity means unconstrained.
 func fits(capacity, required resource.Quantity) bool {
 	if capacity.IsZero() {
 		return true
@@ -329,9 +492,7 @@ func fits(capacity, required resource.Quantity) bool {
 	return capacity.Cmp(required) >= 0
 }
 
-// bind claims the given machine for the claim. A resourceVersion
-// conflict (someone else won the race) bubbles up — the caller marks
-// the claim Pending and retries on the next reconcile.
+// bind claims the machine for the claim.
 func (r *UbuntuMachineClaimReconciler) bind(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
@@ -346,13 +507,28 @@ func (r *UbuntuMachineClaimReconciler) bind(
 	return m, nil
 }
 
-// releaseAll is the cascade for claim deletion: any machine whose
-// boundClaimRef points at this claim returns to Available. We re-Get
-// each candidate so the status write carries a current resourceVersion.
+// releaseAll is the cascade for claim deletion: removes the per-claim SSH key
+// from the machine, deletes the SSHKey CR, then returns all bound machines to Available.
 func (r *UbuntuMachineClaimReconciler) releaseAll(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
 ) error {
+	logger := log.FromContext(ctx)
+
+	if claim.Status.SSHSecretRef != nil {
+		if err := r.removeClaimSSHKey(ctx, claim); err != nil {
+			logger.Error(err, "failed to remove claim SSH key; proceeding with release")
+		}
+	}
+
+	sshKey := &unstructured.Unstructured{}
+	sshKey.SetGroupVersionKind(sshKeyGVK)
+	sshKey.SetName(claim.Name + "-sshkey")
+	sshKey.SetNamespace(claim.Namespace)
+	if err := r.Delete(ctx, sshKey); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete SSHKey: %w", err)
+	}
+
 	var all umv1alpha1.UbuntuMachineList
 	if err := r.List(ctx, &all); err != nil {
 		return err
@@ -413,10 +589,7 @@ func (r *UbuntuMachineClaimReconciler) event(o client.Object, evType, reason, ms
 	r.Recorder.Event(o, evType, reason, msg)
 }
 
-// machineToPendingClaims wakes every Pending claim cluster-wide when an
-// UbuntuMachine changes. The pool is cluster-scoped, so a newly Available
-// machine could unblock a claim in any namespace. Cheap (small N) and
-// correct.
+// machineToPendingClaims wakes every Pending claim when an UbuntuMachine changes.
 func (r *UbuntuMachineClaimReconciler) machineToPendingClaims(
 	ctx context.Context,
 	_ client.Object,
