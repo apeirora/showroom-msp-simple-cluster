@@ -11,6 +11,7 @@ You may obtain a copy of the License at
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,9 +53,7 @@ type UbuntuMachineClaimSpec struct {
 	Selector map[string]string `json:"selector,omitempty"`
 }
 
-// BoundMachine is the embedded copy of a bound UbuntuMachine's spec
-// (just what consumers need to template against). Avoids forcing
-// downstream operators to do a second .Resources lookup.
+// BoundMachine is the embedded copy of a bound UbuntuMachine's addressing info.
 type BoundMachine struct {
 	// Name is the bound UbuntuMachine's metadata.name.
 	Name string `json:"name"`
@@ -63,8 +62,6 @@ type BoundMachine struct {
 	// ExternalAddress echoes UbuntuMachine.spec.externalAddress.
 	// +optional
 	ExternalAddress string `json:"externalAddress,omitempty"`
-	// SSH echoes UbuntuMachine.spec.ssh.
-	SSH SSHAuth `json:"ssh"`
 }
 
 // UbuntuMachineClaimStatus is the observed state.
@@ -77,6 +74,13 @@ type UbuntuMachineClaimStatus struct {
 	// Nil when Pending.
 	// +optional
 	Machine *BoundMachine `json:"machine,omitempty"`
+
+	// SSHSecretRef points at the Secret (in the claim's namespace) that
+	// holds the per-claim SSH private key under `ssh-privatekey`.
+	// Connect as root using this key.
+	// Nil until the key has been injected into the machine.
+	// +optional
+	SSHSecretRef *corev1.LocalObjectReference `json:"sshSecretRef,omitempty"`
 
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
