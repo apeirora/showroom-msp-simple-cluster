@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.0...v0.19.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* **cloudferro:** scope SSH key export secret name per SimpleCluster ([895b595](https://github.com/apeirora/showroom-simple-cluster/commit/895b5959a63d364ac4fa5cfb8e589f01a132c6f9))
+
 ## [0.19.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.18.0...v0.19.0) (2026-06-30)
 
 
