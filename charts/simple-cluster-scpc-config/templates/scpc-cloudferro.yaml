@@ -59,7 +59,7 @@ spec:
         spec:
           keyType: ed25519
           exportToSecret:
-            name: cloudferro-ssh
+            name: "{{ .SC.name }}-cloudferro-ssh"
 
     - name: vmcp
       apiVersion: openstack.apeirora.eu/v1alpha1
@@ -132,7 +132,7 @@ spec:
           ssh:
             user: eouser
             privateKeySecretRef:
-              name: cloudferro-ssh
+              name: "{{ .SC.name }}-cloudferro-ssh"
           controlPlane:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
