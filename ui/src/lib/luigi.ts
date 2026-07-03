@@ -63,7 +63,7 @@ const resolveGraphqlUrl = (context: any): string | null => {
 
 const workspaceFromUrl = (url: string | null): string | null => {
   if (!url) return null;
-  const m = url.match(/\/kubernetes-graphql-gateway\/([^/]+)\/graphql/);
+  const m = url.match(/\/(?:kubernetes-graphql-gateway|gateway\/api\/clusters)\/([^/]+)\/graphql/);
   if (!m) return null;
   const path = m[1];
   return path.startsWith(':') ? null : path;
