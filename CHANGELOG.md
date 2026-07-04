@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.1...v0.19.2) (2026-07-04)
+
+
+### Bug Fixes
+
+* 404 graphql ([5095600](https://github.com/apeirora/showroom-simple-cluster/commit/50956003d56fd8cbdb8c3b106f2bc2ec862b7a27))
+
 ## [0.19.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.0...v0.19.1) (2026-07-01)
 
 
