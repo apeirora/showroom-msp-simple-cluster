@@ -6,6 +6,7 @@ metadata:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
 spec:
+  autoscaling: true
   target:
     namespace: garden-pm-cc-d2
     kubeconfigSecretRef:
@@ -59,8 +60,8 @@ spec:
             type: ironcore
             workers:
               - name: worker-main
-                minimum: {{ .SC.workers.nodes }}
-                maximum: {{ .SC.workers.nodes }}
+                minimum: {{ .SC.workers.min }}
+                maximum: {{ .SC.workers.max }}
                 machine:
                   type: {{ .Inputs.machineType }}
                   image:

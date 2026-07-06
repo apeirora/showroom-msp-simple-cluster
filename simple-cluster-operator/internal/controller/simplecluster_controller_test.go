@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
@@ -42,7 +43,7 @@ var _ = Describe("SimpleCluster Controller", func() {
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterSpec{
-					Workers:            showroomv1alpha1.WorkersSpec{Nodes: 1},
+					Workers:            showroomv1alpha1.WorkersSpec{Nodes: ptr.To[int32](1)},
 					ProviderConfigRefs: []string{"ghost"},
 				},
 			})).To(Succeed())
@@ -117,7 +118,7 @@ data:
 				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterSpec{
 					Workers: showroomv1alpha1.WorkersSpec{
-						Nodes: 1,
+						Nodes: ptr.To[int32](1),
 						Requested: showroomv1alpha1.NodeResources{
 							CPU:    resource.MustParse("16"),
 							Memory: resource.MustParse("8Gi"),
@@ -209,7 +210,7 @@ data:
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: scName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterSpec{
-					Workers:            showroomv1alpha1.WorkersSpec{Nodes: 4},
+					Workers:            showroomv1alpha1.WorkersSpec{Nodes: ptr.To[int32](4)},
 					ProviderConfigRefs: []string{scpcName},
 				},
 			})).To(Succeed())

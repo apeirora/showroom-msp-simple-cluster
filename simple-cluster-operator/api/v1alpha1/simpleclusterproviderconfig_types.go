@@ -334,6 +334,14 @@ type SimpleClusterProviderConfigSpec struct {
 	// +listType=map
 	// +listMapKey=name
 	Profiles []Profile `json:"profiles,omitempty"`
+
+	// Autoscaling declares that this SCPC's templates honor
+	// .SC.workers.{min,max} and the underlying platform scales the worker
+	// pool automatically (e.g. Gardener). When false, an SC requesting
+	// autoscaling is provisioned at the fixed size .SC.workers.min and its
+	// AutoscalingSupported condition is set to False.
+	// +optional
+	Autoscaling bool `json:"autoscaling,omitempty"`
 }
 
 // ResolvedResource records a successfully resolved ResourceSpec on the target cluster.

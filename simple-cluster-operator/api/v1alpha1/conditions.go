@@ -22,6 +22,11 @@ const (
 	ConditionError           = "Error"
 	ConditionKubeconfigValid = "KubeconfigValid"
 
+	// ConditionAutoscalingSupported is set only when the SC requests
+	// workers.autoscaling: True when the chosen SCPC declares autoscaling
+	// support, False when the pool stays fixed at workers.min.
+	ConditionAutoscalingSupported = "AutoscalingSupported"
+
 	// ConditionResourcePrefix is prepended to a ClusterResource.Name to form
 	// the per-resource apply condition type (e.g. "Resource-deployment-x").
 	ConditionResourcePrefix = "Resource-"
