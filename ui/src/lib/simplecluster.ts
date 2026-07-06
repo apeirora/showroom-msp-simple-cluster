@@ -86,6 +86,11 @@ const CREATE_SIMPLECLUSTER_MUTATION = `
   }
 `;
 
+// The gateway schema types Quantity fields (cpu/memory) as JSONString: the
+// value must itself be valid JSON. Plain "2Gi" is not ("1" only passes by
+// parsing as a number), so string quantities are JSON-encoded on input.
+const quantity = (v: string): string => JSON.stringify(v);
+
 export const createSimpleCluster = async (
   opts: GraphqlClientOptions,
   input: CreateSimpleClusterInput
@@ -97,7 +102,7 @@ export const createSimpleCluster = async (
   // Workers are sized either as a fixed count or an autoscaled min/max
   // range — the CRD forbids sending both.
   const workers: Record<string, unknown> = {
-    requested: { cpu: input.workerCpu, memory: input.workerMemory }
+    requested: { cpu: quantity(input.workerCpu), memory: quantity(input.workerMemory) }
   };
   if (input.workerAutoscaling && input.workerMin != null && input.workerMax != null) {
     workers.autoscaling = { min: input.workerMin, max: input.workerMax };
@@ -113,8 +118,8 @@ export const createSimpleCluster = async (
     spec.controlPlane = {
       nodes: input.controlPlaneNodes,
       requested: {
-        cpu: input.controlPlaneCpu ?? input.workerCpu,
-        memory: input.controlPlaneMemory ?? input.workerMemory
+        cpu: quantity(input.controlPlaneCpu ?? input.workerCpu),
+        memory: quantity(input.controlPlaneMemory ?? input.workerMemory)
       }
     };
   }
