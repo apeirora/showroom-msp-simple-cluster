@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Bar,
   Button,
+  CheckBox,
   Dialog,
   FlexBox,
   FlexBoxDirection,
@@ -20,6 +21,9 @@ export interface CreateValues {
   name: string;
   provider: string;
   workerNodes: number;
+  workerAutoscaling: boolean;
+  workerMin: number;
+  workerMax: number;
   workerCpu: string;
   workerMemory: string;
   controlPlaneNodes: number;
@@ -42,6 +46,9 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
   const [name, setName] = useState('');
   const [provider, setProvider] = useState(config.providers[0] ?? '');
   const [workerNodes, setWorkerNodes] = useState(config.workers.default);
+  const [workerAutoscaling, setWorkerAutoscaling] = useState(false);
+  const [workerMin, setWorkerMin] = useState(config.workers.default);
+  const [workerMax, setWorkerMax] = useState(Math.min(config.workers.default + 2, config.workers.max));
   const [workerCpu, setWorkerCpu] = useState(config.cpu[0] ?? '');
   const [workerMemory, setWorkerMemory] = useState(config.memory[0] ?? '');
   const [controlPlaneNodes, setControlPlaneNodes] = useState(config.controlPlane.default);
@@ -50,10 +57,11 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
   const [nameTouched, setNameTouched] = useState(false);
 
   const nameValid = useMemo(() => RFC_1123.test(name) && name.length <= 63, [name]);
+  const workersValid = workerAutoscaling ? workerMin >= 1 && workerMax >= workerMin : workerNodes >= 1;
   const canSubmit =
     nameValid &&
     Boolean(provider) &&
-    workerNodes >= 1 &&
+    workersValid &&
     Boolean(workerCpu) &&
     Boolean(workerMemory) &&
     controlPlaneNodes >= 1 &&
@@ -65,6 +73,9 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
     setNameTouched(false);
     setProvider(config.providers[0] ?? '');
     setWorkerNodes(config.workers.default);
+    setWorkerAutoscaling(false);
+    setWorkerMin(config.workers.default);
+    setWorkerMax(Math.min(config.workers.default + 2, config.workers.max));
     setWorkerCpu(config.cpu[0] ?? '');
     setWorkerMemory(config.memory[0] ?? '');
     setControlPlaneNodes(config.controlPlane.default);
@@ -83,6 +94,9 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
       name,
       provider,
       workerNodes,
+      workerAutoscaling,
+      workerMin,
+      workerMax,
       workerCpu,
       workerMemory,
       controlPlaneNodes,
@@ -187,20 +201,57 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
         </FlexBox>
 
         <Label>Workers</Label>
+        <CheckBox
+          text="Autoscaling — the provider scales the pool between min and max"
+          checked={workerAutoscaling}
+          onChange={(e) => setWorkerAutoscaling(Boolean((e.target as unknown as HTMLInputElement).checked))}
+        />
         <FlexBox style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
-          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
-            <Label for="sc-wkr-nodes" required>
-              Nodes
-            </Label>
-            <StepInput
-              id="sc-wkr-nodes"
-              value={workerNodes}
-              min={config.workers.min}
-              max={config.workers.max}
-              step={1}
-              onChange={(e) => setWorkerNodes(Number((e.target as unknown as HTMLInputElement).value))}
-            />
-          </FlexBox>
+          {workerAutoscaling ? (
+            <>
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+                <Label for="sc-wkr-min" required>
+                  Min nodes
+                </Label>
+                <StepInput
+                  id="sc-wkr-min"
+                  value={workerMin}
+                  min={config.workers.min}
+                  max={config.workers.max}
+                  step={1}
+                  onChange={(e) => setWorkerMin(Number((e.target as unknown as HTMLInputElement).value))}
+                />
+              </FlexBox>
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+                <Label for="sc-wkr-max" required>
+                  Max nodes
+                </Label>
+                <StepInput
+                  id="sc-wkr-max"
+                  value={workerMax}
+                  min={config.workers.min}
+                  max={config.workers.max}
+                  step={1}
+                  valueState={workerMax < workerMin ? 'Negative' : 'None'}
+                  onChange={(e) => setWorkerMax(Number((e.target as unknown as HTMLInputElement).value))}
+                />
+              </FlexBox>
+            </>
+          ) : (
+            <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+              <Label for="sc-wkr-nodes" required>
+                Nodes
+              </Label>
+              <StepInput
+                id="sc-wkr-nodes"
+                value={workerNodes}
+                min={config.workers.min}
+                max={config.workers.max}
+                step={1}
+                onChange={(e) => setWorkerNodes(Number((e.target as unknown as HTMLInputElement).value))}
+              />
+            </FlexBox>
+          )}
           <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
             <Label for="sc-wkr-cpu" required>
               CPU / node

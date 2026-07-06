@@ -5,4 +5,5 @@ resources:
   - scpc-dati-openstack.yaml
   - scpc-sap-gardener-openstack.yaml
   - scpc-sap-gardener-ironcore.yaml
-#  - simplecluster.yaml
+#  - simplecluster-fixed.yaml
+#  - simplecluster-autoscale.yaml
