@@ -28,10 +28,19 @@ export interface NodePool {
   requested?: ResourceRequest;
 }
 
+export interface WorkerAutoscaling {
+  min?: number;
+  max?: number;
+}
+
+export interface WorkersPool extends NodePool {
+  autoscaling?: WorkerAutoscaling;
+}
+
 export interface SimpleClusterSpec {
   providerConfigRefs?: string[];
   controlPlane?: NodePool;
-  workers?: NodePool;
+  workers?: WorkersPool;
 }
 
 export interface ResourceStatus {

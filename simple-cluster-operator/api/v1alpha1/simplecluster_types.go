@@ -31,7 +31,8 @@ type SimpleClusterSpec struct {
 	ControlPlane *ControlPlaneSpec `json:"controlPlane,omitempty"`
 
 	// Workers describes the worker pool sizing and per-worker resources.
-	// Exposed to templates as .SC.workers.{nodes,requested.{cpu,memory}}.
+	// Exposed to templates as
+	// .SC.workers.{nodes,min,max,autoscaling,requested.{cpu,memory}}.
 	Workers WorkersSpec `json:"workers"`
 
 	// ProviderConfigRefs is the ordered list of SCPC candidates by name. The
@@ -94,15 +95,70 @@ type ControlPlaneSpec struct {
 }
 
 // WorkersSpec describes the worker pool size and per-worker resource ask.
+// Sizing is given either as a fixed count (Nodes) or as an autoscaled
+// Min/Max range (Autoscaling). Exactly one of the two must be set.
+// +kubebuilder:validation:XValidation:rule="has(self.nodes) || has(self.autoscaling)",message="either nodes or autoscaling must be set"
+// +kubebuilder:validation:XValidation:rule="!(has(self.nodes) && has(self.autoscaling))",message="nodes and autoscaling are mutually exclusive"
 type WorkersSpec struct {
-	// Nodes is the worker count. Surfaced as .SC.workers.nodes.
+	// Nodes is the fixed worker count. Surfaced as .SC.workers.nodes.
+	// Mutually exclusive with Autoscaling.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=100
-	Nodes int32 `json:"nodes"`
+	// +optional
+	Nodes *int32 `json:"nodes,omitempty"`
+
+	// Autoscaling sizes the worker pool as a Min/Max range the provider
+	// scales within. Only providers with a native autoscaler honor the
+	// range; others provision Min and the AutoscalingSupported condition
+	// reports the limitation. Surfaced as .SC.workers.{min,max} plus the
+	// boolean .SC.workers.autoscaling; .SC.workers.nodes mirrors Min for
+	// templates that predate the range form. Mutually exclusive with Nodes.
+	// +optional
+	Autoscaling *AutoscalingSpec `json:"autoscaling,omitempty"`
 
 	// Requested is the per-worker resource ask. Templates surface these as
 	// the worker machine type / VM size / replica resources.
 	Requested NodeResources `json:"requested"`
+}
+
+// AutoscalingSpec is the worker pool range the provider scales within.
+// +kubebuilder:validation:XValidation:rule="self.max >= self.min",message="max must be >= min"
+type AutoscalingSpec struct {
+	// Min is the minimum worker count. Surfaced as .SC.workers.min.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	Min int32 `json:"min"`
+
+	// Max is the maximum worker count. Surfaced as .SC.workers.max.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	Max int32 `json:"max"`
+}
+
+// MinNodes is the effective lower bound of the worker pool: Autoscaling.Min
+// when autoscaling is requested, else the fixed count Nodes.
+func (w *WorkersSpec) MinNodes() int32 {
+	if w.Autoscaling != nil {
+		return w.Autoscaling.Min
+	}
+	if w.Nodes != nil {
+		return *w.Nodes
+	}
+	return 0
+}
+
+// MaxNodes is the effective upper bound of the worker pool: Autoscaling.Max
+// when autoscaling is requested, else the fixed size MinNodes.
+func (w *WorkersSpec) MaxNodes() int32 {
+	if w.Autoscaling != nil {
+		return w.Autoscaling.Max
+	}
+	return w.MinNodes()
+}
+
+// AutoscalingEnabled reports whether the SC asked for an autoscaled pool.
+func (w *WorkersSpec) AutoscalingEnabled() bool {
+	return w.Autoscaling != nil
 }
 
 // NodeResources is the per-node resource ask, shared by ControlPlaneSpec and

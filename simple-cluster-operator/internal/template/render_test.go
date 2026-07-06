@@ -34,7 +34,7 @@ func minimalSC(workers int32, inputs map[string]string) *showroomv1alpha1.Simple
 	sc := &showroomv1alpha1.SimpleCluster{}
 	sc.Name = "foo"
 	sc.Namespace = "users"
-	sc.Spec.Workers = showroomv1alpha1.WorkersSpec{Nodes: workers}
+	sc.Spec.Workers = showroomv1alpha1.WorkersSpec{Nodes: &workers}
 	sc.Spec.Inputs = inputs
 	return sc
 }
@@ -480,5 +480,46 @@ data:
 	data, _, _ = unstructured.NestedStringMap(objs[0].Object, "data")
 	if data["nodes"] != "3" || data["cpu"] != "8" || data["memory"] != "16Gi" {
 		t.Errorf("explicit control-plane mismatch: %v", data)
+	}
+}
+
+func TestRender_WorkersAutoscaling(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "config",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Template: `apiVersion: v1
+kind: ConfigMap
+data:
+  nodes: "{{ .SC.workers.nodes }}"
+  min: "{{ .SC.workers.min }}"
+  max: "{{ .SC.workers.max }}"
+  autoscaling: "{{ .SC.workers.autoscaling }}"
+`,
+	}
+
+	// Fixed count: min and max collapse to nodes.
+	sc := minimalSC(3, nil)
+	objs, err := Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["nodes"] != "3" || data["min"] != "3" || data["max"] != "3" || data["autoscaling"] != "false" {
+		t.Errorf("fixed-count workers context mismatch: %v", data)
+	}
+
+	// Autoscaled range: nodes mirrors min, max is the ceiling.
+	sc.Spec.Workers = showroomv1alpha1.WorkersSpec{
+		Autoscaling: &showroomv1alpha1.AutoscalingSpec{Min: 2, Max: 5},
+	}
+	objs, err = Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	data, _, _ = unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["nodes"] != "2" || data["min"] != "2" || data["max"] != "5" || data["autoscaling"] != "true" {
+		t.Errorf("autoscaled workers context mismatch: %v", data)
 	}
 }

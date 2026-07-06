@@ -40,6 +40,44 @@ export const fixtureSimpleClusters = (): SimpleCluster[] => [
   },
   {
     metadata: {
+      name: 'autoscaled-workers',
+      namespace: 'default',
+      creationTimestamp: new Date(Date.now() - 6 * 3600_000).toISOString(),
+      uid: 'fixture-3'
+    },
+    spec: {
+      providerConfigRefs: ['gardener-sap-ironcore'],
+      workers: { autoscaling: { min: 1, max: 3 }, requested: { cpu: '4', memory: '8Gi' } }
+    },
+    status: {
+      phase: 'Ready',
+      cp: '-/-',
+      wkr: '1/1-3',
+      providerConfigRef: { name: 'gardener-sap-ironcore' },
+      targetCluster: 'gardener-sap-ironcore',
+      kubeconfigSecretRef: { name: 'autoscaled-workers-kubeconfig' },
+      kubeconfigExpiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+      kubeconfigIssuedAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
+      conditions: [
+        {
+          type: 'Ready',
+          status: 'True',
+          reason: 'Reconciled',
+          message: 'SimpleCluster is ready.',
+          lastTransitionTime: new Date(Date.now() - 5 * 3600_000).toISOString()
+        },
+        {
+          type: 'AutoscalingSupported',
+          status: 'True',
+          reason: 'ProviderAutoscaling',
+          message: 'provider scales workers between 1 and 3',
+          lastTransitionTime: new Date(Date.now() - 5 * 3600_000).toISOString()
+        }
+      ]
+    }
+  },
+  {
+    metadata: {
       name: 'ci-runner',
       namespace: 'default',
       creationTimestamp: new Date(Date.now() - 20 * 60_000).toISOString(),

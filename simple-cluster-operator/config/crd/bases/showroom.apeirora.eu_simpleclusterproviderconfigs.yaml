@@ -50,6 +50,14 @@ spec:
             description: SimpleClusterProviderConfigSpec defines the desired state
               of SimpleClusterProviderConfig.
             properties:
+              autoscaling:
+                description: |-
+                  Autoscaling declares that this SCPC's templates honor
+                  .SC.workers.{min,max} and the underlying platform scales the worker
+                  pool automatically (e.g. Gardener). When false, an SC requesting
+                  autoscaling is provisioned at the fixed size .SC.workers.min and its
+                  AutoscalingSupported condition is set to False.
+                type: boolean
               inputs:
                 description: |-
                   Inputs is the closed set of keys a SimpleCluster may override via
