@@ -252,8 +252,11 @@ func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 		"namespace": sc.Namespace,
 		"uid":       string(sc.UID),
 		"workers": map[string]any{
-			"nodes":     sc.Spec.Workers.Nodes,
-			"requested": nodeResourcesContext(sc.Spec.Workers.Requested),
+			"nodes":       sc.Spec.Workers.MinNodes(),
+			"min":         sc.Spec.Workers.MinNodes(),
+			"max":         sc.Spec.Workers.MaxNodes(),
+			"autoscaling": sc.Spec.Workers.AutoscalingEnabled(),
+			"requested":   nodeResourcesContext(sc.Spec.Workers.Requested),
 		},
 		"labels": sc.Labels,
 	}

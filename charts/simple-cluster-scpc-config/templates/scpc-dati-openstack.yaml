@@ -25,6 +25,7 @@ metadata:
     app.kubernetes.io/name: simple-cluster-operator
     app.kubernetes.io/managed-by: kustomize
 spec:
+  autoscaling: true
   target:
     namespace: garden-sap
     kubeconfigSecretRef:
@@ -89,8 +90,8 @@ spec:
                   image:
                     name: gardenlinux
                     version: "2150.0.0"
-                minimum: 1
-                maximum: 3
+                minimum: {{ .SC.workers.min }}
+                maximum: {{ .SC.workers.max }}
                 zones:
                   - {{ .Inputs.zone }}
           maintenance:

@@ -167,10 +167,41 @@ spec:
               workers:
                 description: |-
                   Workers describes the worker pool sizing and per-worker resources.
-                  Exposed to templates as .SC.workers.{nodes,requested.{cpu,memory}}.
+                  Exposed to templates as
+                  .SC.workers.{nodes,min,max,autoscaling,requested.{cpu,memory}}.
                 properties:
+                  autoscaling:
+                    description: |-
+                      Autoscaling sizes the worker pool as a Min/Max range the provider
+                      scales within. Only providers with a native autoscaler honor the
+                      range; others provision Min and the AutoscalingSupported condition
+                      reports the limitation. Surfaced as .SC.workers.{min,max} plus the
+                      boolean .SC.workers.autoscaling; .SC.workers.nodes mirrors Min for
+                      templates that predate the range form. Mutually exclusive with Nodes.
+                    properties:
+                      max:
+                        description: Max is the maximum worker count. Surfaced as .SC.workers.max.
+                        format: int32
+                        maximum: 100
+                        minimum: 1
+                        type: integer
+                      min:
+                        description: Min is the minimum worker count. Surfaced as .SC.workers.min.
+                        format: int32
+                        maximum: 100
+                        minimum: 1
+                        type: integer
+                    required:
+                    - max
+                    - min
+                    type: object
+                    x-kubernetes-validations:
+                    - message: max must be >= min
+                      rule: self.max >= self.min
                   nodes:
-                    description: Nodes is the worker count. Surfaced as .SC.workers.nodes.
+                    description: |-
+                      Nodes is the fixed worker count. Surfaced as .SC.workers.nodes.
+                      Mutually exclusive with Autoscaling.
                     format: int32
                     maximum: 100
                     minimum: 1
@@ -201,9 +232,13 @@ spec:
                     - memory
                     type: object
                 required:
-                - nodes
                 - requested
                 type: object
+                x-kubernetes-validations:
+                - message: either nodes or autoscaling must be set
+                  rule: has(self.nodes) || has(self.autoscaling)
+                - message: nodes and autoscaling are mutually exclusive
+                  rule: '!(has(self.nodes) && has(self.autoscaling))'
             required:
             - providerConfigRefs
             - workers

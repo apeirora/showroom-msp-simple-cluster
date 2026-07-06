@@ -108,7 +108,13 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
 
         <Panel headerText="Workers" collapsed={false}>
           <Row label="Ready / declared">{st.wkr}</Row>
-          <Row label="Nodes">{s.workers?.nodes ?? '—'}</Row>
+          {s.workers?.autoscaling ? (
+            <Row label="Nodes (autoscaled)">
+              {`${s.workers.autoscaling.min ?? '—'} – ${s.workers.autoscaling.max ?? '—'}`}
+            </Row>
+          ) : (
+            <Row label="Nodes">{s.workers?.nodes ?? '—'}</Row>
+          )}
           <Row label="CPU / node">{String(s.workers?.requested?.cpu ?? '—')}</Row>
           <Row label="Memory / node">{String(s.workers?.requested?.memory ?? '—')}</Row>
         </Panel>
