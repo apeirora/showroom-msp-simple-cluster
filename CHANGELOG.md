@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.2...v0.20.0) (2026-07-06)
+
+
+### Features
+
+* worker pool autoscaling with min/max range ([cc95982](https://github.com/apeirora/showroom-simple-cluster/commit/cc95982b4f8f27d5b824f0d671b2b3592b8dc185))
+
 ## [0.19.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.1...v0.19.2) (2026-07-04)
 
 
