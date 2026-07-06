@@ -98,7 +98,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
   }));
 
   const columns = [
-    { Header: 'Name', accessor: 'name', width: 200 },
+    { Header: 'Name', accessor: 'name', minWidth: 150 },
     {
       Header: 'Phase',
       accessor: 'phase',
@@ -109,7 +109,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
         </ObjectStatus>
       )
     },
-    { Header: 'Provider', accessor: 'provider', width: 200 },
+    { Header: 'Provider', accessor: 'provider', minWidth: 180 },
     { Header: 'CP', accessor: 'cp', width: 70 },
     { Header: 'Workers', accessor: 'wkr', width: 90 },
     { Header: 'Age', accessor: 'age', width: 80 },
@@ -165,7 +165,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
         data={rows}
         columns={columns as any}
         visibleRows={10}
-        minRows={3}
+        minRows={1}
         filterable
         sortable
       />
