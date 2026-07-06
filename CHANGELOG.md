@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.20.0...v0.20.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* JSON-encode quantity values in create mutation ([ba31657](https://github.com/apeirora/showroom-simple-cluster/commit/ba31657078ddde99d1d0bfdd8d990ba98a705f93))
+
 ## [0.20.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.2...v0.20.0) (2026-07-06)
 
 
