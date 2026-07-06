@@ -269,6 +269,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
 	apimeta.RemoveStatusCondition(&sc.Status.Conditions, showroomv1alpha1.ConditionError)
+	setAutoscalingCondition(&sc, &scpc)
 
 	// Kubeconfig propagation: once the named source resource is Ready,
 	// fetch its kubeconfig and mirror it into a Secret in SC.Namespace.
@@ -833,8 +834,9 @@ func (r *SimpleClusterReconciler) noHardwareSC(
 // and aggregate Phase. SC has no per-node visibility into NC, so the
 // ready side tracks Phase (Ready ⇒ full, otherwise 0). When the SCPC
 // owns the control plane (spec.controlPlane omitted), CP is "-/-".
+// With autoscaling the declared side is the range, e.g. "2/2-5".
 func setRoleCounts(sc *showroomv1alpha1.SimpleCluster) {
-	wkrDeclared := int(sc.Spec.Workers.Nodes)
+	wkrDeclared := int(sc.Spec.Workers.MinNodes())
 	cpReady, wkrReady := 0, 0
 	if sc.Status.Phase == showroomv1alpha1.PhaseReady {
 		wkrReady = wkrDeclared
@@ -848,7 +850,38 @@ func setRoleCounts(sc *showroomv1alpha1.SimpleCluster) {
 	} else {
 		sc.Status.CP = "-/-"
 	}
-	sc.Status.WKR = fmt.Sprintf("%d/%d", wkrReady, wkrDeclared)
+	if wkrMax := int(sc.Spec.Workers.MaxNodes()); wkrMax > wkrDeclared {
+		sc.Status.WKR = fmt.Sprintf("%d/%d-%d", wkrReady, wkrDeclared, wkrMax)
+	} else {
+		sc.Status.WKR = fmt.Sprintf("%d/%d", wkrReady, wkrDeclared)
+	}
+}
+
+// setAutoscalingCondition reports whether the chosen SCPC honors the SC's
+// workers.autoscaling request. The condition exists only while the SC asks
+// for autoscaling; SCs without it (or with the legacy fixed count) carry no
+// AutoscalingSupported condition at all.
+func setAutoscalingCondition(
+	sc *showroomv1alpha1.SimpleCluster, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) {
+	if !sc.Spec.Workers.AutoscalingEnabled() {
+		apimeta.RemoveStatusCondition(&sc.Status.Conditions, showroomv1alpha1.ConditionAutoscalingSupported)
+		return
+	}
+	cond := metav1.Condition{
+		Type:   showroomv1alpha1.ConditionAutoscalingSupported,
+		Status: metav1.ConditionTrue,
+		Reason: "ProviderAutoscaling",
+		Message: fmt.Sprintf("provider scales workers between %d and %d",
+			sc.Spec.Workers.MinNodes(), sc.Spec.Workers.MaxNodes()),
+	}
+	if !scpc.Spec.Autoscaling {
+		cond.Status = metav1.ConditionFalse
+		cond.Reason = "UnsupportedByProvider"
+		cond.Message = fmt.Sprintf("SCPC %q does not support autoscaling; worker pool fixed at %d",
+			scpc.Name, sc.Spec.Workers.MinNodes())
+	}
+	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
 }
 
 // validateAndTopoSort validates the SCPC DAG and returns a topological

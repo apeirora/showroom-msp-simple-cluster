@@ -3,7 +3,7 @@ kind: SimpleCluster
 metadata:
   # Keep the SC name short: Gardener enforces a 21-char cap on
   # <project>-<shoot> across project+namePrefix+SC.name.
-  name: my
+  name: sample-fixed
 spec:
   controlPlane:
     nodes: 1
@@ -17,5 +17,4 @@ spec:
       memory: 8Gi
   providerConfigRefs:
     - sap-gardener-openstack
-    #- sap-gardener-ironcore
 

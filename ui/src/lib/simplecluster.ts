@@ -18,7 +18,7 @@ const CLUSTER_LIST_QUERY = `
             spec {
               providerConfigRefs
               controlPlane { nodes requested { cpu memory } }
-              workers { nodes requested { cpu memory } }
+              workers { nodes autoscaling { min max } requested { cpu memory } }
             }
             status {
               phase
@@ -64,6 +64,9 @@ export interface CreateSimpleClusterInput {
   name: string;
   provider: string;
   workerNodes: number;
+  workerAutoscaling?: boolean;
+  workerMin?: number;
+  workerMax?: number;
   workerCpu: string;
   workerMemory: string;
   controlPlaneNodes?: number;
@@ -91,12 +94,19 @@ export const createSimpleCluster = async (
     await new Promise((r) => setTimeout(r, 350));
     return;
   }
+  // Workers are sized either as a fixed count or an autoscaled min/max
+  // range — the CRD forbids sending both.
+  const workers: Record<string, unknown> = {
+    requested: { cpu: input.workerCpu, memory: input.workerMemory }
+  };
+  if (input.workerAutoscaling && input.workerMin != null && input.workerMax != null) {
+    workers.autoscaling = { min: input.workerMin, max: input.workerMax };
+  } else {
+    workers.nodes = input.workerNodes;
+  }
   const spec: Record<string, unknown> = {
     providerConfigRefs: [input.provider],
-    workers: {
-      nodes: input.workerNodes,
-      requested: { cpu: input.workerCpu, memory: input.workerMemory }
-    }
+    workers
   };
   // Control plane is optional — providers like Gardener manage it themselves.
   if (input.controlPlaneNodes && input.controlPlaneNodes > 0) {
