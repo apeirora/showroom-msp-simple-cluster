@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.20.1...v0.20.2) (2026-07-06)
+
+
+### Bug Fixes
+
+* UI table fix ([c697a04](https://github.com/apeirora/showroom-simple-cluster/commit/c697a04421386b0db3d9f06ed2f705a6cdec36eb))
+
 ## [0.20.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.20.0...v0.20.1) (2026-07-06)
 
 
