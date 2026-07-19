@@ -1,0 +1,32 @@
+apiVersion: apis.kcp.io/v1alpha2
+kind: APIExport
+metadata:
+  name: shoots.dati.gardener
+  labels:
+    # Marketplace/ContentConfigurations virtual-workspace filters on content-for
+    # = APIExport name. Must match `shoots.dati.gardener` verbatim.
+    ui.platform-mesh.io/content-for: shoots.dati.gardener
+spec:
+  resources:
+    - group: dati.gardener
+      name: shoots
+      schema: v1alpha1.shoots.dati.gardener
+      storage:
+        crd: {}
+  permissionClaims:
+    # Each claim sets `all: true` to match APIExport v1alpha2's required scope.
+    # The syncagent mirrors namespaces and Events between KCP and the MSP cluster.
+    - group: ""
+      resource: namespaces
+      verbs: ["*"]
+      all: true
+    - group: ""
+      resource: events
+      verbs: ["*"]
+      all: true
+    # Reserved for a future bring-your-own-credentials path: a workspace
+    # Secret referenced from the Shoot would be mirrored down to the MSP side.
+    - group: ""
+      resource: secrets
+      verbs: ["*"]
+      all: true

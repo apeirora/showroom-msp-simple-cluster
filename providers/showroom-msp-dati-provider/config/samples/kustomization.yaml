@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- dati_v1alpha1_shoot.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

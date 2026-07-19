@@ -1,0 +1,8 @@
+rbac:
+  # KCP-side access for the sync agent; disabled when provider onboarding
+  # already created the ClusterRoleBinding out-of-band.
+  enabled: false
+branding:
+  marketplace:
+    title: "Dati SimpleCluster Provider"
+    description: "Enables dati as a provider for SimpleCluster: installing it provisions a dati provider configuration for your workspace."
