@@ -1,0 +1,54 @@
+- apiGroups:
+    - dati.gardener
+  resources:
+    - shoots
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+- apiGroups:
+    - dati.gardener
+  resources:
+    - shoots/finalizers
+  verbs:
+    - update
+- apiGroups:
+    - dati.gardener
+  resources:
+    - shoots/status
+  verbs:
+    - get
+    - patch
+    - update
+- apiGroups:
+    - showroom.apeirora.eu
+  resources:
+    - simpleclusterproviderconfigs
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+- apiGroups:
+    - showroom.apeirora.eu
+  resources:
+    - simpleclusters
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - ""
+  resources:
+    - secrets
+  verbs:
+    - get
+    - list
+    - watch

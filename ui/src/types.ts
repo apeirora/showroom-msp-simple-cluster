@@ -84,8 +84,33 @@ export interface SimpleCluster {
   status?: SimpleClusterStatus;
 }
 
+// A provider CR family whose instances, once installed in the workspace,
+// advertise the SimpleClusterProviderConfig names a SimpleCluster may target
+// via status.providerConfigs. The create dialog discovers the live provider
+// list by querying every configured source.
+export interface ProviderSource {
+  // Kubernetes API group, e.g. "dati.gardener".
+  group: string;
+  // API version, e.g. "v1alpha1".
+  version: string;
+  // GraphQL list field for the kind, e.g. "Shoots".
+  listField: string;
+  // Whether the resource is namespaced in the KCP workspace. Provider CRs are
+  // projected cluster-scoped by design (projection.scope: Cluster), so this
+  // defaults to false — the gateway then exposes the list field WITHOUT a
+  // namespace argument, and querying with one is a schema error.
+  namespaced?: boolean;
+  // Optional human-facing label for the provider family.
+  label?: string;
+}
+
 export interface ClusterConfig {
+  // Static fallback provider list, used only when no providerSources are
+  // configured (legacy deployments, offline/fixtures).
   providers: string[];
+  // Live provider discovery sources. When non-empty, the create dialog lists
+  // providers discovered from these CRs instead of the static list.
+  providerSources: ProviderSource[];
   cpu: string[];
   memory: string[];
   controlPlane: {
