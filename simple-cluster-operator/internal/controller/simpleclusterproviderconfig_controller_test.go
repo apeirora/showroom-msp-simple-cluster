@@ -34,11 +34,11 @@ var _ = Describe("SimpleClusterProviderConfig Controller", func() {
 
 	Context("with a valid local-cluster SCPC", func() {
 		const name = "valid-scpc"
-		key := types.NamespacedName{Name: name}
+		key := types.NamespacedName{Name: name, Namespace: "default"}
 
 		BeforeEach(func() {
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleClusterProviderConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: name},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
 					Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
 					Resources: []showroomv1alpha1.ResourceSpec{{
@@ -85,11 +85,11 @@ var _ = Describe("SimpleClusterProviderConfig Controller", func() {
 
 	Context("with an invalid DAG", func() {
 		const name = "invalid-scpc"
-		key := types.NamespacedName{Name: name}
+		key := types.NamespacedName{Name: name, Namespace: "default"}
 
 		BeforeEach(func() {
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleClusterProviderConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: name},
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
 					Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
 					Resources: []showroomv1alpha1.ResourceSpec{

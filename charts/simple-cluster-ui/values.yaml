@@ -47,10 +47,18 @@ branding:
 # simple-cluster-config.json). Editing these tunes the dropdowns without
 # rebuilding the container image.
 clusterConfig:
-  # Available SimpleClusterProviderConfig (SCPC) names offered in the provider
-  # drop-down. SCPCs are admin-managed and not exported into consumer
-  # workspaces, so the list is curated here (override per env to match the
-  # SCPCs applied on the cluster).
+  # providerSources drive the LIVE provider drop-down: the create dialog lists
+  # the SimpleClusterProviderConfig names advertised by installed provider CRs
+  # (status.providerConfigs). Each entry is a provider CR family — when a user
+  # installs a provider and creates its CR, that provider appears automatically.
+  # Add an entry per provider family the portal should discover.
+  providerSources:
+    - group: dati.gardener
+      version: v1alpha1
+      listField: Shoots
+      label: Dati (Gardener Shoot)
+  # Static fallback provider list, used only when providerSources is empty
+  # (legacy deployments / offline). Ignored once providerSources is set.
   providers:
     - cloudferro
     - sap-gardener-ironcore

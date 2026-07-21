@@ -31,6 +31,7 @@ import {
 } from './lib/simplecluster';
 import { fetchKubeconfig } from './lib/secret';
 import { fallbackClusterConfig, loadClusterConfig } from './lib/config';
+import { fetchAvailableProviders } from './lib/providers';
 import type { ClusterConfig, SimpleCluster } from './types';
 
 const POLL_INTERVAL_MS = 5000;
@@ -44,6 +45,11 @@ const App = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
+
+  // Live provider list discovered from installed provider CRs. null means
+  // discovery has not produced a list, so the static config list is used.
+  const [discoveredProviders, setDiscoveredProviders] = useState<string[] | null>(null);
+  const [providersLoading, setProvidersLoading] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<SimpleCluster | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -77,6 +83,46 @@ const App = () => {
     }),
     [ctx.graphqlUrl, ctx.token, ctx.workspacePath]
   );
+
+  const usingDynamicProviders = config.providerSources.length > 0;
+
+  const discoverProviders = useCallback(async () => {
+    if (!usingDynamicProviders) {
+      setDiscoveredProviders(null);
+      return;
+    }
+    // Provider CRs are cluster-scoped in KCP, so discovery needs the gateway
+    // but not a namespace.
+    if (!ctx.graphqlUrl) return;
+    setProvidersLoading(true);
+    try {
+      const result = await fetchAvailableProviders(client, ctx.namespace ?? '', config.providerSources);
+      // ran=false means discovery could not run — keep the static fallback.
+      setDiscoveredProviders(result.ran ? result.providers : null);
+    } catch (err) {
+      console.warn('[simple-cluster-ui] provider discovery failed', err);
+    } finally {
+      setProvidersLoading(false);
+    }
+  }, [client, ctx.graphqlUrl, ctx.namespace, config.providerSources, usingDynamicProviders]);
+  // note: ctx.namespace stays in deps so discovery reruns if it arrives late.
+
+  useEffect(() => {
+    void discoverProviders();
+  }, [discoverProviders]);
+
+  // Providers offered in the create dialog: the discovered list when dynamic
+  // discovery produced one, otherwise the static config list.
+  const providers = useMemo(
+    () => (usingDynamicProviders && discoveredProviders !== null ? discoveredProviders : config.providers),
+    [usingDynamicProviders, discoveredProviders, config.providers]
+  );
+
+  const openCreate = useCallback(() => {
+    setCreateOpen(true);
+    // Refresh so providers installed since page load appear.
+    void discoverProviders();
+  }, [discoverProviders]);
 
   const reload = useCallback(async () => {
     if (!ctx.graphqlUrl || !ctx.namespace) return;
@@ -250,7 +296,7 @@ const App = () => {
           <ClusterList
             clusters={clusters}
             loading={loading}
-            onCreate={() => setCreateOpen(true)}
+            onCreate={openCreate}
             onAction={handleAction}
           />
         </FlexBox>
@@ -260,6 +306,8 @@ const App = () => {
         open={createOpen}
         busy={createBusy}
         config={config}
+        providers={providers}
+        providersLoading={providersLoading}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

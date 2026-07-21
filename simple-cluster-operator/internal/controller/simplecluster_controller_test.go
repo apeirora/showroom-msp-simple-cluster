@@ -86,7 +86,7 @@ var _ = Describe("SimpleCluster Controller", func() {
 
 		BeforeEach(func() {
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleClusterProviderConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: scpcName},
+				ObjectMeta: metav1.ObjectMeta{Name: scpcName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
 					Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
 					Inputs: []showroomv1alpha1.InputDeclaration{
@@ -137,7 +137,7 @@ data:
 				_ = k8sClient.Delete(ctx, sc)
 			}
 			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc); err == nil {
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: scpcName, Namespace: "default"}, scpc); err == nil {
 				_ = k8sClient.Delete(ctx, scpc)
 			}
 		})
@@ -172,7 +172,7 @@ data:
 
 		BeforeEach(func() {
 			Expect(k8sClient.Create(ctx, &showroomv1alpha1.SimpleClusterProviderConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: scpcName},
+				ObjectMeta: metav1.ObjectMeta{Name: scpcName, Namespace: "default"},
 				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
 					Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
 					Resources: []showroomv1alpha1.ResourceSpec{{
@@ -224,7 +224,7 @@ data:
 				_ = k8sClient.Delete(ctx, sc)
 			}
 			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc); err == nil {
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: scpcName, Namespace: "default"}, scpc); err == nil {
 				_ = k8sClient.Delete(ctx, scpc)
 			}
 			cm := &corev1.ConfigMap{}
@@ -344,7 +344,7 @@ data:
 			// dependsOn `config`. We expect dependent to stay
 			// WaitingForDependencies with config in its message.
 			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc)).To(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName, Namespace: "default"}, scpc)).To(Succeed())
 			scpc.Spec.Resources[0].Readiness = nil // config is now never Ready
 			scpc.Spec.Resources = append(scpc.Spec.Resources, showroomv1alpha1.ResourceSpec{
 				Name:       "dependent",
@@ -386,7 +386,7 @@ data:
 			// Mutate the SCPC into an invalid state (self-reference) and
 			// re-reconcile; the SC must surface the error.
 			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName}, scpc)).To(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName, Namespace: "default"}, scpc)).To(Succeed())
 			scpc.Spec.Resources[0].DependsOn = []string{"config"} // self-reference
 			Expect(k8sClient.Update(ctx, scpc)).To(Succeed())
 

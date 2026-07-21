@@ -13,6 +13,7 @@ repo: github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator
 resources:
 - api:
     crdVersion: v1
+    namespaced: true
   controller: true
   domain: apeirora.eu
   group: showroom

@@ -1,0 +1,100 @@
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleClusterProviderConfig
+metadata:
+  name: dati
+  labels:
+    app.kubernetes.io/name: dati-provider-operator
+    app.kubernetes.io/managed-by: dati-provider-operator
+spec:
+  autoscaling: true
+  target:
+    namespace: garden-sap
+    # kubeconfigSecretRef is overwritten by the Shoot controller.
+    kubeconfigSecretRef:
+      name: gardener-dati-kubeconfig
+      namespace: dati-provider
+  inputs:
+    - { name: region,       type: string,   default: RegionOne,                   description: "Cloud region" }
+    - { name: k8sVersion,   type: string,   default: "1.33.9",                    description: "Kubernetes version" }
+    - { name: machineType,  type: string,   default: 4vCPU-8192RAM-100STORAGE,    description: "Worker machine type from the CloudProfile" }
+    - { name: machineImage, type: string,   default: gardenlinux,                 description: "Worker OS image name" }
+    - { name: zone,         type: string,   default: nova,                        description: "OpenStack availability zone for the worker pool" }
+  resources:
+    - name: shoot
+      apiVersion: core.gardener.cloud/v1beta1
+      kind: Shoot
+      nameTemplate: '{{- printf "%s/%s" .SC.namespace .SC.name | sha256sum | trunc 12 | printf "sc-%s" }}'
+      deletionAnnotations:
+        confirmation.gardener.cloud/deletion: "true"
+      readiness:
+        phasePath: status.lastOperation.state
+        phaseReadyValue: Succeeded
+        phaseFailedValues:
+          - Failed
+          - Error
+        lastOperationPath: status.lastOperation.description
+        lastErrorPath: status.lastErrors[0].description
+      template: |
+        apiVersion: core.gardener.cloud/v1beta1
+        kind: Shoot
+        metadata:
+          name: placeholder
+          namespace: garden-sap
+        spec:
+          cloudProfile:
+            name: openstack
+            kind: CloudProfile
+          credentialsBindingName: my-openstack-secret
+          region: {{ .Inputs.region }}
+          kubernetes:
+            version: "{{ .Inputs.k8sVersion }}"
+          networking:
+            type: calico
+            nodes: 10.250.0.0/16
+            pods: 100.128.0.0/11
+            services: 100.72.0.0/13
+          provider:
+            type: openstack
+            infrastructureConfig:
+              apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+              kind: InfrastructureConfig
+              floatingPoolName: external
+              networks:
+                workers: 10.250.0.0/19
+            controlPlaneConfig:
+              apiVersion: openstack.provider.extensions.gardener.cloud/v1alpha1
+              kind: ControlPlaneConfig
+              loadBalancerProvider: amphora
+            workers:
+              - name: worker-main
+                machine:
+                  type: {{ .Inputs.machineType }}
+                  image:
+                    name: gardenlinux
+                    version: "2150.0.0"
+                minimum: {{ .SC.workers.min }}
+                maximum: {{ .SC.workers.max }}
+                zones:
+                  - {{ .Inputs.zone }}
+          maintenance:
+            autoUpdate:
+              kubernetesVersion: false
+              machineImageVersion: false
+            timeWindow:
+              begin: "220000+0000"
+              end: "230000+0000"
+          hibernation:
+            enabled: false
+  kubeconfigSource:
+    resourceName: shoot
+    subResource:
+      apiVersion: authentication.gardener.cloud/v1alpha1
+      kind: AdminKubeconfigRequest
+      subResource: adminkubeconfig
+      kubeconfigPath: status.kubeconfig
+      expirationPath: status.expirationTimestamp
+    # Gardener caps AdminKubeconfigRequest expiration at ~24h; requesting a
+    # longer validity with renewalBefore above the cap causes a perpetual
+    # re-mint loop in the simple-cluster operator.
+    validity: 24h
+    renewalBefore: 4h

@@ -64,6 +64,11 @@ type SimpleClusterReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	RESTConfig *rest.Config
+	// FallbackSCPCNamespace is consulted when an SCPC is not found in the
+	// SimpleCluster's own namespace. Transitional: it lets chart-managed
+	// shared SCPCs keep working while providers migrate to creating
+	// per-workspace SCPCs. Empty disables the fallback.
+	FallbackSCPCNamespace string
 }
 
 // +kubebuilder:rbac:groups=showroom.apeirora.eu,resources=simpleclusters,verbs=get;list;watch;create;update;patch;delete
@@ -116,14 +121,15 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		scpcRef = &corev1.LocalObjectReference{Name: chosen}
 	}
 
-	var scpc showroomv1alpha1.SimpleClusterProviderConfig
-	if err := r.Get(ctx, types.NamespacedName{Name: scpcRef.Name}, &scpc); err != nil {
+	scpcFound, err := r.getSCPC(ctx, &sc, scpcRef.Name)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return r.failSC(ctx, &sc, "SCPCNotFound",
-				fmt.Sprintf("SimpleClusterProviderConfig %q not found", scpcRef.Name))
+				fmt.Sprintf("SimpleClusterProviderConfig %q not found in namespace %q or fallback", scpcRef.Name, sc.Namespace))
 		}
 		return ctrl.Result{}, err
 	}
+	scpc := *scpcFound
 
 	order, err := validateAndTopoSort(&scpc)
 	if err != nil {
@@ -589,14 +595,15 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName string) (bool, error) {
 	log := logf.FromContext(ctx)
 
-	var scpc showroomv1alpha1.SimpleClusterProviderConfig
-	if err := r.Get(ctx, types.NamespacedName{Name: scpcName}, &scpc); err != nil {
+	scpcFound, err := r.getSCPC(ctx, sc, scpcName)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info("SCPC no longer present; skipping remote delete", "scpc", scpcName)
 			return true, nil
 		}
 		return false, fmt.Errorf("get SCPC %s: %w", scpcName, err)
 	}
+	scpc := *scpcFound
 
 	order, err := validateAndTopoSort(&scpc)
 	if err != nil {
@@ -758,6 +765,26 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	}
 
 	return true, nil
+}
+
+// getSCPC resolves an SCPC name for the given SimpleCluster: the SC's own
+// namespace wins, then FallbackSCPCNamespace. The returned error is the
+// fallback lookup's NotFound when the name exists in neither namespace.
+func (r *SimpleClusterReconciler) getSCPC(
+	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, name string,
+) (*showroomv1alpha1.SimpleClusterProviderConfig, error) {
+	var scpc showroomv1alpha1.SimpleClusterProviderConfig
+	err := r.Get(ctx, types.NamespacedName{Namespace: sc.Namespace, Name: name}, &scpc)
+	if err == nil {
+		return &scpc, nil
+	}
+	if !apierrors.IsNotFound(err) || r.FallbackSCPCNamespace == "" || r.FallbackSCPCNamespace == sc.Namespace {
+		return nil, err
+	}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: r.FallbackSCPCNamespace, Name: name}, &scpc); err != nil {
+		return nil, err
+	}
+	return &scpc, nil
 }
 
 // selectProvider picks an SCPC name from the SC's candidate list. v0.x

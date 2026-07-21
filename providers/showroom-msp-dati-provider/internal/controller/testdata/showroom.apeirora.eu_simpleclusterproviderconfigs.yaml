@@ -1,0 +1,531 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: simpleclusterproviderconfigs.showroom.apeirora.eu
+spec:
+  group: showroom.apeirora.eu
+  names:
+    kind: SimpleClusterProviderConfig
+    listKind: SimpleClusterProviderConfigList
+    plural: simpleclusterproviderconfigs
+    shortNames:
+    - scpc
+    singular: simpleclusterproviderconfig
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.reachable
+      name: Reachable
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          SimpleClusterProviderConfig is the namespaced admin-facing template/profile.
+          A SimpleCluster resolves its providerConfigRefs in its own namespace first,
+          then in the operator's fallback namespace (see --scpc-fallback-namespace).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SimpleClusterProviderConfigSpec defines the desired state
+              of SimpleClusterProviderConfig.
+            properties:
+              autoscaling:
+                description: |-
+                  Autoscaling declares that this SCPC's templates honor
+                  .SC.workers.{min,max} and the underlying platform scales the worker
+                  pool automatically (e.g. Gardener). When false, an SC requesting
+                  autoscaling is provisioned at the fixed size .SC.workers.min and its
+                  AutoscalingSupported condition is set to False.
+                type: boolean
+              inputs:
+                description: |-
+                  Inputs is the closed set of keys a SimpleCluster may override via
+                  spec.inputs. Every entry MUST carry a default unless it sets From.
+                items:
+                  description: |-
+                    InputDeclaration is a single SC input slot: name, type, default, and metadata
+                    to make the SCPC self-documenting (kubectl explain / UI rendering).
+                  properties:
+                    allowEmpty:
+                      description: AllowEmpty permits "" as a meaningful value for
+                        Type=string.
+                      type: boolean
+                    default:
+                      description: |-
+                        Default value substituted when SC.spec.inputs[Name] is unset.
+                        Required unless From is set.
+                      type: string
+                    description:
+                      description: Description shown in CRD docs / UI tooling.
+                      type: string
+                    from:
+                      description: |-
+                        From derives the input's value from a source other than Default. With
+                        From=profile the value is the name of the smallest SCPC profile that
+                        fits the SC's requested per-node resources; such inputs need no Default
+                        and no Type (always string). An explicit SC override is passed through
+                        unchanged (free-form, not validated against the profile list).
+                      enum:
+                      - profile
+                      type: string
+                    name:
+                      description: Name as referenced from the template (e.g. region
+                        -> .Inputs.region).
+                      minLength: 1
+                      pattern: ^[a-zA-Z][a-zA-Z0-9_]*$
+                      type: string
+                    type:
+                      default: string
+                      description: |-
+                        Type of the input. Both the Default and any SC override are parsed
+                        against this type; mismatches are rejected at reconcile.
+                      enum:
+                      - string
+                      - int
+                      - bool
+                      - duration
+                      - enum
+                      type: string
+                    values:
+                      description: |-
+                        Values enumerates the allowed choices when Type=enum. Required and
+                        non-empty for enum inputs; ignored otherwise. Default (if set) and any
+                        SC override must match one of Values[].Key.
+                      items:
+                        description: InputEnumValue is one allowed choice for an enum-typed
+                          input.
+                        properties:
+                          key:
+                            description: Key is the value substituted into the template
+                              (e.g. "eu-de-1").
+                            minLength: 1
+                            type: string
+                          label:
+                            description: Label is the human-readable description shown
+                              in UIs / kubectl explain.
+                            type: string
+                        required:
+                        - key
+                        type: object
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - key
+                      x-kubernetes-list-type: map
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              kubeconfigSource:
+                description: |-
+                  KubeconfigSource describes how to obtain the kubeconfig of NC once
+                  the resource named by KubeconfigSource.ResourceName reports Ready.
+                properties:
+                  inline:
+                    description: |-
+                      Inline - JSONPath expression that locates the kubeconfig bytes inside
+                      R itself.
+                    properties:
+                      kubeconfigPath:
+                        description: KubeconfigPath is the JSONPath into R that resolves
+                          to kubeconfig bytes.
+                        type: string
+                    required:
+                    - kubeconfigPath
+                    type: object
+                  renewalBefore:
+                    description: RenewalBefore is how long before expiry the kubeconfig
+                      is renewed (SubResource only).
+                    type: string
+                  resourceName:
+                    description: |-
+                      ResourceName names the ResourceSpec whose kubeconfig is synced to SC.
+                      Must match one of SCPC.spec.resources[].name.
+                    minLength: 1
+                    type: string
+                  secretRef:
+                    description: |-
+                      SecretRef - kubeconfig lives in a Secret in the target cluster's
+                      namespace (typical for Cluster API / Gardener seed Secrets). Name/
+                      Namespace are Go templates evaluated against the same context as the
+                      named resource's Template, with the live R bound at
+                      .Resources.<resourceName>.
+                    properties:
+                      dataKey:
+                        description: DataKey is the key in the Secret holding the
+                          kubeconfig; defaults to "kubeconfig".
+                        type: string
+                      name:
+                        description: Name of the Secret; Go template.
+                        type: string
+                      namespace:
+                        description: Namespace of the Secret; Go template; defaults
+                          to R.namespace.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  subResource:
+                    description: SubResource - call a SubResource on R (e.g. Gardener's
+                      /adminkubeconfig).
+                    properties:
+                      apiVersion:
+                        type: string
+                      expirationPath:
+                        type: string
+                      kind:
+                        type: string
+                      kubeconfigPath:
+                        type: string
+                      subResource:
+                        type: string
+                    required:
+                    - apiVersion
+                    - kind
+                    - kubeconfigPath
+                    - subResource
+                    type: object
+                  validity:
+                    description: Validity is the desired lifetime of issued kubeconfigs
+                      (SubResource only).
+                    type: string
+                required:
+                - resourceName
+                type: object
+              profiles:
+                description: |-
+                  Profiles is the closed set of machine types this SCPC offers. An input
+                  declared with From=profile resolves to the smallest profile whose cpu
+                  and memory satisfy the SC's requested per-node resources (the larger of
+                  the worker and control-plane pool asks). When no profile is large enough
+                  the SimpleCluster is parked in Phase=NoHardware.
+                items:
+                  description: |-
+                    Profile is a named machine type with a fixed per-node CPU/memory capacity.
+                    Profiles are the closed set of machine types an SCPC offers; an input
+                    declared with From=profile resolves to the smallest profile that fits the
+                    SC's requested per-node resources.
+                  properties:
+                    cpu:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: CPU is the profile's CPU capacity per node (e.g.
+                        "4", "8000m").
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    memory:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: Memory is the profile's memory capacity per node
+                        (e.g. "16Gi").
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    name:
+                      description: |-
+                        Name is the machine type identifier substituted into templates
+                        (e.g. "m5.large").
+                      minLength: 1
+                      type: string
+                  required:
+                  - cpu
+                  - memory
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              resources:
+                description: |-
+                  Resources is the ordered DAG of resources to render and create.
+                  Edges are declared via ResourceSpec.DependsOn.
+                items:
+                  description: |-
+                    ResourceSpec describes one node in the SCPC's DAG: a YAML template plus
+                    dependency and readiness metadata.
+                  properties:
+                    apiVersion:
+                      description: APIVersion of the target resource R (e.g. core.gardener.cloud/v1beta1).
+                      type: string
+                    deletionAnnotations:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        DeletionAnnotations are applied to R before the operator deletes it.
+                        Required by some controllers as a "double opt-in"
+                        (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
+                      type: object
+                    dependsOn:
+                      description: |-
+                        DependsOn is the list of sibling ResourceSpec names that must reach
+                        Ready before this resource is rendered. Cycles, unknown names, and
+                        self-references are rejected at reconcile-time.
+                      items:
+                        type: string
+                      type: array
+                    forceCleanupOnCascade:
+                      description: |-
+                        ForceCleanupOnCascade, when true, tells the operator that R has no
+                        external state worth tearing down gracefully in the context of a
+                        SimpleCluster delete cascade: after issuing Delete the operator
+                        will give R a short grace window and then strip all finalizers,
+                        letting K8s GC it immediately. Use for layers whose graceful
+                        teardown depends on infrastructure that is itself being deleted
+                        in the same cascade (e.g. UbuntuCluster's SSH-based k3s uninstall
+                        on VMs that are about to disappear). Do NOT set on resources that
+                        own external state which must be reclaimed by their controller
+                        (Gardener Shoot, OpenStackVM, …) — they will leak.
+                      type: boolean
+                    kind:
+                      description: Kind of the target resource R (e.g. Shoot).
+                      type: string
+                    name:
+                      description: |-
+                        Name is the resource's identity within this SCPC. Referenced from
+                        other resources via .Resources.<name> in their templates, and from
+                        KubeconfigSource.ResourceName.
+                      minLength: 1
+                      pattern: ^[a-zA-Z][a-zA-Z0-9_-]*$
+                      type: string
+                    namePrefix:
+                      description: |-
+                        NamePrefix prepended to the generated R name. The actual name is
+                        sanitise(<NamePrefix><SC.name>-<Name>).
+                      type: string
+                    nameTemplate:
+                      description: |-
+                        NameTemplate, when set, overrides NamePrefix and computes the R name
+                        by rendering this Go template against .SC and .Inputs. The result is
+                        used verbatim as the target resource name.
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace overrides Target.Namespace for this resource.
+                        Required for namespaced kinds when Target.Namespace is also empty.
+                        May be a Go template evaluated against .SC and .Inputs.
+                      type: string
+                    readiness:
+                      description: |-
+                        Readiness projects R's status into the universal Phase enum.
+                        Optional - when omitted, the operator reads R.status.phase and treats
+                        "Ready" as Ready, "Failed"/"Error" as Failed, empty/missing as
+                        Pending, and any other value as Provisioning.
+                      properties:
+                        lastErrorPath:
+                          description: LastErrorPath optionally provides a human-readable
+                            error string.
+                          type: string
+                        lastOperationPath:
+                          description: LastOperationPath optionally provides a human-readable
+                            progress string.
+                          type: string
+                        phaseFailedValues:
+                          description: PhaseFailedValues are values at PhasePath that
+                            indicate Failed.
+                          items:
+                            type: string
+                          type: array
+                        phasePath:
+                          description: |-
+                            PhasePath is a JSONPath into R that resolves to a state value
+                            (e.g. status.lastOperation.state).
+                          type: string
+                        phaseReadyValue:
+                          description: |-
+                            PhaseReadyValue is the value at PhasePath that indicates Ready
+                            (e.g. Succeeded).
+                          type: string
+                      required:
+                      - phasePath
+                      - phaseReadyValue
+                      type: object
+                    repeat:
+                      description: |-
+                        Repeat, when set, fans this ResourceSpec out to N target resources.
+                        The value is a Go template (same engine as Template, with .SC /
+                        .Inputs / .Resources in scope but NOT .Index / .Prev) that MUST
+                        render to a non-negative integer. Target names get suffixed with
+                        "-<index>" (0-based). Inside Template, .Index is the current
+                        iteration and .Prev is the list of objects rendered so far for this
+                        ResourceSpec. From sibling ResourceSpecs' Templates, .Resources.<name>
+                        is exposed as a list (rather than a single object) when <name> had
+                        Repeat set.
+                      type: string
+                    template:
+                      description: |-
+                        Template is the YAML body of R rendered through the Helm-style
+                        text/template + sprig/v3 engine. The post-render result MUST embed
+                        apiVersion/kind consistent with this ResourceSpec.
+                      minLength: 1
+                      type: string
+                  required:
+                  - apiVersion
+                  - kind
+                  - name
+                  - template
+                  type: object
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              target:
+                description: |-
+                  Target describes which cluster the resources are created on plus the
+                  default Namespace.
+                properties:
+                  kubeconfigSecretRef:
+                    description: |-
+                      KubeconfigSecretRef points at a Secret in the management cluster
+                      whose "kubeconfig" key holds credentials for the target cluster.
+                      When nil, resources are created on the management cluster.
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  namespace:
+                    description: |-
+                      Namespace used by default for namespaced resources. Each ResourceSpec
+                      may override this via its own Namespace. May be a Go template evaluated
+                      against .SC and .Inputs (e.g. "{{ .SC.namespace }}" to co-locate
+                      resources with the owning SimpleCluster).
+                    type: string
+                type: object
+            required:
+            - kubeconfigSource
+            - resources
+            - target
+            type: object
+          status:
+            description: SimpleClusterProviderConfigStatus defines the observed state
+              of SimpleClusterProviderConfig.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              reachable:
+                description: |-
+                  Reachable mirrors a smoke test against Target.KubeconfigSecretRef.
+                  True when omitted (local cluster).
+                type: boolean
+              resources:
+                description: |-
+                  Resources lists each ResourceSpec's resolution outcome against the
+                  target cluster. Populated when all GVKs resolve successfully.
+                items:
+                  description: ResolvedResource records a successfully resolved ResourceSpec
+                    on the target cluster.
+                  properties:
+                    gvk:
+                      description: GVK is the resolved GroupVersionKind ("<group>/<version>,
+                        Kind=<Kind>").
+                      type: string
+                    name:
+                      description: Name matches ResourceSpec.Name.
+                      type: string
+                  required:
+                  - gvk
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
