@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.20.2...v0.21.0) (2026-07-21)
+
+
+### Features
+
+* rename marketplace integration to 'Dati integration' ([#78](https://github.com/apeirora/showroom-msp-simple-cluster/issues/78)) ([4408fe8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4408fe838a8747376a20a67cef64c170b36925af))
+
 ## [0.20.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.20.1...v0.20.2) (2026-07-06)
 
 
