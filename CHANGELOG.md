@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.1...v0.21.2) (2026-07-21)
+
+
+### Bug Fixes
+
+* drop unsupported permissionClaims.all from dati APIExport ([#82](https://github.com/apeirora/showroom-msp-simple-cluster/issues/82)) ([60431a8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/60431a8772786fe379ca35fa78540a75e990c220))
+
 ## [0.21.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.0...v0.21.1) (2026-07-21)
 
 
