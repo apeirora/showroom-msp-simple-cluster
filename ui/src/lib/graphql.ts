@@ -12,6 +12,19 @@ export interface GraphqlEnvelope<T> {
   errors?: Array<{ message: string }>;
 }
 
+// kind distinguishes a transport failure (gateway unreachable — inconclusive)
+// from a GraphQL-level error (gateway answered; e.g. the queried type is not
+// in the schema because that provider is not installed — a definitive answer).
+export class GraphqlError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: 'http' | 'graphql'
+  ) {
+    super(message);
+    this.name = 'GraphqlError';
+  }
+}
+
 export interface GraphqlClientOptions {
   graphqlUrl: string;
   token: string | null;
@@ -45,14 +58,14 @@ export const graphqlFetch = async <T>(
     body: JSON.stringify(body)
   });
   if (!resp.ok) {
-    throw new Error(`GraphQL HTTP ${resp.status} ${resp.statusText}`);
+    throw new GraphqlError(`GraphQL HTTP ${resp.status} ${resp.statusText}`, 'http');
   }
   const envelope = (await resp.json()) as GraphqlEnvelope<T>;
   if (envelope.errors?.length) {
-    throw new Error(envelope.errors.map((e) => e.message).join('; '));
+    throw new GraphqlError(envelope.errors.map((e) => e.message).join('; '), 'graphql');
   }
   if (!envelope.data) {
-    throw new Error('GraphQL response missing data');
+    throw new GraphqlError('GraphQL response missing data', 'graphql');
   }
   return envelope.data;
 };

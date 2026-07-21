@@ -5,6 +5,9 @@
     "gardener-sap-openstack",
     "kind"
   ],
+  "providerSources": [
+    { "group": "dati.gardener", "version": "v1alpha1", "listField": "Shoots", "label": "Dati (Gardener Shoot)" }
+  ],
   "cpu": ["1", "2", "4", "8", "16"],
   "memory": ["2Gi", "4Gi", "8Gi", "16Gi", "32Gi"],
   "controlPlane": {

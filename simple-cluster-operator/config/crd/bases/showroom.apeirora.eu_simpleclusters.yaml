@@ -313,10 +313,12 @@ spec:
                 type: string
               kubeconfig:
                 description: |-
-                  Kubeconfig is the raw NC kubeconfig, mirrored from the Secret
-                  referenced by KubeconfigSecretRef so the generic portal detail
-                  view can surface it for copy/download. Readable by anyone with
-                  get access to this SimpleCluster.
+                  Kubeconfig is the raw NC kubeconfig, mirrored from the Secret referenced
+                  by KubeconfigSecretRef. It is duplicated here so the generic portal
+                  detail view (which can only read fields of the SimpleCluster itself, not
+                  a separate Secret) can surface it for copy/download. It is readable by
+                  anyone with get access to this SimpleCluster — the same audience that can
+                  already read the Secret in the account namespace.
                 type: string
               kubeconfigExpiresAt:
                 description: KubeconfigExpiresAt is the expiry time of the embedded

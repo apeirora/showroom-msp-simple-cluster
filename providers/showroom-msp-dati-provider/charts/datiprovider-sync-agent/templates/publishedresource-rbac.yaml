@@ -1,0 +1,54 @@
+{{- if .Values.publishedResources.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: api-syncagent:datiprovider
+  labels:
+    app.kubernetes.io/name: datiprovider-sync-agent
+    app.kubernetes.io/component: portal-integration
+rules:
+  - apiGroups:
+      - dati.gardener
+    resources:
+      - shoots
+      - shoots/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  {{- if .Values.publishedResources.clientKubeconfig.enabled }}
+  # Sync the client-kubeconfig related Secret (kubeconfig source 'kcp').
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: api-syncagent:datiprovider
+  labels:
+    app.kubernetes.io/name: datiprovider-sync-agent
+    app.kubernetes.io/component: portal-integration
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: api-syncagent:datiprovider
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.publishedResources.serviceAccountName | default .Release.Name }}
+    namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
+{{- end }}
