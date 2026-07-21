@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.0...v0.21.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* dati marketplace ([#80](https://github.com/apeirora/showroom-msp-simple-cluster/issues/80)) ([69765c0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/69765c0b82aede194f7df805794eda5902776d7e))
+
 ## [0.21.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.20.2...v0.21.0) (2026-07-21)
 
 
