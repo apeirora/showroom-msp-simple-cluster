@@ -14,19 +14,15 @@ spec:
       storage:
         crd: {}
   permissionClaims:
-    # Each claim sets `all: true` to match APIExport v1alpha2's required scope.
     # The syncagent mirrors namespaces and Events between KCP and the MSP cluster.
     - group: ""
       resource: namespaces
       verbs: ["*"]
-      all: true
     - group: ""
       resource: events
       verbs: ["*"]
-      all: true
     # Reserved for a future bring-your-own-credentials path: a workspace
     # Secret referenced from the Shoot would be mirrored down to the MSP side.
     - group: ""
       resource: secrets
       verbs: ["*"]
-      all: true
