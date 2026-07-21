@@ -4,5 +4,5 @@ rbac:
   enabled: false
 branding:
   marketplace:
-    title: "Dati SimpleCluster Provider"
+    title: "Dati integration"
     description: "Enables dati as a provider for SimpleCluster: installing it provisions a dati provider configuration for your workspace."
