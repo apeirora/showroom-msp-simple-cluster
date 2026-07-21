@@ -9,3 +9,6 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Re-include files consumed by //go:embed
+!**/scpc-dati.yaml

@@ -5,5 +5,5 @@ description: >-
   CRs synced from KCP account workspaces and materialises a namespaced
   SimpleClusterProviderConfig ("dati") per namespace for simple-cluster.
 type: application
-version: 0.0.1
-appVersion: 0.0.1
+version: 1.6.0
+appVersion: 1.6.0
