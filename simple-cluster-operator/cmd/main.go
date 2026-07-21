@@ -81,7 +81,8 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&scpcFallbackNamespace, "scpc-fallback-namespace", "simple-cluster-system-scpc-configs",
-		"Namespace searched for an SCPC when it is not found in a SimpleCluster's own namespace. Empty disables the fallback.")
+		"Namespace searched for an SCPC when it is not found in a SimpleCluster's own "+
+			"namespace. Empty disables the fallback.")
 	opts := zap.Options{
 		Development: true,
 	}
