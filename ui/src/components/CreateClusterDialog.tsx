@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Bar,
+  BusyIndicator,
   Button,
   CheckBox,
   Dialog,
@@ -35,6 +36,10 @@ interface Props {
   open: boolean;
   busy: boolean;
   config: ClusterConfig;
+  // Live provider list (discovered from installed provider CRs when dynamic
+  // discovery is enabled, otherwise the static config list).
+  providers: string[];
+  providersLoading: boolean;
   onClose: () => void;
   onSubmit: (values: CreateValues) => void;
 }
@@ -42,9 +47,26 @@ interface Props {
 const selectValue = (e: { detail: { selectedOption: unknown } }): string =>
   String((e.detail.selectedOption as unknown as HTMLElement).getAttribute('value') ?? '');
 
-export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: Props) => {
+export const CreateClusterDialog = ({
+  open,
+  busy,
+  config,
+  providers,
+  providersLoading,
+  onClose,
+  onSubmit
+}: Props) => {
   const [name, setName] = useState('');
-  const [provider, setProvider] = useState(config.providers[0] ?? '');
+  const [provider, setProvider] = useState(providers[0] ?? '');
+
+  // Keep the selection valid as the discovered provider list arrives or
+  // changes (and whenever the dialog reopens).
+  useEffect(() => {
+    if (!open) return;
+    if (!providers.includes(provider)) {
+      setProvider(providers[0] ?? '');
+    }
+  }, [open, providers, provider]);
   const [workerNodes, setWorkerNodes] = useState(config.workers.default);
   const [workerAutoscaling, setWorkerAutoscaling] = useState(false);
   const [workerMin, setWorkerMin] = useState(config.workers.default);
@@ -58,9 +80,11 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
 
   const nameValid = useMemo(() => RFC_1123.test(name) && name.length <= 63, [name]);
   const workersValid = workerAutoscaling ? workerMin >= 1 && workerMax >= workerMin : workerNodes >= 1;
+  const noProviders = !providersLoading && providers.length === 0;
   const canSubmit =
     nameValid &&
     Boolean(provider) &&
+    !providersLoading &&
     workersValid &&
     Boolean(workerCpu) &&
     Boolean(workerMemory) &&
@@ -71,7 +95,7 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
   const reset = () => {
     setName('');
     setNameTouched(false);
-    setProvider(config.providers[0] ?? '');
+    setProvider(providers[0] ?? '');
     setWorkerNodes(config.workers.default);
     setWorkerAutoscaling(false);
     setWorkerMin(config.workers.default);
@@ -156,13 +180,26 @@ export const CreateClusterDialog = ({ open, busy, config, onClose, onSubmit }: P
           <Label for="sc-provider" required>
             Provider
           </Label>
-          <Select id="sc-provider" onChange={(e) => setProvider(selectValue(e))}>
-            {config.providers.map((p) => (
-              <Option key={p} value={p} selected={p === provider}>
-                {p}
-              </Option>
-            ))}
-          </Select>
+          {providersLoading ? (
+            <FlexBox style={{ gap: 8, alignItems: 'center' }}>
+              <BusyIndicator active size="S" />
+              <span style={{ fontSize: '0.85rem' }}>Loading available providers…</span>
+            </FlexBox>
+          ) : noProviders ? (
+            <MessageStrip design="Critical" hideCloseButton>
+              No providers are available in this workspace. Install a provider (for
+              example Dati) from the marketplace and create its resource, then reopen
+              this dialog.
+            </MessageStrip>
+          ) : (
+            <Select id="sc-provider" onChange={(e) => setProvider(selectValue(e))}>
+              {providers.map((p) => (
+                <Option key={p} value={p} selected={p === provider}>
+                  {p}
+                </Option>
+              ))}
+            </Select>
+          )}
         </FlexBox>
 
         <Label>Control plane</Label>

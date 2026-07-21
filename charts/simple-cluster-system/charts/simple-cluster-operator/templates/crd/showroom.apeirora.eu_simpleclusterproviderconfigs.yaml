@@ -20,7 +20,7 @@ spec:
     shortNames:
     - scpc
     singular: simpleclusterproviderconfig
-  scope: Cluster
+  scope: Namespaced
   versions:
   - additionalPrinterColumns:
     - jsonPath: .status.reachable
@@ -32,8 +32,10 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SimpleClusterProviderConfig is the cluster-scoped admin-facing
-          template/profile.
+        description: |-
+          SimpleClusterProviderConfig is the namespaced admin-facing template/profile.
+          A SimpleCluster resolves its providerConfigRefs in its own namespace first,
+          then in the operator's fallback namespace (see --scpc-fallback-namespace).
         properties:
           apiVersion:
             description: |-
@@ -252,8 +254,9 @@ spec:
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
                     name:
-                      description: Name is the machine type identifier substituted
-                        into templates (e.g. "m5.large").
+                      description: |-
+                        Name is the machine type identifier substituted into templates
+                        (e.g. "m5.large").
                       minLength: 1
                       type: string
                   required:
@@ -332,6 +335,7 @@ spec:
                       description: |-
                         Namespace overrides Target.Namespace for this resource.
                         Required for namespaced kinds when Target.Namespace is also empty.
+                        May be a Go template evaluated against .SC and .Inputs.
                       type: string
                     readiness:
                       description: |-
@@ -422,7 +426,9 @@ spec:
                   namespace:
                     description: |-
                       Namespace used by default for namespaced resources. Each ResourceSpec
-                      may override this via its own Namespace.
+                      may override this via its own Namespace. May be a Go template evaluated
+                      against .SC and .Inputs (e.g. "{{ .SC.namespace }}" to co-locate
+                      resources with the owning SimpleCluster).
                     type: string
                 type: object
             required:

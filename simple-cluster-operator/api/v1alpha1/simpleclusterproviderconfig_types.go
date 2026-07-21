@@ -374,11 +374,13 @@ type SimpleClusterProviderConfigStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,shortName=scpc
+// +kubebuilder:resource:scope=Namespaced,shortName=scpc
 // +kubebuilder:printcolumn:name="Reachable",type=boolean,JSONPath=`.status.reachable`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// SimpleClusterProviderConfig is the cluster-scoped admin-facing template/profile.
+// SimpleClusterProviderConfig is the namespaced admin-facing template/profile.
+// A SimpleCluster resolves its providerConfigRefs in its own namespace first,
+// then in the operator's fallback namespace (see --scpc-fallback-namespace).
 type SimpleClusterProviderConfig struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
