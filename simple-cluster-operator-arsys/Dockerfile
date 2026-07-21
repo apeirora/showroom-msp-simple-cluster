@@ -15,7 +15,7 @@ COPY ubuntu-machines/ ubuntu-machines/
 COPY simple-cluster-operator-arsys/ simple-cluster-operator-arsys/
 WORKDIR /workspace/simple-cluster-operator-arsys
 RUN go mod download || true
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o /manager cmd/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /manager cmd/main.go
 
 # Pure HTTP + Kubernetes client — distroless static is enough.
 FROM gcr.io/distroless/static:nonroot
