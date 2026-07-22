@@ -49,6 +49,9 @@ jobs:
           - context: sshkey-operator
             image: sshkey-operator
             platforms: linux/amd64
+          - context: bind-watcher-operator
+            image: bind-watcher-operator
+            platforms: linux/amd64
           # arsys builds from the repo root: its go.mod has a
           # `replace => ../ubuntu-machines`, so the Dockerfile COPYs that sibling.
           - context: .

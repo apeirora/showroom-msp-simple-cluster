@@ -58,6 +58,7 @@ jobs:
             simple-cluster-system
             ubuntu-machines-operator
             sshkey-operator
+            bind-watcher-operator
             arsys-ubuntu-machine-operator
             simple-cluster-pm-integration
             simple-cluster-ui
