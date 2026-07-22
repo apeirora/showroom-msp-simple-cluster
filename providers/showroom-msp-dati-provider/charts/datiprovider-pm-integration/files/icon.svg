@@ -1,1 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><rect width="24" height="24" rx="4" fill="#0a6ed1"/><path d="M6 12h12M12 6v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 31">
+  <!-- Kubernetes badge (same as simple-cluster), scaled into the top, with a "Dati" label -->
+  <g transform="translate(1.8 0.4) scale(0.85)">
+    <polygon points="12,1 20.6,5.14 22.72,14.45 16.77,21.91 7.23,21.91 1.28,14.45 3.4,5.14" fill="#326ce5"/>
+    <g fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linejoin="round">
+      <polygon points="12,5 17.47,7.63 18.82,13.56 15.04,18.31 8.96,18.31 5.18,13.56 6.53,7.63"/>
+      <path d="M12 12 12 5M12 12 17.47 7.63M12 12 18.82 13.56M12 12 15.04 18.31M12 12 8.96 18.31M12 12 5.18 13.56M12 12 6.53 7.63"/>
+    </g>
+    <g fill="#ffffff">
+      <circle cx="12" cy="5" r="1"/>
+      <circle cx="17.47" cy="7.63" r="1"/>
+      <circle cx="18.82" cy="13.56" r="1"/>
+      <circle cx="15.04" cy="18.31" r="1"/>
+      <circle cx="8.96" cy="18.31" r="1"/>
+      <circle cx="5.18" cy="13.56" r="1"/>
+      <circle cx="6.53" cy="7.63" r="1"/>
+    </g>
+    <circle cx="12" cy="12" r="1.9" fill="#326ce5" stroke="#ffffff" stroke-width="1.1"/>
+  </g>
+  <text x="12" y="28.5" font-family="Arial, Helvetica, sans-serif" font-size="7" font-weight="bold" text-anchor="middle" fill="#326ce5">Dati</text>
+</svg>
