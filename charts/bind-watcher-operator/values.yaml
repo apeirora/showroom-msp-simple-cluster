@@ -10,8 +10,10 @@ resources:
 
 # How KCP bindings are projected onto MSP namespaces.
 mapping:
-  # Namespace label (selector) whose value equals the KCP logical cluster name.
-  clusterLabelKey: kcp.io/cluster
+  # Namespace selector label whose value equals the KCP logical cluster name.
+  # The MSP namespace is named after the logical cluster, so the well-known
+  # name label selects it directly.
+  clusterLabelKey: kubernetes.io/metadata.name
   # Annotation written with the list of bound exports.
   exportsAnnotationKey: bind.simple-cluster.apeirora.eu/exports
   # Separator joining export names in the annotation value.
@@ -19,6 +21,7 @@ mapping:
 
 KCP:
   kubeconfig:
+    # Kubeconfig targeting the workspace that holds the APIExportEndpointSlices.
     secretName: kcp-kubeconfig
-  # Comma-separated APIExport virtual-workspace URLs (one per provider export).
-  endpoints: ""
+  # How often to re-discover APIExportEndpointSlices in that workspace.
+  discoveryInterval: 1m

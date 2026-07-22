@@ -21,8 +21,8 @@ spec:
           env:
             - name: KCP_KUBECONFIG
               value: /kcp.admin.config
-            - name: KCP_API_EXPORT_ENDPOINTS
-              value: {{ required ".Values.KCP.endpoints must be provided" .Values.KCP.endpoints | quote }}
+            - name: KCP_DISCOVERY_INTERVAL
+              value: {{ .Values.KCP.discoveryInterval | quote }}
             - name: CLUSTER_LABEL_KEY
               value: {{ .Values.mapping.clusterLabelKey | quote }}
             - name: EXPORTS_ANNOTATION_KEY
