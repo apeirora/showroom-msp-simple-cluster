@@ -1,0 +1,6 @@
+apiVersion: v2
+name: bind-watcher-operator
+description: Reflects KCP APIBindings onto MSP namespace labels
+type: application
+version: 0.0.0
+appVersion: "0.0.0"
