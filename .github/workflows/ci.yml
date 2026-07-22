@@ -83,6 +83,28 @@ jobs:
       - name: Test
         run: make test
 
+  build-bind-watcher:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bind-watcher-operator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: bind-watcher-operator/go.mod
+          cache: true
+          cache-dependency-path: bind-watcher-operator/go.sum
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: make test
+
   lint:
     runs-on: ubuntu-latest
     steps:

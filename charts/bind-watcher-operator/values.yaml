@@ -1,0 +1,24 @@
+registry: ghcr.io/apeirora
+image: /bind-watcher-operator
+
+serviceAccount: bind-watcher-operator
+
+resources:
+  limits:
+    memory: "128Mi"
+    cpu: "500m"
+
+# How KCP bindings are projected onto MSP namespaces.
+mapping:
+  # Namespace label (selector) whose value equals the KCP logical cluster name.
+  clusterLabelKey: kcp.io/cluster
+  # Annotation written with the list of bound exports.
+  exportsAnnotationKey: bind.simple-cluster.apeirora.eu/exports
+  # Separator joining export names in the annotation value.
+  separator: ","
+
+KCP:
+  kubeconfig:
+    secretName: kcp-kubeconfig
+  # Comma-separated APIExport virtual-workspace URLs (one per provider export).
+  endpoints: ""
