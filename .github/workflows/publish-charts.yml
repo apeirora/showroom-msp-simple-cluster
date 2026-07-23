@@ -8,9 +8,8 @@ name: Publish Charts
 # Normally invoked by the Release Please workflow on an operator release. Can
 # also be run manually (workflow_dispatch) to re-publish at an explicit version.
 #
-# Exception: simple-cluster-scpc-config is versioned independently (it carries no
-# operator image) and is published by publish-scpc-config.yml at its own
-# Chart.yaml version — it is deliberately NOT in the list below.
+# Note: simple-cluster-scpc-config is NOT published from this repo — SCPC
+# resources are now provided by the individual providers (e.g. datiprovider).
 on:
   workflow_call:
     inputs:
