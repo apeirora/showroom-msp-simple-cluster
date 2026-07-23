@@ -28,26 +28,13 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # Build and push every operator/UI image at the release version. Extracted
-  # into a reusable workflow so it can also be re-run manually. See publish-images.yml.
-  publish-images:
+  # Build/push every operator/UI image and publish every chart at the release
+  # version — images first, then charts — so they stay in lockstep. Extracted
+  # into a reusable workflow so it can also be re-run manually. See publish.yml.
+  publish:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    uses: ./.github/workflows/publish-images.yml
-    with:
-      version: ${{ needs.release-please.outputs.version }}
-    permissions:
-      contents: read
-      packages: write
-    secrets: inherit
-
-  # Publish every chart at the operator release version, with that version
-  # stamped into chart version/appVersion and all operator image tags — so
-  # charts and images stay in lockstep. See publish-charts.yml.
-  publish-charts:
-    needs: [release-please, publish-images]
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    uses: ./.github/workflows/publish-charts.yml
+    uses: ./.github/workflows/publish.yml
     with:
       version: ${{ needs.release-please.outputs.version }}
     permissions:
