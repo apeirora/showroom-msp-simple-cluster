@@ -16,6 +16,7 @@ IMAGE="${IMAGE:-ghcr.io/m-szalik/bind-watcher}"
 TAG="${TAG:-latest}"
 NAMESPACE="${NAMESPACE:-simple-cluster-system}"
 KUBECONFIG_MSP03="${KUBECONFIG_MSP03:-$HOME/SAP/cc-d2-msp03-kubeconfig.yaml}"
+KCP_SECRET="${KCP_SECRET:-kcp-admin-kubeconfig}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OPERATOR_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -34,8 +35,8 @@ deploy() {
   export KUBECONFIG="$KUBECONFIG_MSP03"
 
   echo ">>> target: $(kubectl config current-context)"
-  if ! kubectl -n "$NAMESPACE" get secret pm-kubeconfig >/dev/null 2>&1; then
-    echo "WARNING: secret pm-kubeconfig missing in $NAMESPACE — the operator will crashloop until KCP access is provided." >&2
+  if ! kubectl -n "$NAMESPACE" get secret "$KCP_SECRET" >/dev/null 2>&1; then
+    echo "WARNING: secret $KCP_SECRET missing in $NAMESPACE — the operator will crashloop until KCP access is provided." >&2
   fi
 
   echo ">>> apply $MANIFEST"

@@ -78,5 +78,8 @@ spec:
               name: kcp-config
       volumes:
         - name: kcp-config
+          # Experiment: a broad (kcp-admin) kubeconfig admitted to every
+          # root:providers:* workspace — the scoped pm-kubeconfig syncagent
+          # identity cannot list slices across provider workspaces.
           secret:
-            secretName: pm-kubeconfig
+            secretName: kcp-admin-kubeconfig
