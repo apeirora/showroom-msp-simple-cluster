@@ -53,22 +53,28 @@ jobs:
         run: |
           set -euo pipefail
           V="${VERSION}"
+          # Chart paths relative to the repo root. The dati-provider charts live
+          # under providers/ but publish in lockstep at the same release version.
           CHARTS=(
-            simple-cluster-system
-            ubuntu-machines-operator
-            sshkey-operator
-            bind-watcher-operator
-            arsys-ubuntu-machine-operator
-            simple-cluster-pm-integration
-            simple-cluster-ui
-            simple-cluster-sync-agent
+            charts/simple-cluster-system
+            charts/ubuntu-machines-operator
+            charts/sshkey-operator
+            charts/bind-watcher-operator
+            charts/arsys-ubuntu-machine-operator
+            charts/simple-cluster-pm-integration
+            charts/simple-cluster-ui
+            charts/simple-cluster-sync-agent
+            providers/showroom-msp-dati-provider/charts/datiprovider-operator
+            providers/showroom-msp-dati-provider/charts/datiprovider-pm-integration
+            providers/showroom-msp-dati-provider/charts/datiprovider-sync-agent
+            providers/showroom-msp-dati-provider/charts/datiprovider-ui
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do
             echo ">>> $c @ $V"
             # Resolve external deps (api-syncagent); umbrella sub-charts are vendored.
-            helm dependency build "charts/$c" || true
-            helm package "charts/$c" --version "$V" --app-version "$V" --destination .cr-release-packages
+            helm dependency build "$c" || true
+            helm package "$c" --version "$V" --app-version "$V" --destination .cr-release-packages
           done
           for pkg in .cr-release-packages/*.tgz; do
             echo ">>> push $pkg"
