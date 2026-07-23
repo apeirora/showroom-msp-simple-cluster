@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator/internal/controller"
@@ -40,8 +41,6 @@ func main() {
 	// workspace the kubeconfig targets — no hard-coded endpoints.
 	baseCfg, err := discovery.LoadKubeconfig(goutils.EnvRequired[string]("KCP_KUBECONFIG"))
 	goutils.ExitOnErrorf(err, 1, "cannot load KCP kubeconfig")
-	kcpClient, err := client.New(baseCfg, client.Options{Scheme: controller.Scheme})
-	goutils.ExitOnErrorf(err, 1, "cannot create KCP discovery client")
 
 	mp := multi.New(multi.Options{})
 	mgr, err := mcmanager.New(&rest.Config{}, mp, mcmanager.Options{Scheme: controller.Scheme})
@@ -68,7 +67,9 @@ func main() {
 	err = mgr.Add(bc)
 	goutils.ExitOnErrorf(err, 1, "cannot register disengage handler")
 
-	disc := discovery.New(kcpClient, mp, baseCfg, controller.Scheme, goutils.Env("KCP_DISCOVERY_INTERVAL", time.Minute))
+	workspaces := splitCSV(goutils.Env("KCP_WORKSPACES", ""))
+	disc, err := discovery.New(mp, baseCfg, controller.Scheme, workspaces, goutils.Env("KCP_DISCOVERY_INTERVAL", time.Minute))
+	goutils.ExitOnErrorf(err, 1, "cannot create discovery")
 	go func() {
 		if err := disc.Start(ctx); err != nil {
 			ctrllog.Log.Error(err, "discovery loop stopped")
@@ -85,4 +86,14 @@ func ignoreCanceled(err error) error {
 		return nil
 	}
 	return err
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

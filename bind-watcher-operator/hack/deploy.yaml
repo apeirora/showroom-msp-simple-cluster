@@ -54,6 +54,8 @@ spec:
           env:
             - name: KCP_KUBECONFIG
               value: /kcp.admin.config
+            - name: KCP_WORKSPACES
+              value: "root:providers:simple-cluster,root:providers:dati"
             - name: KCP_DISCOVERY_INTERVAL
               value: "1m"
             - name: CLUSTER_LABEL_KEY

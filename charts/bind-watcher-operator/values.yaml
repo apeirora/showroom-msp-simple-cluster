@@ -30,5 +30,9 @@ KCP:
   kubeconfig:
     # Kubeconfig targeting the workspace that holds the APIExportEndpointSlices.
     secretName: kcp-kubeconfig
-  # How often to re-discover APIExportEndpointSlices in that workspace.
+  # Comma-separated KCP workspace paths to scan for APIExportEndpointSlices.
+  # Empty = scan the kubeconfig's own workspace only.
+  # e.g. "root:providers:simple-cluster,root:providers:dati"
+  workspaces: ""
+  # How often to re-discover APIExportEndpointSlices in those workspaces.
   discoveryInterval: 1m

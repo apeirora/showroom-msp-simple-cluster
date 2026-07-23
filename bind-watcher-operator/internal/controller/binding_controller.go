@@ -103,6 +103,7 @@ func (c *BindingController) Reconcile(ctx context.Context, req mcreconcile.Reque
 	case !binding.DeletionTimestamp.IsZero():
 		c.index.Remove(realCluster, mcCluster, binding.Name)
 	default:
+		c.index.SetPath(realCluster, binding.Annotations["kcp.io/path"])
 		c.index.Set(realCluster, mcCluster, binding.Name, exportName(binding))
 	}
 
@@ -126,7 +127,7 @@ func (c *BindingController) Engage(ctx context.Context, name string, _ cluster.C
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
 		if err := c.syncNamespaceAnnotation(cleanupCtx, realCluster); err != nil {
-			c.log.Error(err, "failed to clean up namespace annotation on disengage", "cluster", realCluster)
+			c.log.Error(err, "failed to clean up namespace annotation on disengage", "cluster", realCluster, "workspace", c.index.Path(realCluster))
 		}
 	}()
 	return nil
@@ -148,11 +149,11 @@ func (c *BindingController) syncNamespaceAnnotation(ctx context.Context, realClu
 	if len(nsList.Items) == 0 {
 		// Nothing bound and no namespace: nothing to record.
 		if len(c.index.Exports(realCluster)) == 0 {
-			c.log.V(1).Info("no MSP namespace and no exports for KCP cluster", "cluster", realCluster)
+			c.log.V(1).Info("no MSP namespace and no exports for KCP cluster", "cluster", realCluster, "workspace", c.index.Path(realCluster))
 			return nil
 		}
 		if !c.cfg.CreateNamespaces {
-			c.log.V(1).Info("no MSP namespace maps to KCP cluster", "cluster", realCluster, "labelKey", c.cfg.ClusterLabelKey)
+			c.log.V(1).Info("no MSP namespace maps to KCP cluster", "cluster", realCluster, "workspace", c.index.Path(realCluster), "labelKey", c.cfg.ClusterLabelKey)
 			return nil
 		}
 		if err := c.ensureNamespace(ctx, realCluster); err != nil {
@@ -183,7 +184,7 @@ func (c *BindingController) ensureNamespace(ctx context.Context, name string) er
 	case err != nil:
 		return err
 	}
-	c.log.Info("created MSP namespace for KCP cluster", "namespace", name)
+	c.log.Info("created MSP namespace for KCP cluster", "namespace", name, "workspace", c.index.Path(name))
 	return nil
 }
 
@@ -216,7 +217,7 @@ func (c *BindingController) writeAnnotation(ctx context.Context, nsName, realClu
 		if err := c.msp.Patch(ctx, ns, patch); err != nil {
 			return err
 		}
-		c.log.Info("updated namespace exports annotation", "namespace", nsName, "exports", value)
+		c.log.Info("updated namespace exports annotation", "namespace", nsName, "workspace", c.index.Path(realCluster), "exports", value)
 		return nil
 	})
 }

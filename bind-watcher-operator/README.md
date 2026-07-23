@@ -10,12 +10,15 @@ account?"* by reading a single namespace annotation instead of guessing.
 
 ## How it works
 
-* **Endpoint discovery** — the operator connects to one KCP workspace (via
-  `KCP_KUBECONFIG`) and polls its `APIExportEndpointSlice` objects. Each ready
-  `status.endpoints[].url` is an APIExport virtual-workspace URL; the operator
-  registers one [`apiexport`](https://github.com/kcp-dev/multicluster-provider)
-  provider per endpoint and drops it again when the slice disappears. No
-  endpoints are hard-coded — new provider exports are picked up automatically.
+* **Endpoint discovery** — the operator polls `APIExportEndpointSlice` objects in
+  the workspaces listed in `KCP_WORKSPACES` (or, if unset, the kubeconfig's own
+  workspace). Each ready `status.endpoints[].url` is an APIExport virtual-workspace
+  URL; the operator registers one
+  [`apiexport`](https://github.com/kcp-dev/multicluster-provider) provider per
+  endpoint and drops it again when the slice disappears. No endpoints are
+  hard-coded, and multiple provider workspaces (e.g. simple-cluster and dati) can
+  be watched at once. All log lines carry the KCP `workspace` path (from the
+  APIBinding `kcp.io/path` annotation) alongside the logical cluster id.
 * **Bind** — through an APIExport virtual workspace, multicluster-runtime
   *engages* exactly the workspaces that have bound that export. On every
   `APIBinding` change the reconciler updates an in-memory index
@@ -54,7 +57,8 @@ remain the annotation is removed.
 
 | Variable                   | Required | Default                                      | Meaning                                                      |
 |----------------------------|----------|----------------------------------------------|--------------------------------------------------------------|
-| `KCP_KUBECONFIG`           | yes      | —                                            | Kubeconfig targeting the workspace with the endpoint slices  |
+| `KCP_KUBECONFIG`           | yes      | —                                            | Kubeconfig for KCP (auth; host rewritten per workspace)      |
+| `KCP_WORKSPACES`           | no       | *(kubeconfig's own)*                         | Comma-separated workspace paths to scan for endpoint slices  |
 | `KCP_DISCOVERY_INTERVAL`   | no       | `1m`                                         | How often to re-list `APIExportEndpointSlice`s               |
 | `CLUSTER_LABEL_KEY`        | no       | `kubernetes.io/metadata.name`                | Namespace label whose value is the logical cluster name      |
 | `EXPORTS_ANNOTATION_KEY`   | no       | `bind.simple-cluster.apeirora.eu/exports`    | Annotation written with the bound-export list                |

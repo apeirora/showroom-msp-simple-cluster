@@ -21,6 +21,8 @@ spec:
           env:
             - name: KCP_KUBECONFIG
               value: /kcp.admin.config
+            - name: KCP_WORKSPACES
+              value: {{ .Values.KCP.workspaces | quote }}
             - name: KCP_DISCOVERY_INTERVAL
               value: {{ .Values.KCP.discoveryInterval | quote }}
             - name: CLUSTER_LABEL_KEY
