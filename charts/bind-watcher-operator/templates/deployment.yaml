@@ -17,18 +17,24 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount }}
       containers:
         - name: bind-watcher-operator
-          image: {{ .Values.registry }}{{ .Values.image }}:{{ .Chart.AppVersion }}
+          image: {{ .Values.registry }}{{ .Values.image }}:{{ .Values.imageTag | default .Chart.AppVersion }}
           env:
             - name: KCP_KUBECONFIG
               value: /kcp.admin.config
-            - name: KCP_API_EXPORT_ENDPOINTS
-              value: {{ required ".Values.KCP.endpoints must be provided" .Values.KCP.endpoints | quote }}
+            - name: KCP_WORKSPACES
+              value: {{ .Values.KCP.workspaces | quote }}
+            - name: KCP_DISCOVERY_INTERVAL
+              value: {{ .Values.KCP.discoveryInterval | quote }}
             - name: CLUSTER_LABEL_KEY
               value: {{ .Values.mapping.clusterLabelKey | quote }}
             - name: EXPORTS_ANNOTATION_KEY
               value: {{ .Values.mapping.exportsAnnotationKey | quote }}
             - name: EXPORTS_SEPARATOR
               value: {{ .Values.mapping.separator | quote }}
+            - name: CREATE_NAMESPACES
+              value: {{ .Values.mapping.createNamespaces | quote }}
+            - name: MANAGED_LABEL_KEY
+              value: {{ .Values.mapping.managedLabelKey | quote }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
