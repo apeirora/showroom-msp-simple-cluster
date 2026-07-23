@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.2...v0.22.0) (2026-07-23)
+
+
+### Features
+
+* Bind detect operator ([#89](https://github.com/apeirora/showroom-msp-simple-cluster/issues/89)) ([96a6a28](https://github.com/apeirora/showroom-msp-simple-cluster/commit/96a6a288029efab2b834ae67e9c579d8e6af0d6c))
+
 ## [0.21.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.1...v0.21.2) (2026-07-21)
 
 
