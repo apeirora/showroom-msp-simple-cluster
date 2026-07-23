@@ -1,0 +1,80 @@
+# Simple standalone deployment for the bind-watcher-operator experiment.
+# Reuses the existing `pm-kubeconfig` secret in simple-cluster-system for KCP
+# access. Image is the personal experiment build; make it public in ghcr first.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bind-watcher-operator
+  namespace: simple-cluster-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: bind-watcher-operator
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: bind-watcher-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: bind-watcher-operator
+subjects:
+  - kind: ServiceAccount
+    name: bind-watcher-operator
+    namespace: simple-cluster-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bind-watcher-operator
+  namespace: simple-cluster-system
+  labels:
+    app: bind-watcher-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bind-watcher-operator
+  template:
+    metadata:
+      labels:
+        app: bind-watcher-operator
+    spec:
+      serviceAccountName: bind-watcher-operator
+      containers:
+        - name: bind-watcher-operator
+          image: ghcr.io/m-szalik/bind-watcher:latest
+          imagePullPolicy: Always
+          env:
+            - name: KCP_KUBECONFIG
+              value: /kcp.admin.config
+            - name: KCP_DISCOVERY_INTERVAL
+              value: "1m"
+            - name: CLUSTER_LABEL_KEY
+              value: "kubernetes.io/metadata.name"
+            - name: EXPORTS_ANNOTATION_KEY
+              value: "bind.simple-cluster.apeirora.eu/exports"
+            - name: EXPORTS_SEPARATOR
+              value: ","
+            - name: CREATE_NAMESPACES
+              value: "true"
+            - name: MANAGED_LABEL_KEY
+              value: "bind-watcher.apeirora.eu/managed"
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          volumeMounts:
+            - mountPath: /kcp.admin.config
+              subPath: kubeconfig
+              name: kcp-config
+      volumes:
+        - name: kcp-config
+          secret:
+            secretName: pm-kubeconfig

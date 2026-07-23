@@ -1,5 +1,7 @@
 registry: ghcr.io/apeirora
 image: /bind-watcher-operator
+# Image tag override; defaults to the chart appVersion when empty.
+imageTag: ""
 
 serviceAccount: bind-watcher-operator
 
@@ -18,6 +20,11 @@ mapping:
   exportsAnnotationKey: bind.simple-cluster.apeirora.eu/exports
   # Separator joining export names in the annotation value.
   separator: ","
+  # Create the MSP namespace (named after the logical cluster) when a cluster
+  # has bound exports but no namespace exists yet.
+  createNamespaces: true
+  # Marker label put on namespaces this operator creates.
+  managedLabelKey: bind-watcher.apeirora.eu/managed
 
 KCP:
   kubeconfig:

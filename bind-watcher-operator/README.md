@@ -25,6 +25,13 @@ account?"* by reading a single namespace annotation instead of guessing.
   is selected by its well-known name label
   `kubernetes.io/metadata.name == <logical cluster>` (configurable via
   `CLUSTER_LABEL_KEY`).
+* **Namespace creation** — the MSP namespace is normally created by the
+  sync-agent when the first object is synced. An account that only *bound* a
+  provider (no instance yet) has no namespace. When `CREATE_NAMESPACES` is on
+  (default), the operator creates it (named after the logical cluster) so the
+  binding can be recorded, tagging it with `MANAGED_LABEL_KEY` to tell it apart
+  from sync-agent-created namespaces. Creation is idempotent; the operator never
+  deletes namespaces.
 * **Unbind** is handled explicitly: the controller is registered as a
   cluster-aware runnable, so when a workspace disengages (its binding is removed,
   or the whole endpoint slice goes away) it drops that provider's entries and
@@ -52,14 +59,16 @@ remain the annotation is removed.
 | `CLUSTER_LABEL_KEY`        | no       | `kubernetes.io/metadata.name`                | Namespace label whose value is the logical cluster name      |
 | `EXPORTS_ANNOTATION_KEY`   | no       | `bind.simple-cluster.apeirora.eu/exports`    | Annotation written with the bound-export list                |
 | `EXPORTS_SEPARATOR`        | no       | `,`                                          | Separator joining export names in the annotation             |
+| `CREATE_NAMESPACES`        | no       | `true`                                       | Create the MSP namespace when bound but none exists          |
+| `MANAGED_LABEL_KEY`        | no       | `bind-watcher.apeirora.eu/managed`           | Marker label on namespaces the operator creates              |
 
 The MSP (in-cluster) API server is used for namespace access via the standard
 controller-runtime config resolution.
 
 ## Access requirements
 
-* **MSP side** (`ServiceAccount` RBAC): `get`/`list`/`watch`/`update`/`patch` on
-  `namespaces`.
+* **MSP side** (`ServiceAccount` RBAC): `get`/`list`/`watch`/`create`/`update`/`patch`
+  on `namespaces`.
 * **KCP side** (governed by `KCP_KUBECONFIG`, not by the chart RBAC): `list` on
   `apiexportendpointslices` in the target workspace, plus access to each
   discovered APIExport virtual workspace.

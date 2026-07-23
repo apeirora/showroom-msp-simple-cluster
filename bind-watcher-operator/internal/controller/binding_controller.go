@@ -11,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,6 +44,14 @@ type Config struct {
 	// default). It is stripped from the multicluster request name to recover
 	// the real KCP logical cluster name.
 	ProviderSeparator string
+	// CreateNamespaces makes the operator create the MSP namespace (named after
+	// the logical cluster) when a cluster has bound exports but no namespace
+	// exists yet — e.g. an account that bound a provider without creating an
+	// instance. Namespaces we create carry ManagedLabelKey.
+	CreateNamespaces bool
+	// ManagedLabelKey marks namespaces created by this operator, so they can be
+	// told apart from sync-agent-created ones.
+	ManagedLabelKey string
 }
 
 // BindingController reconciles APIBindings observed through KCP APIExport
@@ -137,14 +146,44 @@ func (c *BindingController) syncNamespaceAnnotation(ctx context.Context, realClu
 		return err
 	}
 	if len(nsList.Items) == 0 {
-		c.log.V(1).Info("no MSP namespace maps to KCP cluster", "cluster", realCluster, "labelKey", c.cfg.ClusterLabelKey)
-		return nil
+		// Nothing bound and no namespace: nothing to record.
+		if len(c.index.Exports(realCluster)) == 0 {
+			c.log.V(1).Info("no MSP namespace and no exports for KCP cluster", "cluster", realCluster)
+			return nil
+		}
+		if !c.cfg.CreateNamespaces {
+			c.log.V(1).Info("no MSP namespace maps to KCP cluster", "cluster", realCluster, "labelKey", c.cfg.ClusterLabelKey)
+			return nil
+		}
+		if err := c.ensureNamespace(ctx, realCluster); err != nil {
+			return err
+		}
+		return c.writeAnnotation(ctx, realCluster, realCluster)
 	}
 	for i := range nsList.Items {
 		if err := c.writeAnnotation(ctx, nsList.Items[i].Name, realCluster); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// ensureNamespace creates the MSP namespace named after the logical cluster,
+// tagged with the managed marker. It is a no-op if the namespace already exists.
+func (c *BindingController) ensureNamespace(ctx context.Context, name string) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: map[string]string{c.cfg.ManagedLabelKey: "true"},
+		},
+	}
+	switch err := c.msp.Create(ctx, ns); {
+	case apierrors.IsAlreadyExists(err):
+		return nil
+	case err != nil:
+		return err
+	}
+	c.log.Info("created MSP namespace for KCP cluster", "namespace", name)
 	return nil
 }
 

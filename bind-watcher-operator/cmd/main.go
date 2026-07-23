@@ -53,6 +53,8 @@ func main() {
 		ExportsAnnotationKey: goutils.Env("EXPORTS_ANNOTATION_KEY", "bind.simple-cluster.apeirora.eu/exports"),
 		Separator:            goutils.Env("EXPORTS_SEPARATOR", ","),
 		ProviderSeparator:    "#",
+		CreateNamespaces:     goutils.Env("CREATE_NAMESPACES", true),
+		ManagedLabelKey:      goutils.Env("MANAGED_LABEL_KEY", "bind-watcher.apeirora.eu/managed"),
 	})
 
 	err = mcbuilder.ControllerManagedBy(mgr).
