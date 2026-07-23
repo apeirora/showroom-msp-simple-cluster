@@ -7,8 +7,8 @@ description: >-
   SimpleClusterProviderConfig per namespace. Dedicated agent: one api-syncagent
   serves exactly one APIExport.
 type: application
-version: 1.6.1
-appVersion: 1.6.1
+version: 0.1.0
+appVersion: 0.1.0
 dependencies:
   - name: api-syncagent
     alias: syncAgentOperator

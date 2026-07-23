@@ -61,6 +61,12 @@ jobs:
           - context: ui
             image: simple-cluster-ui
             platforms: linux/amd64
+          - context: providers/showroom-msp-dati-provider
+            image: dati-provider-operator
+            platforms: linux/amd64
+          - context: providers/showroom-msp-dati-provider/ui
+            image: datiprovider-ui
+            platforms: linux/amd64
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
