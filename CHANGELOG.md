@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.1...v0.22.2) (2026-07-23)
+
+
+### Bug Fixes
+
+* scpc template ([#93](https://github.com/apeirora/showroom-msp-simple-cluster/issues/93)) ([56959c6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/56959c6ea5e0cfdcdf2e350a5a17a1a880dac24e))
+
 ## [0.22.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.0...v0.22.1) (2026-07-23)
 
 
