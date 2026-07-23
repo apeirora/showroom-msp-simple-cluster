@@ -35,8 +35,9 @@ type Discovery struct {
 
 	// clients lists the workspaces to scan: workspace path -> client. A single
 	// "" key means "use the kubeconfig's own workspace as-is".
-	clients map[string]client.Client
-	active  map[string]string // "workspace|slice" -> URL currently registered
+	clients     map[string]client.Client
+	active      map[string]string // "workspace|slice" -> URL currently registered
+	lastListErr map[string]string // workspace -> last logged list error (dedup)
 }
 
 // New builds a Discovery. If workspaces is empty the kubeconfig's own workspace
@@ -68,8 +69,9 @@ func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, works
 		scheme:   scheme,
 		interval: interval,
 		log:      ctrllog.Log.WithName("discovery"),
-		clients:  clients,
-		active:   map[string]string{},
+		clients:     clients,
+		active:      map[string]string{},
+		lastListErr: map[string]string{},
 	}, nil
 }
 
@@ -93,9 +95,15 @@ func (d *Discovery) reconcile(ctx context.Context) {
 	for ws, cl := range d.clients {
 		slices := &apisv1alpha1.APIExportEndpointSliceList{}
 		if err := cl.List(ctx, slices); err != nil {
-			d.log.Error(err, "listing APIExportEndpointSlices", "workspace", wsLabel(ws))
+			// Log the same error only once (e.g. persistent Forbidden) instead
+			// of every tick.
+			if d.lastListErr[ws] != err.Error() {
+				d.log.Error(err, "listing APIExportEndpointSlices", "workspace", wsLabel(ws))
+				d.lastListErr[ws] = err.Error()
+			}
 			continue
 		}
+		delete(d.lastListErr, ws)
 		for i := range slices.Items {
 			if url := firstURL(&slices.Items[i]); url != "" {
 				desired[ws+"|"+slices.Items[i].Name] = url
