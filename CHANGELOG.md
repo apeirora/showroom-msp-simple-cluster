@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.0...v0.22.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* bump operator Docker base images to golang 1.25 ([#91](https://github.com/apeirora/showroom-msp-simple-cluster/issues/91)) ([f77d7b2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f77d7b23769a8a8525d558ce5649702c69d2e2c4))
+
 ## [0.22.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.2...v0.22.0) (2026-07-23)
 
 
