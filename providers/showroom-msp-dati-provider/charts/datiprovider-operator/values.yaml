@@ -11,14 +11,20 @@ leaderElect: true
 
 extraEnv: []
 
+namespaceScpc:
+  # The NamespaceReconciler is the sole creator of the dati SCPC. It watches
+  # account namespaces and materialises the SCPC once the bind-watcher
+  # annotation shows both APIExports below are bound to the account.
+  enabled: true
+  simpleClusterExportName: simpleclusters.showroom.apeirora.eu
+  datiExportName: shoots.dati.gardener
+
 scpc:
   kubeconfig:
-    # Default source of the Gardener kubeconfig each SCPC targets:
+    # Source of the Gardener kubeconfig each SCPC targets:
     #   global — one shared admin-managed Secret (below). Default.
     #   kcp    — per-client kubeconfig brought from the KCP workspace and
-    #            looked up in the Shoot's own namespace (client.secretName).
-    # A Shoot may override this per-object via the annotation
-    # dati.gardener/kubeconfig-source.
+    #            looked up in the account's own namespace (client.secretName).
     source: global
     global:
       secretName: gardener-dati-kubeconfig

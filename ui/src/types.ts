@@ -102,6 +102,11 @@ export interface ProviderSource {
   namespaced?: boolean;
   // Optional human-facing label for the provider family.
   label?: string;
+  // SimpleClusterProviderConfig name to offer once this source's type resolves
+  // in the gateway schema (i.e. its APIExport is bound), independent of
+  // whether any CR instance exists yet. This is what lets a freshly-installed
+  // provider with zero instances still show up in the create dialog.
+  providerConfigName?: string;
 }
 
 export interface ClusterConfig {

@@ -75,7 +75,7 @@ export interface CreateSimpleClusterInput {
 }
 
 const CREATE_SIMPLECLUSTER_MUTATION = `
-  mutation CreateSimpleCluster($ns: String!, $object: SimpleClusterInput!) {
+  mutation CreateSimpleCluster($ns: String!, $object: ShowroomApeiroraEuV1alpha1SimpleCluster_Input!) {
     showroom_apeirora_eu {
       v1alpha1 {
         createSimpleCluster(namespace: $ns, object: $object) {

@@ -57,6 +57,10 @@ clusterConfig:
       version: v1alpha1
       listField: Shoots
       label: Dati (Gardener Shoot)
+      # providerConfigName is added to the drop-down as soon as this provider's
+      # type resolves in the gateway schema (its APIExport is bound), so dati is
+      # selectable on install without first creating a Shoot instance.
+      providerConfigName: dati
   # Static fallback provider list, used only when providerSources is empty
   # (legacy deployments / offline). Ignored once providerSources is set.
   providers:
