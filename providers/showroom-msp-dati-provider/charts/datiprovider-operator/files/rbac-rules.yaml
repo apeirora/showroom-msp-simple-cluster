@@ -47,8 +47,15 @@
 - apiGroups:
     - ""
   resources:
+    - namespaces
     - secrets
   verbs:
     - get
     - list
     - watch
+- apiGroups:
+    - ""
+  resources:
+    - namespaces/finalizers
+  verbs:
+    - update
