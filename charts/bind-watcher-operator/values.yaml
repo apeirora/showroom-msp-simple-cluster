@@ -1,5 +1,7 @@
 registry: ghcr.io/apeirora
 image: /bind-watcher-operator
+# Image tag override; defaults to the chart appVersion when empty.
+imageTag: ""
 
 serviceAccount: bind-watcher-operator
 
@@ -10,15 +12,27 @@ resources:
 
 # How KCP bindings are projected onto MSP namespaces.
 mapping:
-  # Namespace label (selector) whose value equals the KCP logical cluster name.
-  clusterLabelKey: kcp.io/cluster
+  # Namespace selector label whose value equals the KCP logical cluster name.
+  # The MSP namespace is named after the logical cluster, so the well-known
+  # name label selects it directly.
+  clusterLabelKey: kubernetes.io/metadata.name
   # Annotation written with the list of bound exports.
   exportsAnnotationKey: bind.simple-cluster.apeirora.eu/exports
   # Separator joining export names in the annotation value.
   separator: ","
+  # Create the MSP namespace (named after the logical cluster) when a cluster
+  # has bound exports but no namespace exists yet.
+  createNamespaces: true
+  # Marker label put on namespaces this operator creates.
+  managedLabelKey: bind-watcher.apeirora.eu/managed
 
 KCP:
   kubeconfig:
+    # Kubeconfig targeting the workspace that holds the APIExportEndpointSlices.
     secretName: kcp-kubeconfig
-  # Comma-separated APIExport virtual-workspace URLs (one per provider export).
-  endpoints: ""
+  # Comma-separated KCP workspace paths to scan for APIExportEndpointSlices.
+  # Empty = scan the kubeconfig's own workspace only.
+  # e.g. "root:providers:simple-cluster,root:providers:dati"
+  workspaces: ""
+  # How often to re-discover APIExportEndpointSlices in those workspaces.
+  discoveryInterval: 1m

@@ -15,15 +15,42 @@ import (
 	"sync"
 )
 
-// ExportIndex maps realCluster -> mcCluster -> bindingName -> exportName.
+// ExportIndex maps realCluster -> mcCluster -> bindingName -> exportName, and
+// remembers each realCluster's human-readable KCP workspace path.
 type ExportIndex struct {
-	mu   sync.Mutex
-	data map[string]map[string]map[string]string
+	mu    sync.Mutex
+	data  map[string]map[string]map[string]string
+	paths map[string]string // realCluster -> kcp.io/path
 }
 
 // New returns an empty ExportIndex.
 func New() *ExportIndex {
-	return &ExportIndex{data: map[string]map[string]map[string]string{}}
+	return &ExportIndex{
+		data:  map[string]map[string]map[string]string{},
+		paths: map[string]string{},
+	}
+}
+
+// SetPath records the KCP workspace path (e.g. root:orgs:showroom:a) for a
+// logical cluster, for logging.
+func (i *ExportIndex) SetPath(realCluster, path string) {
+	if path == "" {
+		return
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.paths[realCluster] = path
+}
+
+// Path returns the last-known workspace path for a logical cluster, or the
+// cluster id itself if unknown.
+func (i *ExportIndex) Path(realCluster string) string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if p, ok := i.paths[realCluster]; ok {
+		return p
+	}
+	return realCluster
 }
 
 // Set records that APIBinding bindingName, observed via mcCluster, binds
@@ -62,6 +89,7 @@ func (i *ExportIndex) RemoveCluster(realCluster, mcCluster string) {
 	delete(rc, mcCluster)
 	if len(rc) == 0 {
 		delete(i.data, realCluster)
+		delete(i.paths, realCluster)
 	}
 }
 
@@ -80,6 +108,7 @@ func (i *ExportIndex) removeLocked(realCluster, mcCluster, bindingName string) {
 	}
 	if len(rc) == 0 {
 		delete(i.data, realCluster)
+		delete(i.paths, realCluster)
 	}
 }
 
