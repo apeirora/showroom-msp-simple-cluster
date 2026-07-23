@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.2...v0.22.3) (2026-07-23)
+
+
+### Bug Fixes
+
+* UI fix ([#95](https://github.com/apeirora/showroom-msp-simple-cluster/issues/95)) ([46b197a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/46b197a77549a7446c14beb890eb61346ac05524))
+
 ## [0.22.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.1...v0.22.2) (2026-07-23)
 
 
