@@ -90,7 +90,16 @@ func main() {
 	flag.StringVar(&globalKubeconfigSecretNamespace, "global-kubeconfig-secret-namespace", "dati-provider",
 		"'global' mode: namespace of the shared admin-managed Gardener kubeconfig Secret.")
 	flag.StringVar(&clientKubeconfigSecretName, "client-kubeconfig-secret-name", "dati-gardener-kubeconfig",
-		"'kcp' mode: name of the per-client kubeconfig Secret, looked up in the Shoot's own namespace.")
+		"'kcp' mode: name of the per-client kubeconfig Secret, looked up in the account's own namespace.")
+	var enableNamespaceSCPC bool
+	var simpleClusterExportName, datiExportName string
+	flag.BoolVar(&enableNamespaceSCPC, "enable-namespace-scpc", true,
+		"Enable the NamespaceReconciler that creates the dati SCPC on bind (account namespace annotated with "+
+			"both the SimpleCluster and dati APIExport names). This is the sole SCPC creator.")
+	flag.StringVar(&simpleClusterExportName, "simplecluster-export-name", controller.DefaultSimpleClusterExportName,
+		"APIExport name that marks SimpleCluster as bound to an account namespace.")
+	flag.StringVar(&datiExportName, "dati-export-name", controller.DefaultDatiExportName,
+		"APIExport name that marks dati as bound to an account namespace.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -197,15 +206,26 @@ func main() {
 	}
 
 	if err := (&controller.ShootReconciler{
-		Client:                          mgr.GetClient(),
-		Scheme:                          mgr.GetScheme(),
-		KubeconfigSource:                controller.KubeconfigSource(kubeconfigSource),
-		GlobalKubeconfigSecretName:      globalKubeconfigSecretName,
-		GlobalKubeconfigSecretNamespace: globalKubeconfigSecretNamespace,
-		ClientKubeconfigSecretName:      clientKubeconfigSecretName,
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Shoot")
 		os.Exit(1)
+	}
+	if enableNamespaceSCPC {
+		if err := (&controller.NamespaceReconciler{
+			Client:                          mgr.GetClient(),
+			Scheme:                          mgr.GetScheme(),
+			KubeconfigSource:                controller.KubeconfigSource(kubeconfigSource),
+			GlobalKubeconfigSecretName:      globalKubeconfigSecretName,
+			GlobalKubeconfigSecretNamespace: globalKubeconfigSecretNamespace,
+			ClientKubeconfigSecretName:      clientKubeconfigSecretName,
+			SimpleClusterExportName:         simpleClusterExportName,
+			DatiExportName:                  datiExportName,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "Namespace")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

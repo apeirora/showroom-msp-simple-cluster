@@ -8,7 +8,13 @@ import type { ClusterConfig } from '../types';
 const FALLBACK: ClusterConfig = {
   providers: ['cloudferro', 'gardener-sap-ironcore', 'gardener-sap-openstack', 'kind'],
   providerSources: [
-    { group: 'dati.gardener', version: 'v1alpha1', listField: 'Shoots', label: 'Dati (Gardener Shoot)' }
+    {
+      group: 'dati.gardener',
+      version: 'v1alpha1',
+      listField: 'Shoots',
+      label: 'Dati (Gardener Shoot)',
+      providerConfigName: 'dati'
+    }
   ],
   cpu: ['1', '2', '4', '8', '16'],
   memory: ['2Gi', '4Gi', '8Gi', '16Gi', '32Gi'],

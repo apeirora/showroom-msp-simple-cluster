@@ -40,6 +40,9 @@ spec:
             - --global-kubeconfig-secret-name={{ .Values.scpc.kubeconfig.global.secretName }}
             - --global-kubeconfig-secret-namespace={{ .Values.scpc.kubeconfig.global.secretNamespace }}
             - --client-kubeconfig-secret-name={{ .Values.scpc.kubeconfig.client.secretName }}
+            - --enable-namespace-scpc={{ .Values.namespaceScpc.enabled }}
+            - --simplecluster-export-name={{ .Values.namespaceScpc.simpleClusterExportName }}
+            - --dati-export-name={{ .Values.namespaceScpc.datiExportName }}
           {{- if .Values.extraEnv }}
           env:
             {{- range .Values.extraEnv }}

@@ -10,8 +10,12 @@
  * shape already used by simple-cluster-ui/src/lib/providers.ts.
  *
  * The whole GraphQL surface for Shoots is intentionally confined to this file:
- * if the live gateway schema differs (e.g. the mutation field names), this is
- * the single place to adjust.
+ * if the live gateway schema differs, this is the single place to adjust.
+ * Field/type names below (createShoot/deleteShoot, the Shoots list field, the
+ * dati_gardener_v1alpha1_shoots subscription, and the create input type) are
+ * derived from the gateway's own schema-generation source
+ * (github.com/platform-mesh/kubernetes-graphql-gateway, pinned at v1.12.0 for
+ * this deployment) — not guessed. Still unexercised against a live gateway.
  */
 
 import type { Shoot } from '../types';
@@ -57,8 +61,14 @@ export interface CreateShootInput {
   spec?: string;
 }
 
+// The gateway names each resource's input type after its unique GraphQL type
+// name (group+version+kind, PascalCased) plus an "_Input" suffix — not a bare
+// "<Kind>Input" — to avoid collisions between same-named kinds across groups.
+// For dati.gardener/v1alpha1 Shoot that is DatiGardenerV1alpha1Shoot_Input.
+// Confirmed against the pinned gateway version (v1.12.0, which already
+// contains the type-naming change) via the gateway's own source/e2e tests.
 const CREATE_SHOOT_MUTATION = `
-  mutation CreateShoot($object: ShootInput!) {
+  mutation CreateShoot($object: DatiGardenerV1alpha1Shoot_Input!) {
     dati_gardener {
       v1alpha1 {
         createShoot(object: $object) {

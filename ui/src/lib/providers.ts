@@ -1,9 +1,12 @@
 /*
  * Live provider discovery. Each installed provider ships its own CR family
- * (e.g. dati.gardener/Shoot); once a user installs a provider and creates its
- * CR, the CR's status.providerConfigs lists the SimpleClusterProviderConfig
- * names a SimpleCluster may target. We query every configured source and take
- * the union of those names — that is the live provider drop-down.
+ * (e.g. dati.gardener/Shoot). A source's type resolving in the gateway schema
+ * means its APIExport is bound, i.e. the provider is installed — that alone
+ * is enough to offer src.providerConfigName, whether or not any CR instance
+ * exists yet. Existing instances additionally advertise the
+ * SimpleClusterProviderConfig names they support via status.providerConfigs.
+ * We query every configured source and take the union of both — that is the
+ * live provider drop-down.
  */
 
 import type { ProviderSource } from '../types';
@@ -84,6 +87,10 @@ export const fetchAvailableProviders = async (
           variables: src.namespaced ? { ns: namespace } : {}
         });
         ran = true;
+        // The query succeeded, so this source's type is present in the
+        // schema — its APIExport is bound and the provider is installed,
+        // regardless of whether any instance exists yet.
+        if (src.providerConfigName) found.add(src.providerConfigName);
         for (const item of itemsFrom(data, src)) {
           for (const name of item.status?.providerConfigs ?? []) {
             if (name) found.add(name);
