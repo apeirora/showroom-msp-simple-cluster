@@ -46,7 +46,7 @@ var ironcoreSCPCManifest []byte
 
 const (
 	// openstackSCPCName / ironcoreSCPCName are the fixed names of the two
-	// SimpleClusterProviderConfigs the SAP Gardener provider materialises in
+	// SimpleClusterProviderConfigs the SAP Integration provider materialises in
 	// each bound account namespace.
 	openstackSCPCName = "sap-gardener-openstack"
 	ironcoreSCPCName  = "sap-gardener-ironcore"
@@ -58,7 +58,7 @@ const (
 	managedByNamespaceBind = "namespace-bind"
 )
 
-// flavor describes one SAP Gardener SimpleCluster provider variant.
+// flavor describes one SAP Integration SimpleCluster provider variant.
 type flavor struct {
 	// scpcName is the SimpleClusterProviderConfig name for this flavor.
 	scpcName string

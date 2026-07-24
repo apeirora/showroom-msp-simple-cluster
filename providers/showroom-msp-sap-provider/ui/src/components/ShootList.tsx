@@ -62,7 +62,7 @@ export const ShootList = ({ shoots, loading, onCreate, onAction }: ShootListProp
       <IllustratedMessage
         name="NoData"
         titleText="No Shoots yet"
-        subtitleText="Create a Shoot to add an optional SAP Gardener resource in this workspace."
+        subtitleText="Create a Shoot to add an optional SAP Integration resource in this workspace."
       >
         <Button design="Emphasized" onClick={onCreate}>
           New Shoot
