@@ -1,0 +1,25 @@
+# Grants `bind` on this provider's APIExport to the identity the Platform Mesh
+# portal uses when minting an APIBinding from the marketplace. Distinct resource
+# names so this chart coexists with other providers' marketplace RBAC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sapprovider-apiexport-bind
+rules:
+  - apiGroups: ["apis.kcp.io"]
+    resources: ["apiexports"]
+    resourceNames: ["sap.gardener"]
+    verbs: ["bind"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sapprovider-anonymous-bind
+subjects:
+  - kind: User
+    name: system:anonymous
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: sapprovider-apiexport-bind
+  apiGroup: rbac.authorization.k8s.io
