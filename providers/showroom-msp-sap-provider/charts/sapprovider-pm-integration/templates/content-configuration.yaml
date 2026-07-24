@@ -1,0 +1,17 @@
+{{- if .Values.ui.enabled }}
+{{- $url := printf "%s://%s%s" (.Values.PUBLIC_SCHEME | default "https") (.Values.PUBLIC_HOST | default "localhost") (.Values.ui.contentPath | default "/pm-content.json") }}
+apiVersion: ui.platform-mesh.io/v1alpha1
+kind: ContentConfiguration
+metadata:
+  name: sap.gardener
+  labels:
+    ui.platform-mesh.io/entity: core_platform-mesh_io_account
+    # Must match the APIExport's metadata.name verbatim — the
+    # ContentConfigurations virtual-workspace joins on
+    # content-for == APIExport name to resolve which provider owns which CC.
+    ui.platform-mesh.io/content-for: sap.gardener
+spec:
+  remoteConfiguration:
+    url: {{ $url | quote }}
+    contentType: "json"
+{{- end }}

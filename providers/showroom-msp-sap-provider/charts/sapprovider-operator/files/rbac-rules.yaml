@@ -1,0 +1,64 @@
+- apiGroups:
+    - sap.gardener
+  resources:
+    - openstackshoots
+    - ironcoreshoots
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+- apiGroups:
+    - sap.gardener
+  resources:
+    - openstackshoots/finalizers
+    - ironcoreshoots/finalizers
+  verbs:
+    - update
+- apiGroups:
+    - sap.gardener
+  resources:
+    - openstackshoots/status
+    - ironcoreshoots/status
+  verbs:
+    - get
+    - patch
+    - update
+- apiGroups:
+    - showroom.apeirora.eu
+  resources:
+    - simpleclusterproviderconfigs
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+- apiGroups:
+    - showroom.apeirora.eu
+  resources:
+    - simpleclusters
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - ""
+  resources:
+    - namespaces
+    - secrets
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - ""
+  resources:
+    - namespaces/finalizers
+  verbs:
+    - update

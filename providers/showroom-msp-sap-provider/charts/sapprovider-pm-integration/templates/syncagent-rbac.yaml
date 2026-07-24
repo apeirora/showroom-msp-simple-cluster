@@ -1,0 +1,46 @@
+{{- if .Values.rbac.enabled }}
+# Sync-agent identity RBAC inside the provider's KCP workspace, applied to the
+# child workspace via this release's kubeConfig. The platform onboarding
+# (provider-kcp) writes this role into the PARENT root:providers workspace, not
+# the child, so the child stays without it — this recreates it in the child.
+# Mirrors the platform "syncagent-scoped" role.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: syncagent-scoped
+rules:
+  - nonResourceURLs: ["/*"]
+    verbs: ["*"]
+  - apiGroups: ["apis.kcp.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["secrets", "namespaces", "events", "configmaps"]
+    verbs: ["*"]
+  - apiGroups: ["ui.platform-mesh.io"]
+    resources: ["contentconfigurations", "providermetadatas"]
+    verbs: ["*"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles", "clusterrolebindings"]
+    verbs: ["*"]
+  - apiGroups: ["initialization.kcp.io"]
+    resources: ["inittargets", "inittemplates"]
+    verbs: ["*"]
+  # api-syncagent reads LogicalCluster on startup to scope its reconciler.
+  - apiGroups: ["core.kcp.io"]
+    resources: ["logicalclusters"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.rbac.syncagentUser }}
+subjects:
+  - kind: User
+    name: {{ .Values.rbac.syncagentUser }}
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: syncagent-scoped
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

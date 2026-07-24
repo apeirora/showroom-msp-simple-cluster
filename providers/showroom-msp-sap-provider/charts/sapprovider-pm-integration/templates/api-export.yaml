@@ -1,0 +1,33 @@
+apiVersion: apis.kcp.io/v1alpha2
+kind: APIExport
+metadata:
+  name: sap.gardener
+  labels:
+    # Marketplace/ContentConfigurations virtual-workspace filters on content-for
+    # = APIExport name. Must match `sap.gardener` verbatim.
+    ui.platform-mesh.io/content-for: sap.gardener
+spec:
+  resources:
+    - group: sap.gardener
+      name: openstackshoots
+      schema: v1alpha1.openstackshoots.sap.gardener
+      storage:
+        crd: {}
+    - group: sap.gardener
+      name: ironcoreshoots
+      schema: v1alpha1.ironcoreshoots.sap.gardener
+      storage:
+        crd: {}
+  permissionClaims:
+    # The syncagent mirrors namespaces and Events between KCP and the MSP cluster.
+    - group: ""
+      resource: namespaces
+      verbs: ["*"]
+    - group: ""
+      resource: events
+      verbs: ["*"]
+    # Reserved for a future bring-your-own-credentials path: a workspace
+    # Secret referenced from a flavor CR would be mirrored down to the MSP side.
+    - group: ""
+      resource: secrets
+      verbs: ["*"]
