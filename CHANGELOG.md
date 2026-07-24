@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.1...v0.23.2) (2026-07-24)
+
+
+### Bug Fixes
+
+* sapprovider CRD metadata.name must be plural.group ([#106](https://github.com/apeirora/showroom-msp-simple-cluster/issues/106)) ([5fead54](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5fead543cc2396cf33107004197ec58ff1b8de07))
+
 ## [0.23.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.0...v0.23.1) (2026-07-24)
 
 
