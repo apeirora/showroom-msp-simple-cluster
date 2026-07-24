@@ -1,0 +1,10 @@
+apiVersion: v2
+name: sapprovider-pm-integration
+description: >-
+  Platform Mesh metadata (APIExport/APIResourceSchema/ProviderMetadata) for the
+  sap.gardener Shoot API, applied in the KCP control plane. Installing this
+  provider in a workspace lets sap.gardener OpenStackShoot/IronCoreShoot CRs materialise the
+  SimpleClusterProviderConfig for simple-cluster.
+type: application
+version: 0.1.0
+appVersion: 0.1.0

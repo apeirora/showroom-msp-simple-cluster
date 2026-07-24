@@ -1,0 +1,5 @@
+## Append samples of your project ##
+resources:
+- sap_v1alpha1_openstackshoot.yaml
+- sap_v1alpha1_ironcoreshoot.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

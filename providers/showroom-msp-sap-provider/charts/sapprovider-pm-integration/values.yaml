@@ -1,0 +1,24 @@
+# Public host/scheme of the sapprovider-ui that serves pm-content.json. The
+# portal fetches ContentConfiguration.remoteConfiguration.url from here, so this
+# must match the sapprovider-ui chart's PUBLIC_HOST/PUBLIC_SCHEME.
+PUBLIC_HOST: "localhost"
+PUBLIC_SCHEME: "http"
+
+ui:
+  # Register the sapprovider-ui micro-frontend with the portal via a
+  # ContentConfiguration. Disable if the UI is not deployed.
+  enabled: true
+  contentPath: "/pm-content.json"
+
+rbac:
+  # Create the sync-agent identity's ClusterRole + binding inside the provider's
+  # KCP workspace (applied via this release's kubeConfig). Enabled because the
+  # platform onboarding writes this RBAC into the parent root:providers workspace,
+  # not the child, leaving the child workspace without it.
+  enabled: true
+  # KCP User the api-syncagent authenticates as (client-cert CN, <provider>-syncagent).
+  syncagentUser: sapprovider-syncagent
+branding:
+  marketplace:
+    title: "SAP Gardener"
+    description: "Enables SAP Gardener (OpenStack and IronCore flavors) as a provider for SimpleCluster: installing it provisions the sap-gardener-openstack and sap-gardener-ironcore provider configurations for your workspace."
