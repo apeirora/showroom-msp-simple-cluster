@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.2...v0.23.3) (2026-07-24)
+
+
+### Bug Fixes
+
+* sap provider - go version 1.24 -&gt; 1.25 ([#108](https://github.com/apeirora/showroom-msp-simple-cluster/issues/108)) ([27f1b23](https://github.com/apeirora/showroom-msp-simple-cluster/commit/27f1b2323ed497d89c728e754854988e06d59d65))
+
 ## [0.23.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.1...v0.23.2) (2026-07-24)
 
 
