@@ -1,0 +1,44 @@
+image:
+  repository: ghcr.io/apeirora/sap-provider-operator
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+leaderElect: true
+
+extraEnv: []
+
+namespaceScpc:
+  # The NamespaceReconciler is the sole creator of the SAP Gardener SCPCs. It watches
+  # account namespaces and materialises the SCPC once the bind-watcher
+  # annotation shows both APIExports below are bound to the account.
+  enabled: true
+  simpleClusterExportName: simpleclusters.showroom.apeirora.eu
+  sapExportName: sap.gardener
+
+scpc:
+  kubeconfig:
+    # Source of the Gardener kubeconfig each SCPC targets:
+    #   global — one shared admin-managed Secret (below). Default.
+    #   kcp    — per-client kubeconfig brought from the KCP workspace and
+    #            looked up in the account's own namespace (client.secretName).
+    source: global
+    global:
+      secretName: sap-gardener-kubeconfig
+      secretNamespace: sap-provider
+    client:
+      # Secret name expected in the Shoot's namespace in 'kcp' mode; the
+      # sync agent delivers the client's workspace kubeconfig under this name
+      # (see sapprovider-sync-agent publishedResources.clientKubeconfig).
+      secretName: sap-gardener-kubeconfig
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
