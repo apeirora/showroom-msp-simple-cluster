@@ -4,7 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: openstacksap.gardener
+  name: openstackshoots.sap.gardener
 spec:
   group: sap.gardener
   names:
