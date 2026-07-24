@@ -74,6 +74,12 @@ jobs:
           - context: providers/showroom-msp-dati-provider/ui
             image: datiprovider-ui
             platforms: linux/amd64
+          - context: providers/showroom-msp-sap-provider
+            image: sap-provider-operator
+            platforms: linux/amd64
+          - context: providers/showroom-msp-sap-provider/ui
+            image: sapprovider-ui
+            platforms: linux/amd64
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -140,6 +146,10 @@ jobs:
             providers/showroom-msp-dati-provider/charts/datiprovider-pm-integration
             providers/showroom-msp-dati-provider/charts/datiprovider-sync-agent
             providers/showroom-msp-dati-provider/charts/datiprovider-ui
+            providers/showroom-msp-sap-provider/charts/sapprovider-operator
+            providers/showroom-msp-sap-provider/charts/sapprovider-pm-integration
+            providers/showroom-msp-sap-provider/charts/sapprovider-sync-agent
+            providers/showroom-msp-sap-provider/charts/sapprovider-ui
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do
