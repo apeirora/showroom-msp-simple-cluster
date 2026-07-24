@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.3...v0.23.0) (2026-07-24)
+
+
+### Features
+
+* sap provider ([#99](https://github.com/apeirora/showroom-msp-simple-cluster/issues/99)) ([48b978d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/48b978d266379dc1e228933d65056fe84d1ddd44))
+
 ## [0.22.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.2...v0.22.3) (2026-07-23)
 
 
