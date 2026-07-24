@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.0...v0.23.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* Sap provider ci fix ([#104](https://github.com/apeirora/showroom-msp-simple-cluster/issues/104)) ([a42756c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a42756c344bfc311b8d597797f02dc669f0d60e8))
+
 ## [0.23.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.3...v0.23.0) (2026-07-24)
 
 
