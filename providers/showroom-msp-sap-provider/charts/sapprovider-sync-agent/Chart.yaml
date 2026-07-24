@@ -1,0 +1,17 @@
+apiVersion: v2
+name: sapprovider-sync-agent
+description: >-
+  Deploy a KCP Sync Agent for the sap.gardener Shoot API. Bridges Shoot CRs
+  (cluster-scoped in a user's KCP account workspace) into namespaced copies on
+  the Platform Mesh service cluster, where the operator materialises a
+  SimpleClusterProviderConfig per namespace. Dedicated agent: one api-syncagent
+  serves exactly one APIExport.
+type: application
+version: 0.1.0
+appVersion: 0.1.0
+dependencies:
+  - name: api-syncagent
+    alias: syncAgentOperator
+    version: 0.4.2
+    repository: https://kcp-dev.github.io/helm-charts
+    condition: syncAgentOperator.enabled

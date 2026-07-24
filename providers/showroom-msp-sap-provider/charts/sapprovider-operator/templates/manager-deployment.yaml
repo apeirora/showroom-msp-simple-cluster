@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sap-provider-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sapprovider-operator.labels" . | nindent 4 }}
+    control-plane: sap-provider-controller-manager
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      control-plane: sap-provider-controller-manager
+  strategy: {}
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        {{- include "sapprovider-operator.labels" . | nindent 8 }}
+        control-plane: sap-provider-controller-manager
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ .name }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: manager
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /manager
+          args:
+            - --metrics-bind-address=:8443
+            - --health-probe-bind-address=:8081
+            - --leader-elect={{ .Values.leaderElect }}
+            - --kubeconfig-source={{ .Values.scpc.kubeconfig.source }}
+            - --global-kubeconfig-secret-name={{ .Values.scpc.kubeconfig.global.secretName }}
+            - --global-kubeconfig-secret-namespace={{ .Values.scpc.kubeconfig.global.secretNamespace }}
+            - --client-kubeconfig-secret-name={{ .Values.scpc.kubeconfig.client.secretName }}
+            - --enable-namespace-scpc={{ .Values.namespaceScpc.enabled }}
+            - --simplecluster-export-name={{ .Values.namespaceScpc.simpleClusterExportName }}
+            - --sap-export-name={{ .Values.namespaceScpc.sapExportName }}
+          {{- if .Values.extraEnv }}
+          env:
+            {{- range .Values.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      serviceAccountName: sap-provider-controller-manager
+      terminationGracePeriodSeconds: 10

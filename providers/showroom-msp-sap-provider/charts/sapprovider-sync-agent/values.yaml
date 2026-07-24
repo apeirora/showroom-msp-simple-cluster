@@ -1,0 +1,25 @@
+syncAgentOperator:
+  enabled: true
+  apiExportName: sap.gardener
+  agentName: sap-provider-agent
+  kcpKubeconfig: pm-kubeconfig
+  # Scope this agent to its own PublishedResources so foreign PublishedResources
+  # in the same namespace are never picked up (one api-syncagent serves exactly
+  # one APIExport).
+  extraFlags:
+    - --published-resource-selector=app.kubernetes.io/name=sapprovider-sync-agent
+  crds:
+    enabled: false
+
+publishedResources:
+  enabled: true
+  # Deliver each client's own Gardener kubeconfig from their KCP workspace into
+  # the Shoot's namespace on the service cluster — required for the operator's
+  # kubeconfig source 'kcp'. OFF by default (the default source is 'global').
+  # See sapprovider-operator values scpc.kubeconfig.
+  clientKubeconfig:
+    enabled: false
+    # Name the client's kubeconfig Secret is given in the workspace and mirrored
+    # to on the service cluster; must match the operator's
+    # --client-kubeconfig-secret-name.
+    secretName: sap-gardener-kubeconfig

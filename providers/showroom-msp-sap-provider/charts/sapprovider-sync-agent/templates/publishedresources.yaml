@@ -1,0 +1,47 @@
+{{- if .Values.publishedResources.enabled }}
+{{- $ns := .Values.publishedResources.namespace | default .Release.Namespace }}
+{{- $ck := .Values.publishedResources.clientKubeconfig }}
+{{- range $r := list (dict "kind" "OpenStackShoot" "name" "publish-sap-openstackshoots") (dict "kind" "IronCoreShoot" "name" "publish-sap-ironcoreshoots") }}
+---
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: {{ $r.name }}
+  namespace: {{ $ns }}
+  labels:
+    app.kubernetes.io/name: sapprovider-sync-agent
+    app.kubernetes.io/component: portal-integration
+spec:
+  resource:
+    kind: {{ $r.kind }}
+    apiGroup: sap.gardener
+    version: v1alpha1
+  projection:
+    # Namespaced on the service cluster, cluster-scoped in the KCP workspace.
+    scope: Cluster
+  naming:
+    namespace: "{{`{{ .ClusterName }}`}}"
+    name: "{{`{{ .Object.metadata.name }}`}}"
+  {{- if $ck.enabled }}
+  related:
+    # kubeconfig source 'kcp': mirror the client-provided kubeconfig Secret
+    # from the KCP workspace down into the CR's namespace on the service
+    # cluster, where the operator reads it as the SCPC target.
+    - identifier: client-kubeconfig
+      origin: kcp
+      kind: Secret
+      object:
+        # The CR is projected cluster-scoped in KCP, so the related object's
+        # namespace must be set explicitly. Destination (service-cluster)
+        # namespace is the CR's namespace (the ClusterName template below).
+        # NOTE: the source-side (KCP) namespace mapping for a cluster-scoped
+        # primary must be validated against a live api-syncagent before relying
+        # on this in production.
+        namespace:
+          template:
+            template: "{{`{{ .ClusterName }}`}}"
+        template:
+          template: {{ $ck.secretName | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}
