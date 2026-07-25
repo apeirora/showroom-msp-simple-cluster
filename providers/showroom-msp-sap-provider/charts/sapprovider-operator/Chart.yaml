@@ -1,7 +1,7 @@
 apiVersion: v2
 name: sapprovider-operator
 description: >-
-  Standalone deployment of the SAP Gardener provider controller: watches
+  Standalone deployment of the SAP Integration provider controller: watches
   OpenStackShoot/IronCoreShoot CRs synced from KCP account workspaces and
   materialises the namespaced SimpleClusterProviderConfigs sap-gardener-openstack
   and sap-gardener-ironcore per account namespace for simple-cluster.

@@ -63,7 +63,7 @@ const App = () => {
 
   return (
     <FlexBox direction={FlexBoxDirection.Column} style={{ height: '100vh' }}>
-      <ShellBar primaryTitle="SAP Gardener" secondaryTitle="Gardener Shoots" />
+      <ShellBar primaryTitle="SAP Shoots" secondaryTitle="Gardener Shoots" />
       <div
         style={{
           flex: 1,
