@@ -20,13 +20,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ShootStatus reports the provider config materialised for the namespace.
+// ShootStatus reports the Gardener cluster provisioned for this CR and the
+// provider config materialised for the namespace.
 type ShootStatus struct {
 	// ProviderConfigs lists the SimpleClusterProviderConfig names created in
 	// this namespace on behalf of this flavor. SimpleClusters reference these
 	// names via providerConfigRefs.
 	// +optional
 	ProviderConfigs []string `json:"providerConfigs,omitempty"`
+
+	// ShootName is the name of the Gardener Shoot provisioned for this CR.
+	// +optional
+	ShootName string `json:"shootName,omitempty"`
+
+	// Phase mirrors the Gardener Shoot lifecycle: Provisioning, Ready, Failed
+	// or Deleting.
+	// +optional
+	Phase string `json:"phase,omitempty"`
+
+	// KubeconfigSecretRef names the Secret (next to this CR) holding the admin
+	// kubeconfig for the provisioned cluster.
+	// +optional
+	KubeconfigSecretRef *KubeconfigSecretRef `json:"kubeconfigSecretRef,omitempty"`
+
+	// KubeconfigExpires is when the minted admin kubeconfig expires; the
+	// operator renews it ahead of this time.
+	// +optional
+	KubeconfigExpires *metav1.Time `json:"kubeconfigExpires,omitempty"`
 
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
@@ -37,27 +57,32 @@ type ShootStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+// KubeconfigSecretRef points at the kubeconfig Secret in the CR's namespace.
+type KubeconfigSecretRef struct {
+	Name string `json:"name"`
+}
+
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=osshoot
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// OpenStackShoot enables the SAP Integration OpenStack flavor as a SimpleCluster
-// provider for one namespace (KCP account workspace). Its spec is the Gardener
-// Shoot manifest, as free text, that overrides the resource template of the
-// sap-gardener-openstack SimpleClusterProviderConfig — the MSP side builds the
-// actual Gardener Shoot from it.
+// OpenStackShoot provisions a Gardener cluster of the SAP Integration
+// OpenStack flavor for one namespace (KCP account workspace): the operator
+// creates a real Gardener Shoot from it and maintains an admin-kubeconfig
+// Secret next to the CR.
 type OpenStackShoot struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the Gardener Shoot manifest text used verbatim as the SCPC
-	// resource template. It may contain simple-cluster template expressions
-	// (Go-template placeholders evaluated later against the SimpleCluster and
-	// its resolved inputs). When empty the operator's built-in default
-	// OpenStack template is used.
+	// Spec is the Gardener Shoot manifest, as free text, used for the
+	// provisioned cluster. It may contain the template placeholders the SCPC
+	// templates use ({{ .Inputs.* }}, {{ .SC.* }}), rendered with the flavor
+	// defaults. When empty the operator's built-in default OpenStack template
+	// is used.
 	// +optional
 	Spec string `json:"spec,omitempty"`
 
@@ -78,23 +103,23 @@ type OpenStackShootList struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=icshoot
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// IronCoreShoot enables the SAP Integration IronCore flavor as a SimpleCluster
-// provider for one namespace (KCP account workspace). Its spec is the Gardener
-// Shoot manifest, as free text, that overrides the resource template of the
-// sap-gardener-ironcore SimpleClusterProviderConfig — the MSP side builds the
-// actual Gardener Shoot from it.
+// IronCoreShoot provisions a Gardener cluster of the SAP Integration IronCore
+// flavor for one namespace (KCP account workspace): the operator creates a
+// real Gardener Shoot from it and maintains an admin-kubeconfig Secret next
+// to the CR.
 type IronCoreShoot struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the Gardener Shoot manifest text used verbatim as the SCPC
-	// resource template. It may contain simple-cluster template expressions
-	// (Go-template placeholders evaluated later against the SimpleCluster and
-	// its resolved inputs). When empty the operator's built-in default
-	// IronCore template is used.
+	// Spec is the Gardener Shoot manifest, as free text, used for the
+	// provisioned cluster. It may contain the template placeholders the SCPC
+	// templates use ({{ .Inputs.* }}, {{ .SC.* }}), rendered with the flavor
+	// defaults. When empty the operator's built-in default IronCore template
+	// is used.
 	// +optional
 	Spec string `json:"spec,omitempty"`
 

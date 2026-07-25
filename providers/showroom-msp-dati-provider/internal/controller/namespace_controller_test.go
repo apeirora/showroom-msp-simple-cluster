@@ -141,7 +141,7 @@ var _ = Describe("Namespace Controller", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("uses a Shoot's text spec as the SCPC shoot template override", func() {
+	It("keeps the embedded SCPC template even when a Shoot carries a spec", func() {
 		name := newNamespace(bothExports)
 		custom := "apiVersion: core.gardener.cloud/v1beta1\nkind: Shoot\nmetadata:\n  name: custom\nspec:\n  region: eu\n"
 		Expect(k8sClient.Create(ctx, &dativ1alpha1.Shoot{
@@ -151,8 +151,10 @@ var _ = Describe("Namespace Controller", func() {
 
 		reconcileNS(name)
 
+		// The CR spec feeds the CR's own Gardener Shoot, never the SCPC.
 		scpc, err := getSCPC(name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(scpcShootTemplate(scpc)).To(Equal(custom))
+		Expect(scpcShootTemplate(scpc)).NotTo(Equal(custom))
+		Expect(scpcShootTemplate(scpc)).To(ContainSubstring("core.gardener.cloud/v1beta1"))
 	})
 })

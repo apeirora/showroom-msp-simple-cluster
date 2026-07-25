@@ -18,6 +18,9 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -25,10 +28,9 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          Shoot enables dati as a SimpleCluster provider for one namespace (KCP
-          account workspace). Its spec is the Gardener Shoot manifest, as free text,
-          that the resulting SimpleClusterProviderConfig uses as its resource
-          template — the MSP side builds the actual Gardener Shoot from it.
+          Shoot provisions a Gardener cluster of the dati flavor for one namespace (KCP
+          account workspace): the operator creates a real Gardener Shoot from it and
+          maintains an admin-kubeconfig Secret next to the CR.
         properties:
           apiVersion:
             description: |-
@@ -49,15 +51,15 @@ spec:
             type: object
           spec:
             description: |-
-              Spec is the Gardener Shoot manifest text used verbatim as the SCPC
-              resource template. It may contain simple-cluster template expressions
-              (Go-template placeholders evaluated later against the SimpleCluster and
-              its resolved inputs). When empty the operator's built-in default
-              template is used.
+              Spec is the Gardener Shoot manifest, as free text, used for the
+              provisioned cluster. It may contain the template placeholders the SCPC
+              templates use ({{ .Inputs.* }}, {{ .SC.* }}), rendered with the flavor
+              defaults. When empty the operator's built-in default template is used.
             type: string
           status:
-            description: ShootStatus reports the provider configs materialised for
-              the namespace.
+            description: |-
+              ShootStatus reports the Gardener cluster provisioned for this CR and the
+              provider config materialised for the namespace.
             properties:
               conditions:
                 items:
@@ -118,9 +120,30 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              kubeconfigExpires:
+                description: |-
+                  KubeconfigExpires is when the minted admin kubeconfig expires; the
+                  operator renews it ahead of this time.
+                format: date-time
+                type: string
+              kubeconfigSecretRef:
+                description: |-
+                  KubeconfigSecretRef names the Secret (next to this CR) holding the admin
+                  kubeconfig for the provisioned cluster.
+                properties:
+                  name:
+                    type: string
+                required:
+                - name
+                type: object
               observedGeneration:
                 format: int64
                 type: integer
+              phase:
+                description: |-
+                  Phase mirrors the Gardener Shoot lifecycle: Provisioning, Ready, Failed
+                  or Deleting.
+                type: string
               providerConfigs:
                 description: |-
                   ProviderConfigs lists the SimpleClusterProviderConfig names created in
@@ -128,6 +151,10 @@ spec:
                 items:
                   type: string
                 type: array
+              shootName:
+                description: ShootName is the name of the Gardener Shoot provisioned
+                  for this CR.
+                type: string
             type: object
         type: object
     served: true

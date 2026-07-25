@@ -2,9 +2,10 @@ apiVersion: dati.gardener/v1alpha1
 kind: Shoot
 metadata:
   name: dati
-# spec is the Gardener Shoot manifest as text, used as the provider template.
-# It may contain simple-cluster expressions ({{ .SC.* }}, {{ .Inputs.* }}).
-# Empty spec selects the operator's built-in default template.
+# spec is the Gardener Shoot manifest, as text, used for the cluster this CR
+# provisions. It may contain the template placeholders the SCPC templates use
+# ({{ .Inputs.* }}, {{ .SC.* }}), rendered with the flavor defaults. Empty spec
+# selects the operator's built-in default template.
 spec: |
   apiVersion: core.gardener.cloud/v1beta1
   kind: Shoot
