@@ -80,6 +80,12 @@ jobs:
           - context: providers/showroom-msp-sap-provider/ui
             image: sapprovider-ui
             platforms: linux/amd64
+          - context: providers/showroom-msp-cloudferro-provider
+            image: cloudferro-provider-operator
+            platforms: linux/amd64
+          - context: providers/showroom-msp-arsys-provider
+            image: arsys-provider-operator
+            platforms: linux/amd64
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -150,6 +156,10 @@ jobs:
             providers/showroom-msp-sap-provider/charts/sapprovider-pm-integration
             providers/showroom-msp-sap-provider/charts/sapprovider-sync-agent
             providers/showroom-msp-sap-provider/charts/sapprovider-ui
+            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-operator
+            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-pm-integration
+            providers/showroom-msp-arsys-provider/charts/arsysprovider-operator
+            providers/showroom-msp-arsys-provider/charts/arsysprovider-pm-integration
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do

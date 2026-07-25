@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"slices"
-	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -27,16 +26,11 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	sapv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/providers/sap-provider/api/v1alpha1"
 )
 
 const (
@@ -107,11 +101,7 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	for _, f := range flavors {
-		override, err := r.shootTemplateOverride(ctx, ns.Name, f.listGVK)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		scpc, err := renderSCPC(f, ns.Name, ref, override)
+		scpc, err := renderSCPC(f, ns.Name, ref)
 		if err != nil {
 			return ctrl.Result{RequeueAfter: providerRequeue}, err
 		}
@@ -142,30 +132,6 @@ func parseBindExports(v string) []string {
 		}
 	}
 	return out
-}
-
-// shootTemplateOverride returns the Shoot spec text to use as the SCPC resource
-// template override for the given flavor, or "" for the embedded default. When
-// several flavor CRs carry a spec the lexicographically first name wins, so the
-// choice is deterministic. The CRs are read via the flavor's List GVK so a
-// missing CRD (flavor not installed) degrades to the default template.
-func (r *NamespaceReconciler) shootTemplateOverride(ctx context.Context, namespace string, listGVK schema.GroupVersionKind) (string, error) {
-	list := &unstructured.UnstructuredList{}
-	list.SetGroupVersionKind(listGVK)
-	if err := r.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		if apimeta.IsNoMatchError(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	sort.Slice(list.Items, func(i, j int) bool { return list.Items[i].GetName() < list.Items[j].GetName() })
-	for i := range list.Items {
-		spec, _, _ := unstructured.NestedString(list.Items[i].Object, "spec")
-		if strings.TrimSpace(spec) != "" {
-			return spec, nil
-		}
-	}
-	return "", nil
 }
 
 func (r *NamespaceReconciler) applySCPC(ctx context.Context, ns *corev1.Namespace, desired *unstructured.Unstructured) error {
@@ -218,19 +184,12 @@ func (r *NamespaceReconciler) ensureSCPCsAbsent(ctx context.Context, namespace s
 }
 
 // SetupWithManager wires the controller to watch Namespaces (the install
-// signal) and both flavor CRs (template overrides), mapping each CR to its
-// namespace. No Owns() watch on the SCPC: its CRD is absent on clusters without
+// signal). No Owns() watch on the SCPC: its CRD is absent on clusters without
 // simple-cluster and a missing informer would prevent the manager from
 // starting. Drift is healed by the periodic requeue instead.
 func (r *NamespaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	toNamespace := handler.EnqueueRequestsFromMapFunc(
-		func(_ context.Context, obj client.Object) []reconcile.Request {
-			return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: obj.GetNamespace()}}}
-		})
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Namespace{}).
-		Watches(&sapv1alpha1.OpenStackShoot{}, toNamespace).
-		Watches(&sapv1alpha1.IronCoreShoot{}, toNamespace).
 		Named("namespace").
 		Complete(r)
 }

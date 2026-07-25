@@ -42,6 +42,8 @@ var _ = Describe("Manager wiring", func() {
 		Expect((&ShootReconciler{
 			Client: mgr.GetClient(), Scheme: mgr.GetScheme(),
 			SCPCName:       openstackSCPCName,
+			KindName:       "OpenStackShoot",
+			Manifest:       openstackSCPCManifest,
 			New:            func() FlavorShoot { return &sapv1alpha1.OpenStackShoot{} },
 			ControllerName: "openstackshoot",
 		}).SetupWithManager(mgr)).To(Succeed())
@@ -49,6 +51,8 @@ var _ = Describe("Manager wiring", func() {
 		Expect((&ShootReconciler{
 			Client: mgr.GetClient(), Scheme: mgr.GetScheme(),
 			SCPCName:       ironcoreSCPCName,
+			KindName:       "IronCoreShoot",
+			Manifest:       ironcoreSCPCManifest,
 			New:            func() FlavorShoot { return &sapv1alpha1.IronCoreShoot{} },
 			ControllerName: "ironcoreshoot",
 		}).SetupWithManager(mgr)).To(Succeed())

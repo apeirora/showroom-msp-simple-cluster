@@ -1,0 +1,4 @@
+branding:
+  marketplace:
+    title: "CloudFerro"
+    description: "Enables CloudFerro as a provider for SimpleCluster: installing it provisions the cloudferro provider configuration for your workspace."
