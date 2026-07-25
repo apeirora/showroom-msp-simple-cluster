@@ -205,21 +205,33 @@ func main() {
 	}
 
 	if err := (&controller.ShootReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		SCPCName:       controller.OpenStackSCPCName(),
-		New:            func() controller.FlavorShoot { return &sapv1alpha1.OpenStackShoot{} },
-		ControllerName: "openstackshoot",
+		Client:                          mgr.GetClient(),
+		Scheme:                          mgr.GetScheme(),
+		SCPCName:                        controller.OpenStackSCPCName(),
+		KindName:                        "OpenStackShoot",
+		Manifest:                        controller.OpenStackSCPCManifest(),
+		New:                             func() controller.FlavorShoot { return &sapv1alpha1.OpenStackShoot{} },
+		ControllerName:                  "openstackshoot",
+		KubeconfigSource:                controller.KubeconfigSource(kubeconfigSource),
+		GlobalKubeconfigSecretName:      globalKubeconfigSecretName,
+		GlobalKubeconfigSecretNamespace: globalKubeconfigSecretNamespace,
+		ClientKubeconfigSecretName:      clientKubeconfigSecretName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenStackShoot")
 		os.Exit(1)
 	}
 	if err := (&controller.ShootReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		SCPCName:       controller.IronCoreSCPCName(),
-		New:            func() controller.FlavorShoot { return &sapv1alpha1.IronCoreShoot{} },
-		ControllerName: "ironcoreshoot",
+		Client:                          mgr.GetClient(),
+		Scheme:                          mgr.GetScheme(),
+		SCPCName:                        controller.IronCoreSCPCName(),
+		KindName:                        "IronCoreShoot",
+		Manifest:                        controller.IronCoreSCPCManifest(),
+		New:                             func() controller.FlavorShoot { return &sapv1alpha1.IronCoreShoot{} },
+		ControllerName:                  "ironcoreshoot",
+		KubeconfigSource:                controller.KubeconfigSource(kubeconfigSource),
+		GlobalKubeconfigSecretName:      globalKubeconfigSecretName,
+		GlobalKubeconfigSecretNamespace: globalKubeconfigSecretNamespace,
+		ClientKubeconfigSecretName:      clientKubeconfigSecretName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "IronCoreShoot")
 		os.Exit(1)

@@ -149,7 +149,7 @@ var _ = Describe("Namespace Controller", func() {
 		}
 	})
 
-	It("uses an OpenStackShoot's text spec as the openstack SCPC template override only", func() {
+	It("keeps the embedded SCPC templates even when a flavor CR carries a spec", func() {
 		name := newNamespace(bothExports)
 		custom := "apiVersion: core.gardener.cloud/v1beta1\nkind: Shoot\nmetadata:\n  name: custom\nspec:\n  region: eu\n"
 		Expect(k8sClient.Create(ctx, &sapv1alpha1.OpenStackShoot{
@@ -159,14 +159,14 @@ var _ = Describe("Namespace Controller", func() {
 
 		reconcileNS(name)
 
+		// The CR spec feeds the CR's own Gardener Shoot, never the SCPC.
 		os, err := getSCPC(name, openstackSCPCName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(scpcShootTemplate(os)).To(Equal(custom))
+		Expect(scpcShootTemplate(os)).NotTo(Equal(custom))
+		Expect(scpcShootTemplate(os)).To(ContainSubstring("core.gardener.cloud/v1beta1"))
 
-		// The ironcore SCPC keeps its embedded default (no override supplied).
 		ic, err := getSCPC(name, ironcoreSCPCName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(scpcShootTemplate(ic)).NotTo(Equal(custom))
 		Expect(scpcShootTemplate(ic)).To(ContainSubstring("ironcore"))
 	})
 })

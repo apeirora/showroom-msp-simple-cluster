@@ -1,0 +1,12 @@
+apiVersion: apis.kcp.io/v1alpha2
+kind: APIExport
+metadata:
+  name: cloudferro
+  labels:
+    # Marketplace/ContentConfigurations virtual-workspace filters on content-for
+    # = APIExport name. Must match `cloudferro` verbatim.
+    ui.platform-mesh.io/content-for: cloudferro
+spec:
+  # No resources are synced: binding this export is purely the marketplace signal
+  # the CloudFerro operator watches to create the SCPC in the account namespace.
+  resources: []

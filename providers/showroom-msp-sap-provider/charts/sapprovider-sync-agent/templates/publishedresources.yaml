@@ -22,8 +22,16 @@ spec:
   naming:
     namespace: "{{`{{ .ClusterName }}`}}"
     name: "{{`{{ .Object.metadata.name }}`}}"
-  {{- if $ck.enabled }}
   related:
+    # Mirror the kubeconfig Secret written by the operator back into the
+    # consuming account workspace so the portal can download it.
+    - identifier: kubeconfig-secret
+      origin: service
+      kind: Secret
+      object:
+        reference:
+          path: status.kubeconfigSecretRef.name
+  {{- if $ck.enabled }}
     # kubeconfig source 'kcp': mirror the client-provided kubeconfig Secret
     # from the KCP workspace down into the CR's namespace on the service
     # cluster, where the operator reads it as the SCPC target.

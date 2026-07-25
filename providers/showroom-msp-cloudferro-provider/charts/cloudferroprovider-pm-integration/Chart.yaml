@@ -1,0 +1,11 @@
+apiVersion: v2
+name: cloudferroprovider-pm-integration
+description: >-
+  Platform Mesh marketplace metadata (APIExport/ProviderMetadata/bind RBAC) for
+  the CloudFerro provider, applied in the KCP control plane. The APIExport carries
+  no synced resources; binding it in an account workspace is the signal the
+  CloudFerro operator watches to materialise the `cloudferro`
+  SimpleClusterProviderConfig.
+type: application
+version: 0.1.0
+appVersion: 0.1.0
