@@ -206,8 +206,12 @@ func main() {
 	}
 
 	if err := (&controller.ShootReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:                          mgr.GetClient(),
+		Scheme:                          mgr.GetScheme(),
+		KubeconfigSource:                controller.KubeconfigSource(kubeconfigSource),
+		GlobalKubeconfigSecretName:      globalKubeconfigSecretName,
+		GlobalKubeconfigSecretNamespace: globalKubeconfigSecretNamespace,
+		ClientKubeconfigSecretName:      clientKubeconfigSecretName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Shoot")
 		os.Exit(1)

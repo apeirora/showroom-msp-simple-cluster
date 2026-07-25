@@ -105,6 +105,50 @@ jobs:
       - name: Test
         run: make test
 
+  build-cloudferro-provider:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: providers/showroom-msp-cloudferro-provider
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: providers/showroom-msp-cloudferro-provider/go.mod
+          cache: true
+          cache-dependency-path: providers/showroom-msp-cloudferro-provider/go.sum
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: make test
+
+  build-arsys-provider:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: providers/showroom-msp-arsys-provider
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: providers/showroom-msp-arsys-provider/go.mod
+          cache: true
+          cache-dependency-path: providers/showroom-msp-arsys-provider/go.sum
+
+      - name: Build
+        run: make build
+
+      - name: Test
+        run: make test
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"slices"
-	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -31,11 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	dativ1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/providers/dati-provider/api/v1alpha1"
 )
 
 const (
@@ -104,12 +99,7 @@ func (r *NamespaceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	override, err := r.shootTemplateOverride(ctx, ns.Name)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	scpc, err := renderDatiSCPC(ns.Name, ref, override)
+	scpc, err := renderDatiSCPC(ns.Name, ref)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: providerRequeue}, err
 	}
@@ -140,23 +130,6 @@ func parseBindExports(v string) []string {
 		}
 	}
 	return out
-}
-
-// shootTemplateOverride returns the Shoot spec text to use as the SCPC resource
-// template override, or "" for the embedded default. When several Shoots carry
-// a spec the lexicographically first name wins, so the choice is deterministic.
-func (r *NamespaceReconciler) shootTemplateOverride(ctx context.Context, namespace string) (string, error) {
-	list := &dativ1alpha1.ShootList{}
-	if err := r.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		return "", err
-	}
-	sort.Slice(list.Items, func(i, j int) bool { return list.Items[i].Name < list.Items[j].Name })
-	for i := range list.Items {
-		if strings.TrimSpace(list.Items[i].Spec) != "" {
-			return list.Items[i].Spec, nil
-		}
-	}
-	return "", nil
 }
 
 func (r *NamespaceReconciler) applySCPC(ctx context.Context, ns *corev1.Namespace, desired *unstructured.Unstructured) error {
@@ -204,17 +177,12 @@ func (r *NamespaceReconciler) ensureSCPCAbsent(ctx context.Context, namespace st
 }
 
 // SetupWithManager wires the controller to watch Namespaces (the install
-// signal) and Shoots (template overrides), mapping each Shoot to its namespace.
-// No Owns() watch on the SCPC: its CRD is absent on clusters without
+// signal). No Owns() watch on the SCPC: its CRD is absent on clusters without
 // simple-cluster and a missing informer would prevent the manager from
 // starting. Drift is healed by the periodic requeue instead.
 func (r *NamespaceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Namespace{}).
-		Watches(&dativ1alpha1.Shoot{}, handler.EnqueueRequestsFromMapFunc(
-			func(_ context.Context, obj client.Object) []reconcile.Request {
-				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: obj.GetNamespace()}}}
-			})).
 		Named("namespace").
 		Complete(r)
 }
