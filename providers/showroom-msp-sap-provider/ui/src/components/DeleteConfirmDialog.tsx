@@ -37,7 +37,7 @@ export const DeleteConfirmDialog = ({ open, shootName, busy, onConfirm, onCancel
   >
     <FlexBox direction={FlexBoxDirection.Column} style={{ gap: '0.75rem', minWidth: 380, padding: '0.5rem 0' }}>
       <MessageStrip design="Critical" hideCloseButton>
-        This removes the SAP Gardener Shoot resource. Any provider configuration it materialised is removed
+        This removes the SAP Integration Shoot resource. Any provider configuration it materialised is removed
         too, so SimpleClusters that reference it will no longer resolve their provider.
       </MessageStrip>
       <div>

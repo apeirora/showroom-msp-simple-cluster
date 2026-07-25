@@ -10,7 +10,7 @@
                 {
                     "pathSegment": "sap_gardener",
                     "navigationContext": "sap_gardener",
-                    "label": "SAP Gardener",
+                    "label": "SAP Shoots",
                     "icon": "data:image/svg+xml;base64,{{ $logo }}",
                     "category": {
                         "label": {{ $sidebarTitle | quote }},

@@ -1,6 +1,6 @@
 # showroom-msp-sap-provider
 
-SAP Gardener provider for simple-cluster, packaging the OpenStack and IronCore
+SAP Integration provider for simple-cluster, packaging the OpenStack and IronCore
 Gardener flavors into one provider stack.
 
 ## Description
