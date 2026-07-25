@@ -1,0 +1,10 @@
+apiVersion: v2
+name: cloudferroprovider-operator
+description: >-
+  Standalone deployment of the CloudFerro provider controller: its
+  NamespaceReconciler watches account namespaces and materialises the namespaced
+  SimpleClusterProviderConfig `cloudferro` once both the SimpleCluster and the
+  CloudFerro APIExports are bound to the account.
+type: application
+version: 0.1.0
+appVersion: 0.1.0
