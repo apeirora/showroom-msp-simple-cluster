@@ -52,10 +52,10 @@ const (
 	DefaultSapExportName           = "sap.gardener"
 )
 
-// NamespaceReconciler is the sole creator of the SAP Gardener
+// NamespaceReconciler is the sole creator of the SAP Integration
 // SimpleClusterProviderConfigs (both flavors: OpenStack and IronCore). It
 // watches account namespaces and, whenever the bind-watcher annotation shows
-// that both SimpleCluster and the SAP Gardener export are bound, materialises
+// that both SimpleCluster and the SAP Integration export are bound, materialises
 // both SCPCs in that namespace (owned by the namespace so they are
 // garbage-collected on unbind by namespace deletion). When the SAP binding is
 // gone it removes the SCPCs it manages.
@@ -194,7 +194,7 @@ func (r *NamespaceReconciler) applySCPC(ctx context.Context, ns *corev1.Namespac
 	return r.Update(ctx, existing)
 }
 
-// ensureSCPCsAbsent deletes every SAP Gardener SCPC in the namespace that
+// ensureSCPCsAbsent deletes every SAP Integration SCPC in the namespace that
 // exists and is one we manage (stamped with the managed-by label).
 func (r *NamespaceReconciler) ensureSCPCsAbsent(ctx context.Context, namespace string) error {
 	for _, name := range allSCPCNames() {

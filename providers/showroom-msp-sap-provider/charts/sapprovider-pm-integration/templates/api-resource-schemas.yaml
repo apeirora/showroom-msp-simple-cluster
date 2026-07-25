@@ -17,7 +17,7 @@ spec:
   versions:
   - name: v1alpha1
     schema:
-      description: "OpenStackShoot enables the SAP Gardener OpenStack flavor as a\
+      description: "OpenStackShoot enables the SAP Integration OpenStack flavor as a\
         \ SimpleCluster\nprovider for one namespace (KCP account workspace). Its spec\
         \ is the Gardener\nShoot manifest, as free text, that overrides the resource\
         \ template of the\nsap-gardener-openstack SimpleClusterProviderConfig \u2014\
@@ -182,7 +182,7 @@ spec:
   versions:
   - name: v1alpha1
     schema:
-      description: "IronCoreShoot enables the SAP Gardener IronCore flavor as a SimpleCluster\n\
+      description: "IronCoreShoot enables the SAP Integration IronCore flavor as a SimpleCluster\n\
         provider for one namespace (KCP account workspace). Its spec is the Gardener\n\
         Shoot manifest, as free text, that overrides the resource template of the\n\
         sap-gardener-ironcore SimpleClusterProviderConfig \u2014 the MSP side builds\

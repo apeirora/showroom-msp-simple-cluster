@@ -43,7 +43,7 @@ type ShootStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// OpenStackShoot enables the SAP Gardener OpenStack flavor as a SimpleCluster
+// OpenStackShoot enables the SAP Integration OpenStack flavor as a SimpleCluster
 // provider for one namespace (KCP account workspace). Its spec is the Gardener
 // Shoot manifest, as free text, that overrides the resource template of the
 // sap-gardener-openstack SimpleClusterProviderConfig — the MSP side builds the
@@ -80,7 +80,7 @@ type OpenStackShootList struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// IronCoreShoot enables the SAP Gardener IronCore flavor as a SimpleCluster
+// IronCoreShoot enables the SAP Integration IronCore flavor as a SimpleCluster
 // provider for one namespace (KCP account workspace). Its spec is the Gardener
 // Shoot manifest, as free text, that overrides the resource template of the
 // sap-gardener-ironcore SimpleClusterProviderConfig — the MSP side builds the

@@ -20,5 +20,5 @@ rbac:
   syncagentUser: sapprovider-syncagent
 branding:
   marketplace:
-    title: "SAP Gardener"
-    description: "Enables SAP Gardener (OpenStack and IronCore flavors) as a provider for SimpleCluster: installing it provisions the sap-gardener-openstack and sap-gardener-ironcore provider configurations for your workspace."
+    title: "SAP Integration"
+    description: "Enables SAP Integration (OpenStack and IronCore flavors) as a provider for SimpleCluster: installing it provisions the sap-gardener-openstack and sap-gardener-ironcore provider configurations for your workspace."

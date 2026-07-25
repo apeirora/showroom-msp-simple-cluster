@@ -1,5 +1,5 @@
 /*
- * CRUD + subscriptions for SAP Gardener provider Shoot resources.
+ * CRUD + subscriptions for SAP Integration provider Shoot resources.
  * GraphQL group: sap_gardener.v1alpha1
  * Two Kinds share the same shape and surface:
  *   - OpenStackShoot (list field OpenStackShoots)
