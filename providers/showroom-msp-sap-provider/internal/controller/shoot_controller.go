@@ -44,7 +44,7 @@ const (
 	inUseRequeue    = 30 * time.Second
 )
 
-// FlavorShoot is the common surface both SAP Gardener provider CRs
+// FlavorShoot is the common surface both SAP Integration provider CRs
 // (OpenStackShoot, IronCoreShoot) present to the generic reconciler.
 type FlavorShoot interface {
 	client.Object

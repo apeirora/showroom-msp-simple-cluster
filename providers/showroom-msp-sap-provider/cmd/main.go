@@ -93,12 +93,12 @@ func main() {
 	var enableNamespaceSCPC bool
 	var simpleClusterExportName, sapExportName string
 	flag.BoolVar(&enableNamespaceSCPC, "enable-namespace-scpc", true,
-		"Enable the NamespaceReconciler that creates both SAP Gardener SCPCs on bind (account namespace annotated "+
-			"with both the SimpleCluster and SAP Gardener APIExport names). This is the sole SCPC creator.")
+		"Enable the NamespaceReconciler that creates both SAP Integration SCPCs on bind (account namespace annotated "+
+			"with both the SimpleCluster and SAP Integration APIExport names). This is the sole SCPC creator.")
 	flag.StringVar(&simpleClusterExportName, "simplecluster-export-name", controller.DefaultSimpleClusterExportName,
 		"APIExport name that marks SimpleCluster as bound to an account namespace.")
 	flag.StringVar(&sapExportName, "sap-export-name", controller.DefaultSapExportName,
-		"APIExport name that marks the SAP Gardener provider as bound to an account namespace.")
+		"APIExport name that marks the SAP Integration provider as bound to an account namespace.")
 	opts := zap.Options{
 		Development: true,
 	}

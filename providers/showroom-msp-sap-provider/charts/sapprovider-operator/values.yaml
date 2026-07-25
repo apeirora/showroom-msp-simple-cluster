@@ -12,7 +12,7 @@ leaderElect: true
 extraEnv: []
 
 namespaceScpc:
-  # The NamespaceReconciler is the sole creator of the SAP Gardener SCPCs. It watches
+  # The NamespaceReconciler is the sole creator of the SAP Integration SCPCs. It watches
   # account namespaces and materialises the SCPC once the bind-watcher
   # annotation shows both APIExports below are bound to the account.
   enabled: true
