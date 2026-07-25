@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.3...v0.24.0) (2026-07-25)
+
+
+### Features
+
+* providers: arsys & cloudferro ([#112](https://github.com/apeirora/showroom-msp-simple-cluster/issues/112)) ([94d8ca1](https://github.com/apeirora/showroom-msp-simple-cluster/commit/94d8ca13ce9bb8c4986a7d769b8f3040cfdc1512))
+* sap/dati provider: rebrand labels + per-provider icons ([#110](https://github.com/apeirora/showroom-msp-simple-cluster/issues/110)) ([5b87524](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5b87524069483eefc58ae3f2a18c63e0523f0ce7))
+
 ## [0.23.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.2...v0.23.3) (2026-07-24)
 
 
