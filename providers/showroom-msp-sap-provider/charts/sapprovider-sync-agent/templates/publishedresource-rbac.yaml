@@ -22,6 +22,15 @@ rules:
       - update
       - patch
       - delete
+  # Read the kubeconfig Secret written by the operator (related 'service').
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
   {{- if .Values.publishedResources.clientKubeconfig.enabled }}
   # Sync the client-kubeconfig related Secret (kubeconfig source 'kcp').
   - apiGroups:
