@@ -177,6 +177,25 @@ var _ = Describe("Shoot Controller", func() {
 		Expect(region).To(Equal("custom-region"))
 	})
 
+	It("surfaces a Failed condition when the spec is not plain YAML", func() {
+		seedGardenerSecret()
+		// The spec is now used verbatim: Go-template syntax is no longer
+		// rendered and fails YAML parsing.
+		create("apiVersion: core.gardener.cloud/v1beta1\nkind: Shoot\nspec:\n  region: {{ .Inputs.region }}\n")
+
+		r := newReconciler()
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: shKey})
+		Expect(err).NotTo(HaveOccurred())
+
+		sh := &dativ1alpha1.Shoot{}
+		Expect(k8sClient.Get(ctx, shKey, sh)).To(Succeed())
+		Expect(sh.Status.Phase).To(Equal(phaseFailed))
+		ready := apimeta.FindStatusCondition(sh.Status.Conditions, conditionReady)
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Reason).To(Equal("ShootCreateFailed"))
+		Expect(gardener.shoots).To(BeEmpty())
+	})
+
 	It("turns Ready and writes the kubeconfig Secret once the Shoot succeeds", func() {
 		seedGardenerSecret()
 		create("")

@@ -262,14 +262,14 @@ func smallestProfile(scpc *unstructured.Unstructured) string {
 	return name
 }
 
-// renderShootManifest renders a Shoot manifest template with the synthetic
-// context a standalone provider Shoot gets: the SCPC input defaults and a
-// single-node worker pool. The same placeholders the SCPC templates use
-// ({{ .Inputs.* }}, {{ .SC.* }}) keep working in user-supplied manifests.
-func renderShootManifest(text string, defaults *flavorDefaults, namespace, name string) (*unstructured.Unstructured, error) {
-	tmpl, err := template.New("shoot").Option("missingkey=error").Parse(text)
+// renderDefaultShootManifest renders the flavor's embedded default Shoot
+// template with the synthetic context a standalone provider Shoot gets: the
+// SCPC input defaults and a single-node worker pool. It is used only when the
+// CR spec is empty (backward compatibility for CRs created without a spec).
+func renderDefaultShootManifest(defaults *flavorDefaults, namespace, name string) (*unstructured.Unstructured, error) {
+	tmpl, err := template.New("shoot").Option("missingkey=error").Parse(defaults.template)
 	if err != nil {
-		return nil, fmt.Errorf("parse shoot manifest template: %w", err)
+		return nil, fmt.Errorf("parse default shoot template: %w", err)
 	}
 	ctxData := map[string]interface{}{
 		"Inputs": defaults.inputs,
@@ -281,12 +281,22 @@ func renderShootManifest(text string, defaults *flavorDefaults, namespace, name 
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, ctxData); err != nil {
-		return nil, fmt.Errorf("render shoot manifest: %w", err)
+		return nil, fmt.Errorf("render default shoot template: %w", err)
 	}
+	return decodeShootManifest(buf.Bytes())
+}
 
+// parseShootManifest parses a plain Gardener Shoot manifest — the CR spec text,
+// used verbatim with no templating applied — defaulting apiVersion/kind.
+func parseShootManifest(text string) (*unstructured.Unstructured, error) {
+	return decodeShootManifest([]byte(text))
+}
+
+// decodeShootManifest unmarshals a Shoot manifest and defaults apiVersion/kind.
+func decodeShootManifest(manifest []byte) (*unstructured.Unstructured, error) {
 	var obj map[string]interface{}
-	if err := yaml.Unmarshal(buf.Bytes(), &obj); err != nil {
-		return nil, fmt.Errorf("unmarshal rendered shoot manifest: %w", err)
+	if err := yaml.Unmarshal(manifest, &obj); err != nil {
+		return nil, fmt.Errorf("unmarshal shoot manifest: %w", err)
 	}
 	shoot := &unstructured.Unstructured{Object: obj}
 	if shoot.GetAPIVersion() == "" {
