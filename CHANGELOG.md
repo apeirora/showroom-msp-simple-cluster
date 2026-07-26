@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.0...v0.27.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* provider drop-down sources for all installed providers ([#128](https://github.com/apeirora/showroom-msp-simple-cluster/issues/128)) ([4df549a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4df549a05550c138062ff39fe05f38953a8ee3bf))
+
 ## [0.27.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.26.0...v0.27.0) (2026-07-26)
 
 
