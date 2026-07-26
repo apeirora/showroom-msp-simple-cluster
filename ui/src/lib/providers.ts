@@ -34,17 +34,27 @@ interface ProviderItem {
 // projected cluster-scoped in KCP) take no namespace argument; the gateway
 // only adds one for namespaced resources, so passing it would be a schema
 // error. Only namespaced sources get the $ns argument.
+//
+// Sources that set providerConfigName only need their type to resolve in the
+// gateway schema — that alone means the provider is installed (see header
+// comment). Some provider CR kinds (the VM kinds) have no status field at
+// all, so selecting status.providerConfigs on them is a GraphQL validation
+// error that would wrongly mark the provider as not installed. For those
+// sources we select only metadata { name }. Sources without
+// providerConfigName keep the status-union selection.
 const buildQuery = (src: ProviderSource): string => {
   const header = src.namespaced ? 'query ProviderConfigs($ns: String!)' : 'query ProviderConfigs';
   const listCall = src.namespaced ? `${src.listField}(namespace: $ns)` : src.listField;
+  const itemFields = src.providerConfigName
+    ? 'metadata { name }'
+    : 'metadata { name }\n            status { providerConfigs }';
   return `
   ${header} {
     ${groupId(src.group)} {
       ${src.version} {
         ${listCall} {
           items {
-            metadata { name }
-            status { providerConfigs }
+            ${itemFields}
           }
         }
       }
