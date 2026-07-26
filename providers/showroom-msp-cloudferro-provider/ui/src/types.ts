@@ -18,17 +18,21 @@ export interface OpenStackVMStatus {
   internalAddress?: string;
   externalAddress?: string;
   novaStatus?: string;
+  // SSHSecretRef names the Secret (same namespace) holding the per-VM ed25519
+  // keypair the operator generates: keys ssh-privatekey / ssh-publickey.
+  sshSecretRef?: { name?: string };
   resolvedFlavor?: ResolvedFlavor;
   observedGeneration?: number;
   conditions?: Condition[];
 }
 
-// One Nova server managed by the CloudFerro provider. Projected CLUSTER-SCOPED
-// into the KCP workspace (APIResourceSchema scope: Cluster), so the gateway
-// exposes it WITHOUT a namespace argument.
+// One Nova server managed by the CloudFerro provider. Projected NAMESPACED into
+// the KCP workspace (APIResourceSchema scope: Namespaced), so the gateway
+// exposes it WITH a namespace argument.
 export interface OpenStackVM {
   metadata: {
     name: string;
+    namespace?: string;
     creationTimestamp?: string;
     resourceVersion?: string;
     uid?: string;

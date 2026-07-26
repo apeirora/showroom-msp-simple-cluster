@@ -1,4 +1,4 @@
-# Generated from config/crd/bases with scope switched to Cluster for the
+# Generated from config/crd/bases with scope switched to Namespaced for the
 # KCP-side representation. Keep this in sync when the CRD changes.
 # NOTE: APIResourceSchemas are immutable in KCP — any content change here requires
 # bumping .Values.schemaRevision (new schema name + APIExport repoint).
@@ -15,7 +15,7 @@ spec:
     shortNames:
     - osvm
     singular: openstackvm
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1alpha1
     schema:

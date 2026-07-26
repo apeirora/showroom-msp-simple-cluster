@@ -2,9 +2,9 @@ apiVersion: v2
 name: arsysprovider-sync-agent
 description: >-
   Deploy a KCP Sync Agent for the arsys.apeirora.eu ArsysUbuntuMachine API.
-  Bridges ArsysUbuntuMachine CRs (cluster-scoped in a user's KCP account
-  workspace) into copies on the Platform Mesh service cluster, where the
-  Arsys operator orders the dedicated server. Dedicated agent: one
+  Bridges ArsysUbuntuMachine CRs (namespaced in a user's KCP account
+  workspace) into cluster-scoped copies on the Platform Mesh service cluster,
+  where the Arsys operator orders the dedicated server. Dedicated agent: one
   api-syncagent serves exactly one APIExport.
 type: application
 version: 0.1.0

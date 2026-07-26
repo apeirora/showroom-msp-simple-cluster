@@ -4,18 +4,21 @@ import { FlexBox, FlexBoxDirection, MessageStrip } from '@ui5/webcomponents-reac
 import { MachineList } from './MachineList';
 import { CreateMachineDialog } from './CreateMachineDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { KeyDialog } from './KeyDialog';
 import type { GraphqlClientOptions } from '../lib/graphql';
 import { openStackVmApi, type CreateInput } from '../lib/machine';
+import { fetchSshPrivateKey } from '../lib/secret';
 import type { OpenStackVM } from '../types';
 
 const POLL_INTERVAL_MS = 5000;
 
 interface Props {
   client: GraphqlClientOptions;
+  namespace: string | null;
   ready: boolean;
 }
 
-export const ProviderView = ({ client, ready }: Props) => {
+export const ProviderView = ({ client, namespace, ready }: Props) => {
   const [vms, setVms] = useState<OpenStackVM[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,13 +29,17 @@ export const ProviderView = ({ client, ready }: Props) => {
   const [deleteTarget, setDeleteTarget] = useState<OpenStackVM | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [keyVmName, setKeyVmName] = useState<string | null>(null);
+  const [keyContents, setKeyContents] = useState<string | null>(null);
+
   const subscriptionActiveRef = useRef(false);
 
   const reload = useCallback(async () => {
-    if (!ready) return;
+    if (!ready || !namespace) return;
     setLoading(true);
     try {
-      const items = await openStackVmApi.list(client);
+      const items = await openStackVmApi.list(client, namespace);
       setVms(items);
       setError(null);
     } catch (err) {
@@ -40,7 +47,7 @@ export const ProviderView = ({ client, ready }: Props) => {
     } finally {
       setLoading(false);
     }
-  }, [client, ready]);
+  }, [client, namespace, ready]);
 
   useEffect(() => {
     void reload();
@@ -48,7 +55,7 @@ export const ProviderView = ({ client, ready }: Props) => {
 
   // Auto-refresh: prefer graphql-sse subscriptions; fall back to polling.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !namespace) return;
 
     let reloadQueued = false;
     const queueReload = () => {
@@ -61,7 +68,7 @@ export const ProviderView = ({ client, ready }: Props) => {
     };
 
     subscriptionActiveRef.current = true;
-    const unsubscribe = openStackVmApi.subscribe(client, () => {
+    const unsubscribe = openStackVmApi.subscribe(client, namespace, () => {
       subscriptionActiveRef.current = true;
       queueReload();
     });
@@ -74,12 +81,13 @@ export const ProviderView = ({ client, ready }: Props) => {
       unsubscribe();
       window.clearInterval(pollHandle);
     };
-  }, [client, ready, reload]);
+  }, [client, namespace, ready, reload]);
 
   const handleCreate = async (values: CreateInput) => {
+    if (!namespace) return;
     setCreateBusy(true);
     try {
-      await openStackVmApi.create(client, values);
+      await openStackVmApi.create(client, namespace, values);
       setCreateOpen(false);
       await reload();
     } catch (err) {
@@ -90,16 +98,33 @@ export const ProviderView = ({ client, ready }: Props) => {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!namespace || !deleteTarget) return;
     setDeleteBusy(true);
     try {
-      await openStackVmApi.remove(client, deleteTarget.metadata.name);
+      await openStackVmApi.remove(client, namespace, deleteTarget.metadata.name);
       setDeleteTarget(null);
       await reload();
     } catch (err) {
       setError(`Delete failed: ${(err as Error).message}`);
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const handleDownloadKey = async (vm: OpenStackVM) => {
+    if (!namespace) return;
+    // The operator falls back to the per-VM Secret `<vm-name>-ssh` when
+    // status.sshSecretRef is not yet populated.
+    const secretName = vm.status?.sshSecretRef?.name ?? `${vm.metadata.name}-ssh`;
+    setKeyVmName(vm.metadata.name);
+    setKeyContents(null);
+    setKeyOpen(true);
+    try {
+      const contents = await fetchSshPrivateKey(client, namespace, secretName);
+      setKeyContents(contents);
+    } catch (err) {
+      setKeyOpen(false);
+      setError(`Fetch SSH key failed: ${(err as Error).message}`);
     }
   };
 
@@ -120,6 +145,7 @@ export const ProviderView = ({ client, ready }: Props) => {
         onCreate={() => setCreateOpen(true)}
         onRefresh={() => void reload()}
         onDelete={(vm) => setDeleteTarget(vm)}
+        onDownloadKey={(vm) => void handleDownloadKey(vm)}
       />
 
       <CreateMachineDialog
@@ -135,6 +161,13 @@ export const ProviderView = ({ client, ready }: Props) => {
         busy={deleteBusy}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
+      />
+
+      <KeyDialog
+        open={keyOpen}
+        vmName={keyVmName}
+        privateKey={keyContents}
+        onClose={() => setKeyOpen(false)}
       />
     </FlexBox>
   );
