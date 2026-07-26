@@ -1,10 +1,12 @@
 # Generated from config/crd/bases/dati.gardener_shoots.yaml
 # with scope switched to Cluster for the KCP-side representation.
+# NOTE: APIResourceSchemas are immutable in KCP — any content change here requires
+# bumping .Values.schemaRevision (new schema name + APIExport repoint).
 apiVersion: apis.kcp.io/v1alpha1
 kind: APIResourceSchema
 metadata:
   creationTimestamp: null
-  name: v1alpha1.shoots.dati.gardener
+  name: {{ .Values.schemaRevision }}.shoots.dati.gardener
 spec:
   conversion:
     strategy: None
