@@ -4,6 +4,12 @@
 PUBLIC_HOST: "localhost"
 PUBLIC_SCHEME: "http"
 
+# Name prefix of the APIResourceSchemas (full name: <schemaRevision>.<plural>.sap.gardener).
+# KCP APIResourceSchemas are immutable — whenever the generated schema content in
+# templates/api-resource-schemas.yaml changes, bump this revision so a NEW schema
+# is created and the APIExport is repointed at it; patching in place is rejected.
+schemaRevision: "v1alpha1-r2"
+
 ui:
   # Register the sapprovider-ui micro-frontend with the portal via a
   # ContentConfiguration. Disable if the UI is not deployed.
