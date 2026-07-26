@@ -17,6 +17,7 @@ export const fixtureVMs = (): OpenStackVM[] => [
       novaStatus: 'ACTIVE',
       internalAddress: '10.0.0.11',
       externalAddress: '203.0.113.11',
+      sshSecretRef: { name: 'demo-cp-0-ssh' },
       resolvedFlavor: { flavor: 'eo1a.medium', cpu: 2, memory: '4 GiB' }
     }
   },

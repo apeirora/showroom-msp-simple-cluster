@@ -13,12 +13,30 @@ spec:
     apiGroup: arsys.apeirora.eu
     version: v1alpha1
   projection:
-    # Cluster-scoped in the KCP workspace.
-    scope: Cluster
+    # Namespaced in the KCP workspace (matching the r2 APIResourceSchema), while
+    # the CRD stays cluster-scoped on the service cluster.
+    scope: Namespaced
   naming:
-    # ArsysUbuntuMachine is cluster-scoped on the service cluster, so there is
-    # no namespace for the synced copy - prefix its name with the workspace's
-    # logical cluster instead, or same-named CRs from different workspaces
-    # would collide in one flat cluster-scoped space.
-    name: "{{`{{ .ClusterName }}`}}-{{`{{ .Object.metadata.name }}`}}"
+    # The service-side copy is cluster-scoped (no namespace), so its name must
+    # encode both the workspace's logical cluster and the KCP-side namespace,
+    # otherwise same-named CRs from different workspaces/namespaces would collide
+    # in one flat cluster-scoped space.
+    name: "{{`{{ .ClusterName }}`}}-{{`{{ .Object.metadata.namespace }}`}}-{{`{{ .Object.metadata.name }}`}}"
+  related:
+    # Mirror the generated root-password Secret (kubernetes.io/basic-auth) back
+    # into the consuming account workspace so the portal can show it. The Secret
+    # lives in the service-side namespace named by spec.passwordSecretRef.namespace
+    # (the UI defaults it to simple-cluster-arsys) but must land in the KCP
+    # workspace namespace of the machine - hence the per-side namespace template:
+    # on the kcp side use the machine's namespace, on the service side use the
+    # passwordSecretRef namespace the operator actually wrote the Secret to.
+    - identifier: password-secret
+      origin: service
+      kind: Secret
+      object:
+        namespace:
+          template:
+            template: "{{`{{ if eq .Side \"kcp\" }}{{ .Object.metadata.namespace }}{{ else }}{{ .Object.spec.passwordSecretRef.namespace }}{{ end }}`}}"
+        reference:
+          path: spec.passwordSecretRef.name
 {{- end }}
