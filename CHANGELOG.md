@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.25.0...v0.26.0) (2026-07-26)
+
+
+### Features
+
+* platform mesh ui for cloudferro and arsys providers ([#124](https://github.com/apeirora/showroom-msp-simple-cluster/issues/124)) ([a7fa13a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a7fa13a8f8730c6ddded8b4237fc6a73924f4d40))
+
 ## [0.25.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.2...v0.25.0) (2026-07-26)
 
 
