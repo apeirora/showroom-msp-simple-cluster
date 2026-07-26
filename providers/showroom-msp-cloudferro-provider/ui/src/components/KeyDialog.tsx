@@ -5,6 +5,7 @@ import {
   Dialog,
   FlexBox,
   FlexBoxDirection,
+  MessageStrip,
   TextArea
 } from '@ui5/webcomponents-react';
 
@@ -141,6 +142,10 @@ export const KeyDialog = ({ open, vmName, privateKey, onClose }: Props) => {
       }
     >
       <FlexBox direction={FlexBoxDirection.Column} style={{ gap: '0.5rem', padding: '0.5rem 0' }}>
+        <MessageStrip design="Information" hideCloseButton>
+          Private SSH key for <code>{vmName ?? 'this VM'}</code>. Save it as <code>{filename}</code>,
+          then <code>chmod 600 {filename}</code> and connect with <code>ssh -i {filename} …</code>.
+        </MessageStrip>
         <TextArea
           id="ssh-key-contents"
           value={privateKey ?? ''}
