@@ -49,9 +49,10 @@ interface Props {
   onCreate: () => void;
   onRefresh: () => void;
   onDelete: (vm: OpenStackVM) => void;
+  onDownloadKey: (vm: OpenStackVM) => void;
 }
 
-export const MachineList = ({ vms, loading, onCreate, onRefresh, onDelete }: Props) => {
+export const MachineList = ({ vms, loading, onCreate, onRefresh, onDelete, onDownloadKey }: Props) => {
   if (loading && vms.length === 0) {
     return (
       <FlexBox justifyContent={FlexBoxJustifyContent.Center} style={{ padding: '2rem' }}>
@@ -109,17 +110,27 @@ export const MachineList = ({ vms, loading, onCreate, onRefresh, onDelete }: Pro
     {
       Header: 'Actions',
       accessor: '_actions',
-      width: 130,
+      width: 230,
       disableSortBy: true,
       Cell: ({ row }: { row: { original: (typeof rows)[number] } }) => (
-        <Button
-          design="Negative"
-          icon="delete"
-          onClick={() => onDelete(row.original._vm)}
-          aria-label={`Delete ${row.original.name}`}
-        >
-          Delete
-        </Button>
+        <FlexBox style={{ gap: '0.5rem' }}>
+          <Button
+            design="Transparent"
+            icon="key"
+            onClick={() => onDownloadKey(row.original._vm)}
+            aria-label={`Download SSH key for ${row.original.name}`}
+          >
+            SSH key
+          </Button>
+          <Button
+            design="Negative"
+            icon="delete"
+            onClick={() => onDelete(row.original._vm)}
+            aria-label={`Delete ${row.original.name}`}
+          >
+            Delete
+          </Button>
+        </FlexBox>
       )
     }
   ];
