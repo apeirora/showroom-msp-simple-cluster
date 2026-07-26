@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.28.0...v0.29.0) (2026-07-26)
+
+
+### Features
+
+* ironcore vm resource for sap integration ([#138](https://github.com/apeirora/showroom-msp-simple-cluster/issues/138)) ([18f7e1a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/18f7e1aa891590bc751df843474df21bdd90d1ae))
+
 ## [0.28.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.3...v0.28.0) (2026-07-26)
 
 
