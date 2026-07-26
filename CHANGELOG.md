@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.3...v0.28.0) (2026-07-26)
+
+
+### Features
+
+* plain gardener shoot spec for provider shoots ([#136](https://github.com/apeirora/showroom-msp-simple-cluster/issues/136)) ([a5378b5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a5378b53f885e9fd9db9c34decb30063e5170164))
+
 ## [0.27.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.2...v0.27.3) (2026-07-26)
 
 
