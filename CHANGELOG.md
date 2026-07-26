@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.1...v0.24.2) (2026-07-26)
+
+
+### Bug Fixes
+
+* shorten generated shoot names to fit Gardener limit ([#120](https://github.com/apeirora/showroom-msp-simple-cluster/issues/120)) ([a7150ff](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a7150ff1c4200fdc6d6a687ce581e1b7c595a360))
+
 ## [0.24.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.0...v0.24.1) (2026-07-26)
 
 
