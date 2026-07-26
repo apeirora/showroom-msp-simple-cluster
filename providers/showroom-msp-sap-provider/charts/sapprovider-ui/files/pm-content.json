@@ -24,6 +24,24 @@
                     },
                     "keepSelectedForChildren": true,
                     "url": "{{ $host }}/index.html"
+                },
+                {
+                    "pathSegment": "ironcore_vms",
+                    "navigationContext": "ironcore_vms",
+                    "label": "IronCore VMs",
+                    "icon": "data:image/svg+xml;base64,{{ $logo }}",
+                    "category": {
+                        "label": {{ $sidebarTitle | quote }},
+                        "icon": "data:image/svg+xml;base64,{{ $logo }}",
+                        "collapsible": true,
+                        "order": 7
+                    },
+                    "entityType": "main.core_platform-mesh_io_account.namespace",
+                    "loadingIndicator": {
+                        "enabled": false
+                    },
+                    "keepSelectedForChildren": true,
+                    "url": "{{ $host }}/index.html#vms"
                 }
             ]
         }
