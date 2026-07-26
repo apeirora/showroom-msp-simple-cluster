@@ -22,6 +22,20 @@ rules:
       - update
       - patch
       - delete
+  # IronCoreVM CRs served by simple-cluster-operator-ironcore.
+  - apiGroups:
+      - ironcore.apeirora.eu
+    resources:
+      - ironcorevms
+      - ironcorevms/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
   # Read the kubeconfig Secret written by the operator (related 'service').
   - apiGroups:
       - ""
