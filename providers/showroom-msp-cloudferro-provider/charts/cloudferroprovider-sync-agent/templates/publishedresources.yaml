@@ -12,10 +12,19 @@ spec:
     kind: OpenStackVM
     apiGroup: openstack.apeirora.eu
     version: v1alpha1
-  projection:
-    # Namespaced on the service cluster, cluster-scoped in the KCP workspace.
-    scope: Cluster
   naming:
+    # Namespaced on both sides: the KCP workspace namespace maps to a
+    # per-workspace namespace on the service cluster (the logical cluster id).
     namespace: "{{`{{ .ClusterName }}`}}"
     name: "{{`{{ .Object.metadata.name }}`}}"
+  related:
+    # Mirror the per-VM SSH keypair Secret the operator generates back into the
+    # consuming account workspace so the portal can download the private key.
+    # Same namespace as the primary on both sides, so no namespace mapping.
+    - identifier: ssh-secret
+      origin: service
+      kind: Secret
+      object:
+        reference:
+          path: status.sshSecretRef.name
 {{- end }}

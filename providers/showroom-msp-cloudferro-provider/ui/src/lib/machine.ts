@@ -3,9 +3,10 @@
  * GraphQL group: openstack_apeirora_eu (openstack.apeirora.eu, dots -> underscores)
  * Kind: OpenStackVM (plural openstackvms, list field OpenStackVMs).
  *
- * OpenStackVM is projected CLUSTER-SCOPED into the KCP workspace
- * (APIResourceSchema scope: Cluster), so the gateway exposes it WITHOUT a
- * namespace argument — list/create/delete/subscribe take no ns.
+ * OpenStackVM is projected NAMESPACED into the KCP workspace
+ * (APIResourceSchema scope: Namespaced), so the gateway exposes it WITH a
+ * namespace argument — list/create/delete/subscribe all take the workspace
+ * namespace from the Luigi context.
  *
  * The whole GraphQL surface is intentionally confined to this file. Field/type
  * names (createOpenStackVM/deleteOpenStackVM, the OpenStackVMs list field, the
@@ -56,10 +57,10 @@ export interface CreateInput {
   sizeId: string;
 }
 
-const buildObject = (input: CreateInput): Record<string, unknown> => {
+const buildObject = (namespace: string, input: CreateInput): Record<string, unknown> => {
   const size = MACHINE_SIZES.find((s) => s.id === input.sizeId) ?? MACHINE_SIZES[0];
   return {
-    metadata: { name: input.name },
+    metadata: { name: input.name, namespace },
     spec: {
       credentialsRef: CREDENTIALS_REF,
       network: NETWORK,
@@ -80,17 +81,18 @@ const buildObject = (input: CreateInput): Record<string, unknown> => {
 const INPUT_TYPE = 'OpenstackApeiroraEuV1alpha1OpenStackVM_Input';
 
 const listQuery = `
-  query List {
+  query List($ns: String!) {
     openstack_apeirora_eu {
       v1alpha1 {
-        OpenStackVMs {
+        OpenStackVMs(namespace: $ns) {
           items {
-            metadata { name creationTimestamp uid resourceVersion }
+            metadata { name namespace creationTimestamp uid resourceVersion }
             status {
               phase
               internalAddress
               externalAddress
               novaStatus
+              sshSecretRef { name }
               resolvedFlavor { flavor cpu memory flavorDescription }
               conditions { type status reason message lastTransitionTime }
             }
@@ -102,10 +104,10 @@ const listQuery = `
 `;
 
 const createMutation = `
-  mutation Create($object: ${INPUT_TYPE}!) {
+  mutation Create($ns: String!, $object: ${INPUT_TYPE}!) {
     openstack_apeirora_eu {
       v1alpha1 {
-        createOpenStackVM(object: $object) {
+        createOpenStackVM(namespace: $ns, object: $object) {
           metadata { name }
         }
       }
@@ -114,18 +116,18 @@ const createMutation = `
 `;
 
 const deleteMutation = `
-  mutation Delete($name: String!) {
+  mutation Delete($ns: String!, $name: String!) {
     openstack_apeirora_eu {
       v1alpha1 {
-        deleteOpenStackVM(name: $name)
+        deleteOpenStackVM(namespace: $ns, name: $name)
       }
     }
   }
 `;
 
 const subscription = `
-  subscription Watch {
-    openstack_apeirora_eu_v1alpha1_openstackvms(subscribeToAll: true) {
+  subscription Watch($ns: String!) {
+    openstack_apeirora_eu_v1alpha1_openstackvms(namespace: $ns, subscribeToAll: true) {
       type
       object { metadata { name } }
     }
@@ -137,34 +139,37 @@ interface ListResponse {
 }
 
 export interface MachineApi {
-  list: (opts: GraphqlClientOptions) => Promise<OpenStackVM[]>;
-  create: (opts: GraphqlClientOptions, input: CreateInput) => Promise<void>;
-  remove: (opts: GraphqlClientOptions, name: string) => Promise<void>;
-  subscribe: (opts: GraphqlClientOptions, onEvent: () => void) => SubscriptionHandle;
+  list: (opts: GraphqlClientOptions, namespace: string) => Promise<OpenStackVM[]>;
+  create: (opts: GraphqlClientOptions, namespace: string, input: CreateInput) => Promise<void>;
+  remove: (opts: GraphqlClientOptions, namespace: string, name: string) => Promise<void>;
+  subscribe: (opts: GraphqlClientOptions, namespace: string, onEvent: () => void) => SubscriptionHandle;
 }
 
 export const openStackVmApi: MachineApi = {
-  list: async (opts) => {
+  list: async (opts, namespace) => {
     if (fixturesEnabled()) return fixtureVMs();
-    const data = await graphqlFetch<ListResponse>(opts, { query: listQuery });
+    const data = await graphqlFetch<ListResponse>(opts, { query: listQuery, variables: { ns: namespace } });
     return data.openstack_apeirora_eu?.v1alpha1?.OpenStackVMs?.items ?? [];
   },
-  create: async (opts, input) => {
+  create: async (opts, namespace, input) => {
     if (fixturesEnabled()) {
       await new Promise((r) => setTimeout(r, 350));
       return;
     }
-    await graphqlFetch(opts, { query: createMutation, variables: { object: buildObject(input) } });
+    await graphqlFetch(opts, {
+      query: createMutation,
+      variables: { ns: namespace, object: buildObject(namespace, input) }
+    });
   },
-  remove: async (opts, name) => {
+  remove: async (opts, namespace, name) => {
     if (fixturesEnabled()) {
       await new Promise((r) => setTimeout(r, 350));
       return;
     }
-    await graphqlFetch(opts, { query: deleteMutation, variables: { name } });
+    await graphqlFetch(opts, { query: deleteMutation, variables: { ns: namespace, name } });
   },
-  subscribe: (opts, onEvent) => {
+  subscribe: (opts, namespace, onEvent) => {
     if (fixturesEnabled()) return () => {};
-    return subscribe(opts, subscription, {}, onEvent);
+    return subscribe(opts, subscription, { ns: namespace }, onEvent);
   }
 };

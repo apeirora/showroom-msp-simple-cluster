@@ -3,8 +3,11 @@
  * GraphQL group: arsys_apeirora_eu (arsys.apeirora.eu, dots -> underscores)
  * Kind: ArsysUbuntuMachine (plural arsysubuntumachines, list field ArsysUbuntuMachines).
  *
- * ArsysUbuntuMachine is cluster-scoped, so the gateway exposes it WITHOUT a
- * namespace argument — list/create/delete/subscribe take no ns.
+ * ArsysUbuntuMachine is projected NAMESPACED into the KCP workspace
+ * (APIResourceSchema scope: Namespaced) even though the CRD itself is
+ * cluster-scoped on the service cluster, so the gateway exposes it WITH a
+ * namespace argument — list/create/delete/subscribe all take the workspace
+ * namespace from the Luigi context.
  *
  * The whole GraphQL surface is intentionally confined to this file. Field/type
  * names (createArsysUbuntuMachine/deleteArsysUbuntuMachine, the ArsysUbuntuMachines
@@ -26,11 +29,19 @@ import { fixtureMachines, fixturesEnabled } from './fixtures';
 
 // Hidden defaults, mirrored verbatim from scpc-arsys.yaml.
 const TOKEN_SECRET_REF = { name: 'arsys-token', namespace: 'arsys-provider' };
+// Service-side namespace the operator WRITES the generated password Secret to;
+// the sync-agent mirrors it back into the machine's workspace namespace so the
+// portal can read it. Must match the passwordSecretRef namespace resolved by the
+// arsysprovider-sync-agent PublishedResource.
 const PASSWORD_SECRET_NAMESPACE = 'simple-cluster-arsys';
 const APPLIANCE_ID = 'E994A2B0F5B5EE36281F16214D1185D8';
 const DATACENTER_ID = '9B94281B5B67A755F2B76165E25F6A65';
 const SERVER_TYPE = 'cloud';
 const SSH_USER = 'root';
+
+// The synced password Secret is named after the machine (see buildObject); the
+// UI reads it back from the workspace namespace under this convention.
+export const passwordSecretName = (machineName: string): string => `${machineName}-password`;
 
 export interface MachineSize {
   id: string;
@@ -55,15 +66,15 @@ export interface CreateInput {
   sizeId: string;
 }
 
-const buildObject = (input: CreateInput): Record<string, unknown> => {
+const buildObject = (namespace: string, input: CreateInput): Record<string, unknown> => {
   const size = MACHINE_SIZES.find((s) => s.id === input.sizeId) ?? MACHINE_SIZES[0];
   return {
-    metadata: { name: input.name },
+    metadata: { name: input.name, namespace },
     spec: {
       tokenSecretRef: TOKEN_SECRET_REF,
       // passwordSecretRef is required; the operator writes the generated root
       // password here. Derived from the machine name like the SCPC does.
-      passwordSecretRef: { name: `${input.name}-password`, namespace: PASSWORD_SECRET_NAMESPACE },
+      passwordSecretRef: { name: passwordSecretName(input.name), namespace: PASSWORD_SECRET_NAMESPACE },
       server: {
         type: SERVER_TYPE,
         applianceID: APPLIANCE_ID,
@@ -81,12 +92,12 @@ const buildObject = (input: CreateInput): Record<string, unknown> => {
 const INPUT_TYPE = 'ArsysApeiroraEuV1alpha1ArsysUbuntuMachine_Input';
 
 const listQuery = `
-  query List {
+  query List($ns: String!) {
     arsys_apeirora_eu {
       v1alpha1 {
-        ArsysUbuntuMachines {
+        ArsysUbuntuMachines(namespace: $ns) {
           items {
-            metadata { name creationTimestamp uid resourceVersion }
+            metadata { name namespace creationTimestamp uid resourceVersion }
             status {
               phase
               address
@@ -104,10 +115,10 @@ const listQuery = `
 `;
 
 const createMutation = `
-  mutation Create($object: ${INPUT_TYPE}!) {
+  mutation Create($ns: String!, $object: ${INPUT_TYPE}!) {
     arsys_apeirora_eu {
       v1alpha1 {
-        createArsysUbuntuMachine(object: $object) {
+        createArsysUbuntuMachine(namespace: $ns, object: $object) {
           metadata { name }
         }
       }
@@ -116,18 +127,18 @@ const createMutation = `
 `;
 
 const deleteMutation = `
-  mutation Delete($name: String!) {
+  mutation Delete($ns: String!, $name: String!) {
     arsys_apeirora_eu {
       v1alpha1 {
-        deleteArsysUbuntuMachine(name: $name)
+        deleteArsysUbuntuMachine(namespace: $ns, name: $name)
       }
     }
   }
 `;
 
 const subscription = `
-  subscription Watch {
-    arsys_apeirora_eu_v1alpha1_arsysubuntumachines(subscribeToAll: true) {
+  subscription Watch($ns: String!) {
+    arsys_apeirora_eu_v1alpha1_arsysubuntumachines(namespace: $ns, subscribeToAll: true) {
       type
       object { metadata { name } }
     }
@@ -139,34 +150,37 @@ interface ListResponse {
 }
 
 export interface MachineApi {
-  list: (opts: GraphqlClientOptions) => Promise<ArsysUbuntuMachine[]>;
-  create: (opts: GraphqlClientOptions, input: CreateInput) => Promise<void>;
-  remove: (opts: GraphqlClientOptions, name: string) => Promise<void>;
-  subscribe: (opts: GraphqlClientOptions, onEvent: () => void) => SubscriptionHandle;
+  list: (opts: GraphqlClientOptions, namespace: string) => Promise<ArsysUbuntuMachine[]>;
+  create: (opts: GraphqlClientOptions, namespace: string, input: CreateInput) => Promise<void>;
+  remove: (opts: GraphqlClientOptions, namespace: string, name: string) => Promise<void>;
+  subscribe: (opts: GraphqlClientOptions, namespace: string, onEvent: () => void) => SubscriptionHandle;
 }
 
 export const arsysMachineApi: MachineApi = {
-  list: async (opts) => {
+  list: async (opts, namespace) => {
     if (fixturesEnabled()) return fixtureMachines();
-    const data = await graphqlFetch<ListResponse>(opts, { query: listQuery });
+    const data = await graphqlFetch<ListResponse>(opts, { query: listQuery, variables: { ns: namespace } });
     return data.arsys_apeirora_eu?.v1alpha1?.ArsysUbuntuMachines?.items ?? [];
   },
-  create: async (opts, input) => {
+  create: async (opts, namespace, input) => {
     if (fixturesEnabled()) {
       await new Promise((r) => setTimeout(r, 350));
       return;
     }
-    await graphqlFetch(opts, { query: createMutation, variables: { object: buildObject(input) } });
+    await graphqlFetch(opts, {
+      query: createMutation,
+      variables: { ns: namespace, object: buildObject(namespace, input) }
+    });
   },
-  remove: async (opts, name) => {
+  remove: async (opts, namespace, name) => {
     if (fixturesEnabled()) {
       await new Promise((r) => setTimeout(r, 350));
       return;
     }
-    await graphqlFetch(opts, { query: deleteMutation, variables: { name } });
+    await graphqlFetch(opts, { query: deleteMutation, variables: { ns: namespace, name } });
   },
-  subscribe: (opts, onEvent) => {
+  subscribe: (opts, namespace, onEvent) => {
     if (fixturesEnabled()) return () => {};
-    return subscribe(opts, subscription, {}, onEvent);
+    return subscribe(opts, subscription, { ns: namespace }, onEvent);
   }
 };

@@ -18,12 +18,14 @@ export interface ArsysUbuntuMachineStatus {
   conditions?: Condition[];
 }
 
-// One dedicated/cloud server ordered from Arsys. Cluster-scoped in KCP (the CRD
-// itself is cluster-scoped), so the gateway exposes it WITHOUT a namespace
-// argument.
+// One dedicated/cloud server ordered from Arsys. Projected NAMESPACED into the
+// KCP workspace (APIResourceSchema scope: Namespaced) even though the CRD itself
+// is cluster-scoped on the service cluster, so the gateway exposes it WITH a
+// namespace argument.
 export interface ArsysUbuntuMachine {
   metadata: {
     name: string;
+    namespace?: string;
     creationTimestamp?: string;
     resourceVersion?: string;
     uid?: string;

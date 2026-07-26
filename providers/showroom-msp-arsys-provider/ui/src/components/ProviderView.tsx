@@ -4,18 +4,21 @@ import { FlexBox, FlexBoxDirection, MessageStrip } from '@ui5/webcomponents-reac
 import { MachineList } from './MachineList';
 import { CreateMachineDialog } from './CreateMachineDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
+import { PasswordDialog } from './PasswordDialog';
 import type { GraphqlClientOptions } from '../lib/graphql';
-import { arsysMachineApi, type CreateInput } from '../lib/machine';
+import { arsysMachineApi, passwordSecretName, type CreateInput } from '../lib/machine';
+import { fetchPassword, type Credential } from '../lib/secret';
 import type { ArsysUbuntuMachine } from '../types';
 
 const POLL_INTERVAL_MS = 5000;
 
 interface Props {
   client: GraphqlClientOptions;
+  namespace: string | null;
   ready: boolean;
 }
 
-export const ProviderView = ({ client, ready }: Props) => {
+export const ProviderView = ({ client, namespace, ready }: Props) => {
   const [machines, setMachines] = useState<ArsysUbuntuMachine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,13 +29,17 @@ export const ProviderView = ({ client, ready }: Props) => {
   const [deleteTarget, setDeleteTarget] = useState<ArsysUbuntuMachine | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordMachine, setPasswordMachine] = useState<string | null>(null);
+  const [credential, setCredential] = useState<Credential | null>(null);
+
   const subscriptionActiveRef = useRef(false);
 
   const reload = useCallback(async () => {
-    if (!ready) return;
+    if (!ready || !namespace) return;
     setLoading(true);
     try {
-      const items = await arsysMachineApi.list(client);
+      const items = await arsysMachineApi.list(client, namespace);
       setMachines(items);
       setError(null);
     } catch (err) {
@@ -40,7 +47,7 @@ export const ProviderView = ({ client, ready }: Props) => {
     } finally {
       setLoading(false);
     }
-  }, [client, ready]);
+  }, [client, namespace, ready]);
 
   useEffect(() => {
     void reload();
@@ -48,7 +55,7 @@ export const ProviderView = ({ client, ready }: Props) => {
 
   // Auto-refresh: prefer graphql-sse subscriptions; fall back to polling.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !namespace) return;
 
     let reloadQueued = false;
     const queueReload = () => {
@@ -61,7 +68,7 @@ export const ProviderView = ({ client, ready }: Props) => {
     };
 
     subscriptionActiveRef.current = true;
-    const unsubscribe = arsysMachineApi.subscribe(client, () => {
+    const unsubscribe = arsysMachineApi.subscribe(client, namespace, () => {
       subscriptionActiveRef.current = true;
       queueReload();
     });
@@ -74,12 +81,13 @@ export const ProviderView = ({ client, ready }: Props) => {
       unsubscribe();
       window.clearInterval(pollHandle);
     };
-  }, [client, ready, reload]);
+  }, [client, namespace, ready, reload]);
 
   const handleCreate = async (values: CreateInput) => {
+    if (!namespace) return;
     setCreateBusy(true);
     try {
-      await arsysMachineApi.create(client, values);
+      await arsysMachineApi.create(client, namespace, values);
       setCreateOpen(false);
       await reload();
     } catch (err) {
@@ -90,16 +98,30 @@ export const ProviderView = ({ client, ready }: Props) => {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!namespace || !deleteTarget) return;
     setDeleteBusy(true);
     try {
-      await arsysMachineApi.remove(client, deleteTarget.metadata.name);
+      await arsysMachineApi.remove(client, namespace, deleteTarget.metadata.name);
       setDeleteTarget(null);
       await reload();
     } catch (err) {
       setError(`Delete failed: ${(err as Error).message}`);
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const handleShowPassword = async (machine: ArsysUbuntuMachine) => {
+    if (!namespace) return;
+    setPasswordMachine(machine.metadata.name);
+    setCredential(null);
+    setPasswordOpen(true);
+    try {
+      const cred = await fetchPassword(client, namespace, passwordSecretName(machine.metadata.name));
+      setCredential(cred);
+    } catch (err) {
+      setPasswordOpen(false);
+      setError(`Fetch password failed: ${(err as Error).message}`);
     }
   };
 
@@ -120,6 +142,7 @@ export const ProviderView = ({ client, ready }: Props) => {
         onCreate={() => setCreateOpen(true)}
         onRefresh={() => void reload()}
         onDelete={(machine) => setDeleteTarget(machine)}
+        onShowPassword={(machine) => void handleShowPassword(machine)}
       />
 
       <CreateMachineDialog
@@ -135,6 +158,13 @@ export const ProviderView = ({ client, ready }: Props) => {
         busy={deleteBusy}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => void handleDelete()}
+      />
+
+      <PasswordDialog
+        open={passwordOpen}
+        machineName={passwordMachine}
+        credential={credential}
+        onClose={() => setPasswordOpen(false)}
       />
     </FlexBox>
   );
