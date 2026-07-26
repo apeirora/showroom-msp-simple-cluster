@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.0...v0.24.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* rotate immutable APIResourceSchemas via schemaRevision ([#117](https://github.com/apeirora/showroom-msp-simple-cluster/issues/117)) ([b91f83d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/b91f83ddcbb74a90796c4267dd7b972bb5b67f36))
+* rotate immutable APIResourceSchemas via schemaRevision ([#118](https://github.com/apeirora/showroom-msp-simple-cluster/issues/118)) ([c55c1e2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c55c1e277f76b03793e984ce5e233d633c08b96e))
+
 ## [0.24.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.3...v0.24.0) (2026-07-25)
 
 
