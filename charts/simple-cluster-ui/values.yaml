@@ -61,6 +61,28 @@ clusterConfig:
       # type resolves in the gateway schema (its APIExport is bound), so dati is
       # selectable on install without first creating a Shoot instance.
       providerConfigName: dati
+    - group: sap.gardener
+      version: v1alpha1
+      listField: OpenStackShoots
+      label: SAP Gardener (OpenStack)
+      providerConfigName: sap-gardener-openstack
+    - group: sap.gardener
+      version: v1alpha1
+      listField: IronCoreShoots
+      label: SAP Gardener (IronCore)
+      providerConfigName: sap-gardener-ironcore
+    - group: openstack.apeirora.eu
+      version: v1alpha1
+      listField: OpenStackVMs
+      label: CloudFerro
+      providerConfigName: cloudferro
+      namespaced: true
+    - group: arsys.apeirora.eu
+      version: v1alpha1
+      listField: ArsysUbuntuMachines
+      label: Arsys (virtual)
+      providerConfigName: arsys-virtual
+      namespaced: true
   # Static fallback provider list, used only when providerSources is empty
   # (legacy deployments / offline). Ignored once providerSources is set.
   providers:
