@@ -1,9 +1,11 @@
 # Generated from config/crd/bases with scope switched to Cluster for the
 # KCP-side representation. Keep these in sync when the CRDs change.
+# NOTE: APIResourceSchemas are immutable in KCP — any content change here requires
+# bumping .Values.schemaRevision (new schema name + APIExport repoint).
 apiVersion: apis.kcp.io/v1alpha1
 kind: APIResourceSchema
 metadata:
-  name: v1alpha1.openstackshoots.sap.gardener
+  name: {{ .Values.schemaRevision }}.openstackshoots.sap.gardener
 spec:
   group: sap.gardener
   names:
@@ -182,7 +184,7 @@ spec:
 apiVersion: apis.kcp.io/v1alpha1
 kind: APIResourceSchema
 metadata:
-  name: v1alpha1.ironcoreshoots.sap.gardener
+  name: {{ .Values.schemaRevision }}.ironcoreshoots.sap.gardener
 spec:
   group: sap.gardener
   names:
