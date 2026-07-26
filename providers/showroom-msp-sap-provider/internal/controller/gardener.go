@@ -174,11 +174,12 @@ func (g *gardenerClient) AdminKubeconfig(ctx context.Context, name string, valid
 }
 
 // gardenShootName derives the deterministic Gardener Shoot name for a provider
-// CR: sh-<first 12 hex chars of sha256("kind/namespace/name")>. The kind keeps
-// same-named CRs of both flavors apart.
+// CR: sh-<first 8 hex chars of sha256("kind/namespace/name")>. The kind keeps
+// same-named CRs of both flavors apart. Gardener caps len(project)+len(shoot)
+// at 21 characters, so the 11-char name leaves room for projects up to 10.
 func gardenShootName(kind, namespace, name string) string {
 	sum := sha256.Sum256([]byte(kind + "/" + namespace + "/" + name))
-	return "sh-" + hex.EncodeToString(sum[:])[:12]
+	return "sh-" + hex.EncodeToString(sum[:])[:8]
 }
 
 // flavorDefaults are the pieces of the embedded SCPC skeleton the Shoot
