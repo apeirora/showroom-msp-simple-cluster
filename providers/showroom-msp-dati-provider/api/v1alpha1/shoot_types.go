@@ -75,10 +75,9 @@ type Shoot struct {
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec is the Gardener Shoot manifest, as free text, used for the
-	// provisioned cluster. It may contain the template placeholders the SCPC
-	// templates use ({{ .Inputs.* }}, {{ .SC.* }}), rendered with the flavor
-	// defaults. When empty the operator's built-in default template is used.
+	// Spec is a plain Gardener Shoot manifest, as free text, used verbatim for
+	// the provisioned cluster. When empty the operator's built-in default
+	// template is used.
 	// +optional
 	Spec string `json:"spec,omitempty"`
 
