@@ -158,8 +158,10 @@ jobs:
             providers/showroom-msp-sap-provider/charts/sapprovider-ui
             providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-operator
             providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-pm-integration
+            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-sync-agent
             providers/showroom-msp-arsys-provider/charts/arsysprovider-operator
             providers/showroom-msp-arsys-provider/charts/arsysprovider-pm-integration
+            providers/showroom-msp-arsys-provider/charts/arsysprovider-sync-agent
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do
