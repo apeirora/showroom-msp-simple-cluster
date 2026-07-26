@@ -18,6 +18,13 @@ spec:
       schema: {{ .Values.schemaRevision }}.ironcoreshoots.sap.gardener
       storage:
         crd: {}
+    # IronCoreVM: namespaced VM API served by simple-cluster-operator-ironcore,
+    # synced by sapprovider-sync-agent. Rotates via vmSchemaRevision.
+    - group: ironcore.apeirora.eu
+      name: ironcorevms
+      schema: {{ .Values.vmSchemaRevision }}.ironcorevms.ironcore.apeirora.eu
+      storage:
+        crd: {}
   permissionClaims:
     # The syncagent mirrors namespaces and Events between KCP and the MSP cluster.
     - group: ""
