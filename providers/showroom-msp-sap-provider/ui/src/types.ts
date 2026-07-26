@@ -30,3 +30,39 @@ export interface ProviderShoot {
   spec?: string;
   status?: ShootStatus;
 }
+
+// ResolvedMachineClass records the IronCore MachineClass the operator selected.
+export interface ResolvedMachineClass {
+  name?: string;
+  cpu?: number;
+  memory?: string;
+  description?: string;
+}
+
+export interface IronCoreVMStatus {
+  phase?: string;
+  machineState?: string;
+  internalAddress?: string;
+  externalAddress?: string;
+  // SSHSecretRef names the Secret (same namespace) holding the per-VM ed25519
+  // keypair the operator generates: keys ssh-privatekey / ssh-publickey. When
+  // unset the operator falls back to `<vm-name>-ssh`.
+  sshSecretRef?: { name?: string };
+  resolvedMachineClass?: ResolvedMachineClass;
+  observedGeneration?: number;
+  conditions?: Condition[];
+}
+
+// One IronCore Machine managed by simple-cluster-operator-ironcore. Projected
+// NAMESPACED into the KCP workspace (APIResourceSchema scope: Namespaced), so
+// the gateway exposes it WITH a namespace argument.
+export interface IronCoreVM {
+  metadata: {
+    name: string;
+    namespace?: string;
+    creationTimestamp?: string;
+    resourceVersion?: string;
+    uid?: string;
+  };
+  status?: IronCoreVMStatus;
+}
