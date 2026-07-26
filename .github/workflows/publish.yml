@@ -83,8 +83,14 @@ jobs:
           - context: providers/showroom-msp-cloudferro-provider
             image: cloudferro-provider-operator
             platforms: linux/amd64
+          - context: providers/showroom-msp-cloudferro-provider/ui
+            image: cloudferroprovider-ui
+            platforms: linux/amd64
           - context: providers/showroom-msp-arsys-provider
             image: arsys-provider-operator
+            platforms: linux/amd64
+          - context: providers/showroom-msp-arsys-provider/ui
+            image: arsysprovider-ui
             platforms: linux/amd64
     steps:
       - name: Check out repository
@@ -159,9 +165,11 @@ jobs:
             providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-operator
             providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-pm-integration
             providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-sync-agent
+            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-ui
             providers/showroom-msp-arsys-provider/charts/arsysprovider-operator
             providers/showroom-msp-arsys-provider/charts/arsysprovider-pm-integration
             providers/showroom-msp-arsys-provider/charts/arsysprovider-sync-agent
+            providers/showroom-msp-arsys-provider/charts/arsysprovider-ui
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do
