@@ -49,9 +49,17 @@ interface Props {
   onCreate: () => void;
   onRefresh: () => void;
   onDelete: (machine: ArsysUbuntuMachine) => void;
+  onShowPassword: (machine: ArsysUbuntuMachine) => void;
 }
 
-export const MachineList = ({ machines, loading, onCreate, onRefresh, onDelete }: Props) => {
+export const MachineList = ({
+  machines,
+  loading,
+  onCreate,
+  onRefresh,
+  onDelete,
+  onShowPassword
+}: Props) => {
   if (loading && machines.length === 0) {
     return (
       <FlexBox justifyContent={FlexBoxJustifyContent.Center} style={{ padding: '2rem' }}>
@@ -107,17 +115,27 @@ export const MachineList = ({ machines, loading, onCreate, onRefresh, onDelete }
     {
       Header: 'Actions',
       accessor: '_actions',
-      width: 130,
+      width: 250,
       disableSortBy: true,
       Cell: ({ row }: { row: { original: (typeof rows)[number] } }) => (
-        <Button
-          design="Negative"
-          icon="delete"
-          onClick={() => onDelete(row.original._machine)}
-          aria-label={`Delete ${row.original.name}`}
-        >
-          Delete
-        </Button>
+        <FlexBox style={{ gap: '0.5rem' }}>
+          <Button
+            design="Transparent"
+            icon="key"
+            onClick={() => onShowPassword(row.original._machine)}
+            aria-label={`Show password for ${row.original.name}`}
+          >
+            Password
+          </Button>
+          <Button
+            design="Negative"
+            icon="delete"
+            onClick={() => onDelete(row.original._machine)}
+            aria-label={`Delete ${row.original.name}`}
+          >
+            Delete
+          </Button>
+        </FlexBox>
       )
     }
   ];

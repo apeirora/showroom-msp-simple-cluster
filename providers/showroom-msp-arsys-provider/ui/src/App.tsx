@@ -56,7 +56,11 @@ const App = () => {
     <FlexBox direction={FlexBoxDirection.Column} style={{ height: '100vh' }}>
       <ShellBar primaryTitle="Arsys" secondaryTitle="Ubuntu machines" />
       <div style={{ flex: 1, overflow: 'auto', background: 'var(--sapBackgroundColor)' }}>
-        <ProviderView client={client} ready={Boolean(ctx.graphqlUrl)} />
+        <ProviderView
+          client={client}
+          namespace={ctx.namespace}
+          ready={Boolean(ctx.graphqlUrl && ctx.namespace)}
+        />
       </div>
     </FlexBox>
   );

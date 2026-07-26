@@ -2,7 +2,7 @@ apiVersion: v2
 name: cloudferroprovider-sync-agent
 description: >-
   Deploy a KCP Sync Agent for the openstack.apeirora.eu OpenStackVM API.
-  Bridges OpenStackVM CRs (cluster-scoped in a user's KCP account workspace)
+  Bridges OpenStackVM CRs (namespaced in a user's KCP account workspace)
   into namespaced copies on the Platform Mesh service cluster, where the
   OpenStack operator provisions the VM. Dedicated agent: one api-syncagent
   serves exactly one APIExport.
