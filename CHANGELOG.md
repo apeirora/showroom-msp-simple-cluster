@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.1...v0.27.2) (2026-07-26)
+
+
+### Bug Fixes
+
+* sap scpc shoot names exceed gardener length limit ([#130](https://github.com/apeirora/showroom-msp-simple-cluster/issues/130)) ([406c3e2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/406c3e2d619f96932a692fdd2dea9d96e8b9108d))
+
 ## [0.27.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.0...v0.27.1) (2026-07-26)
 
 
