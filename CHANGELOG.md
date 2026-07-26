@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.26.0...v0.27.0) (2026-07-26)
+
+
+### Features
+
+* surface vm ssh key and password to workspace users ([#126](https://github.com/apeirora/showroom-msp-simple-cluster/issues/126)) ([961e111](https://github.com/apeirora/showroom-msp-simple-cluster/commit/961e111386bb6d7f870665c0e1b602f9c84c4ba1))
+
 ## [0.26.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.25.0...v0.26.0) (2026-07-26)
 
 
