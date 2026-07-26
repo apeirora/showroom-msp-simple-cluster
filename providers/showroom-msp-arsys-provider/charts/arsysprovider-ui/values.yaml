@@ -1,0 +1,37 @@
+# Hostname under which the UI (SPA + pm-content.json) is served. Must match the
+# PUBLIC_HOST/PUBLIC_SCHEME the portal uses to resolve the micro-frontend URL.
+PUBLIC_HOST: "localhost"
+PUBLIC_SCHEME: "http"
+
+tls:
+  secretName: ""
+
+ingress:
+  extraAnnotations: {}
+
+traefik:
+  ingressClass:
+    name: ""
+
+imagePullSecrets: []
+
+ui:
+  enabled: true
+  contentPath: "/pm-content.json"
+  # The micro-frontend container image (React + UI5, served by nginx). CI
+  # publishes it tagged with the release version and `latest`; the chart cannot
+  # know that version, so it defaults to the chart appVersion. Pin a specific
+  # version per environment via the GitOps overlay.
+  image:
+    repository: ghcr.io/apeirora/arsysprovider-ui
+    pullPolicy: IfNotPresent
+  resources: {}
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    annotations: {}
+
+branding:
+  sidebar:
+    title: "Arsys"
