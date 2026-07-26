@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.2...v0.25.0) (2026-07-26)
+
+
+### Features
+
+* expose OpenStackVM and ArsysUbuntuMachine via provider exports ([#122](https://github.com/apeirora/showroom-msp-simple-cluster/issues/122)) ([1861839](https://github.com/apeirora/showroom-msp-simple-cluster/commit/186183955714fd2ae4e7b94073d81bf71106c926))
+
 ## [0.24.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.1...v0.24.2) (2026-07-26)
 
 
