@@ -7,6 +7,25 @@ metadata:
     # = APIExport name. Must match `cloudferro` verbatim.
     ui.platform-mesh.io/content-for: cloudferro
 spec:
-  # No resources are synced: binding this export is purely the marketplace signal
-  # the CloudFerro operator watches to create the SCPC in the account namespace.
-  resources: []
+  # Binding this export is the marketplace signal the CloudFerro operator
+  # watches to create the SCPC in the account namespace; it additionally
+  # exposes the OpenStackVM API, synced by cloudferroprovider-sync-agent.
+  resources:
+    - group: openstack.apeirora.eu
+      name: openstackvms
+      schema: {{ .Values.schemaRevision }}.openstackvms.openstack.apeirora.eu
+      storage:
+        crd: {}
+  permissionClaims:
+    # The syncagent mirrors namespaces and Events between KCP and the MSP cluster.
+    - group: ""
+      resource: namespaces
+      verbs: ["*"]
+    - group: ""
+      resource: events
+      verbs: ["*"]
+    # Reserved for a future bring-your-own-credentials path: a workspace
+    # Secret referenced from a flavor CR would be mirrored down to the MSP side.
+    - group: ""
+      resource: secrets
+      verbs: ["*"]

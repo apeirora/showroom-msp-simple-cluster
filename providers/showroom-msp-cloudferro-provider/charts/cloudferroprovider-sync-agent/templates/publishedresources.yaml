@@ -1,0 +1,21 @@
+{{- if .Values.publishedResources.enabled }}
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: publish-openstack-openstackvms
+  namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: cloudferroprovider-sync-agent
+    app.kubernetes.io/component: portal-integration
+spec:
+  resource:
+    kind: OpenStackVM
+    apiGroup: openstack.apeirora.eu
+    version: v1alpha1
+  projection:
+    # Namespaced on the service cluster, cluster-scoped in the KCP workspace.
+    scope: Cluster
+  naming:
+    namespace: "{{`{{ .ClusterName }}`}}"
+    name: "{{`{{ .Object.metadata.name }}`}}"
+{{- end }}

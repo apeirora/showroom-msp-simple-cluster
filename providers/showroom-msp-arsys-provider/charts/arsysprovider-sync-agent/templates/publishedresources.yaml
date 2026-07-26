@@ -1,0 +1,24 @@
+{{- if .Values.publishedResources.enabled }}
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: publish-arsys-arsysubuntumachines
+  namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: arsysprovider-sync-agent
+    app.kubernetes.io/component: portal-integration
+spec:
+  resource:
+    kind: ArsysUbuntuMachine
+    apiGroup: arsys.apeirora.eu
+    version: v1alpha1
+  projection:
+    # Cluster-scoped in the KCP workspace.
+    scope: Cluster
+  naming:
+    # ArsysUbuntuMachine is cluster-scoped on the service cluster, so there is
+    # no namespace for the synced copy - prefix its name with the workspace's
+    # logical cluster instead, or same-named CRs from different workspaces
+    # would collide in one flat cluster-scoped space.
+    name: "{{`{{ .ClusterName }}`}}-{{`{{ .Object.metadata.name }}`}}"
+{{- end }}
