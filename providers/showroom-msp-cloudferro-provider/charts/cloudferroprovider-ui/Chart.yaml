@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cloudferroprovider-ui
+description: CloudFerro provider UI for the Platform Mesh portal (React + UI5 micro-frontend for OpenStackVM CRUD, served by nginx).
+type: application
+version: 0.1.0
+appVersion: 0.1.0

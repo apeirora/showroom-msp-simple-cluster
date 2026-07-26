@@ -4,6 +4,19 @@
 # is created and the APIExport is repointed at it; patching in place is rejected.
 schemaRevision: "v1alpha1-r1"
 
+# Public host/scheme of the cloudferroprovider-ui that serves pm-content.json. The
+# portal fetches ContentConfiguration.remoteConfiguration.url from here, so this
+# must match the cloudferroprovider-ui chart's PUBLIC_HOST/PUBLIC_SCHEME.
+PUBLIC_HOST: "localhost"
+PUBLIC_SCHEME: "http"
+
+ui:
+  # Register the cloudferroprovider-ui micro-frontend with the portal via a
+  # ContentConfiguration. Disabled by default: enable once the UI is deployed
+  # and its PUBLIC_HOST/PUBLIC_SCHEME are wired from the GitOps overlay.
+  enabled: false
+  contentPath: "/pm-content.json"
+
 branding:
   marketplace:
     title: "CloudFerro"
