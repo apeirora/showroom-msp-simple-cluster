@@ -78,7 +78,6 @@ export const ShootList = ({ shoots, loading, onCreate, onAction }: ShootListProp
       ready: ready.label,
       readyStateValue: ready.state,
       template: s.spec?.trim() ? 'Custom' : 'Built-in',
-      providerConfigs: s.status?.providerConfigs?.join(', ') || '—',
       age: ageOf(s.metadata.creationTimestamp),
       _shoot: s
     };
@@ -97,7 +96,6 @@ export const ShootList = ({ shoots, loading, onCreate, onAction }: ShootListProp
       )
     },
     { Header: 'Template', accessor: 'template', width: 110 },
-    { Header: 'Provider configs', accessor: 'providerConfigs', minWidth: 200 },
     { Header: 'Age', accessor: 'age', width: 80 },
     {
       Header: 'Actions',
