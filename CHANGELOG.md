@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.2...v0.27.3) (2026-07-26)
+
+
+### Bug Fixes
+
+* UI drop provider configs column, drop ssh key hint ([#134](https://github.com/apeirora/showroom-msp-simple-cluster/issues/134)) ([06e7972](https://github.com/apeirora/showroom-msp-simple-cluster/commit/06e7972376e4618ff1b5fd4d367ba7f60a711781))
+
 ## [0.27.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.1...v0.27.2) (2026-07-26)
 
 
