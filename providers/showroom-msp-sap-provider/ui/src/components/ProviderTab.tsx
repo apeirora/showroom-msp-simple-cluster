@@ -27,11 +27,13 @@ interface Props {
   flavor: string;
   // Suggested default resource name for the create dialog.
   defaultName: string;
+  // Ready-to-use default Gardener Shoot manifest pre-filled in the create dialog.
+  defaultSpec: string;
 }
 
 // One self-contained Shoot page (list + create + delete + detail), bound to a
 // single Kind via `api`. Two of these are mounted side by side under the tabs.
-export const ProviderTab = ({ client, ready, api, flavor, defaultName }: Props) => {
+export const ProviderTab = ({ client, ready, api, flavor, defaultName, defaultSpec }: Props) => {
   const [shoots, setShoots] = useState<ProviderShoot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +165,7 @@ export const ProviderTab = ({ client, ready, api, flavor, defaultName }: Props) 
         busy={createBusy}
         flavor={flavor}
         defaultName={defaultName}
+        defaultSpec={defaultSpec}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

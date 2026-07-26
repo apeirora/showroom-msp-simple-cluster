@@ -20,11 +20,10 @@ spec:
   versions:
   - name: v1alpha1
     schema:
-      description: "Shoot enables dati as a SimpleCluster provider for one namespace\
-        \ (KCP\naccount workspace). Its spec is the Gardener Shoot manifest, as\
-        \ free text,\nthat the resulting SimpleClusterProviderConfig uses as its\
-        \ resource\ntemplate \u2014 the MSP side builds the actual Gardener Shoot\
-        \ from it."
+      description: |-
+        Shoot provisions a Gardener cluster of the dati flavor for one namespace (KCP
+        account workspace): the operator creates a real Gardener Shoot from it and
+        maintains an admin-kubeconfig Secret next to the CR.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -53,21 +52,15 @@ spec:
         metadata:
           type: object
         spec:
-          description: 'Spec is the Gardener Shoot manifest text used verbatim as
-            the SCPC
-
-            resource template. It may contain simple-cluster template expressions
-
-            (Go-template placeholders evaluated later against the SimpleCluster
-            and
-
-            its resolved inputs). When empty the operator''s built-in default
-
-            template is used.'
+          description: |-
+            Spec is a plain Gardener Shoot manifest, as free text, used verbatim for
+            the provisioned cluster. When empty the operator's built-in default
+            template is used.
           type: string
         status:
-          description: ShootStatus reports the provider configs materialised for
-            the namespace.
+          description: |-
+            ShootStatus reports the Gardener cluster provisioned for this CR and the
+            provider config materialised for the namespace.
           properties:
             conditions:
               items:
@@ -142,9 +135,15 @@ spec:
               - type
               x-kubernetes-list-type: map
             kubeconfigExpires:
+              description: |-
+                KubeconfigExpires is when the minted admin kubeconfig expires; the
+                operator renews it ahead of this time.
               format: date-time
               type: string
             kubeconfigSecretRef:
+              description: |-
+                KubeconfigSecretRef names the Secret (next to this CR) holding the admin
+                kubeconfig for the provisioned cluster.
               properties:
                 name:
                   type: string
@@ -155,6 +154,9 @@ spec:
               format: int64
               type: integer
             phase:
+              description: |-
+                Phase mirrors the Gardener Shoot lifecycle: Provisioning, Ready, Failed
+                or Deleting.
               type: string
             providerConfigs:
               description: 'ProviderConfigs lists the SimpleClusterProviderConfig
@@ -165,6 +167,8 @@ spec:
                 type: string
               type: array
             shootName:
+              description: ShootName is the name of the Gardener Shoot provisioned
+                for this CR.
               type: string
           type: object
       type: object
