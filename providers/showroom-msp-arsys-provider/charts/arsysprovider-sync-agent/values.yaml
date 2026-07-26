@@ -1,0 +1,15 @@
+syncAgentOperator:
+  enabled: true
+  apiExportName: arsys
+  agentName: arsys-provider-agent
+  kcpKubeconfig: pm-kubeconfig
+  # Scope this agent to its own PublishedResources so foreign PublishedResources
+  # in the same namespace are never picked up (one api-syncagent serves exactly
+  # one APIExport).
+  extraFlags:
+    - --published-resource-selector=app.kubernetes.io/name=arsysprovider-sync-agent
+  crds:
+    enabled: false
+
+publishedResources:
+  enabled: true
