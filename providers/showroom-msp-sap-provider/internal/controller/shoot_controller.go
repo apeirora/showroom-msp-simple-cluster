@@ -170,14 +170,18 @@ func (r *ShootReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		r.patchStatus(ctx, sh, scpcPresent, phase, reason, message)
 }
 
-// createShoot renders the manifest (spec text, or the flavor default when
-// empty) and creates the Shoot on the Gardener.
+// createShoot builds the Shoot manifest and creates it on the Gardener. A
+// non-empty CR spec is a plain Gardener Shoot manifest, used verbatim; an empty
+// spec falls back to the flavor's embedded default template.
 func (r *ShootReconciler) createShoot(ctx context.Context, g Gardener, sh FlavorShoot, shootName string) error {
 	text := sh.GetSpecText()
+	var shoot *unstructured.Unstructured
+	var err error
 	if strings.TrimSpace(text) == "" {
-		text = r.defaults.template
+		shoot, err = renderDefaultShootManifest(r.defaults, sh.GetNamespace(), sh.GetName())
+	} else {
+		shoot, err = parseShootManifest(text)
 	}
-	shoot, err := renderShootManifest(text, r.defaults, sh.GetNamespace(), sh.GetName())
 	if err != nil {
 		return err
 	}
