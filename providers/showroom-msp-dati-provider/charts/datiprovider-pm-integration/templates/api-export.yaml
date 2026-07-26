@@ -10,7 +10,7 @@ spec:
   resources:
     - group: dati.gardener
       name: shoots
-      schema: v1alpha1.shoots.dati.gardener
+      schema: {{ .Values.schemaRevision }}.shoots.dati.gardener
       storage:
         crd: {}
   permissionClaims:

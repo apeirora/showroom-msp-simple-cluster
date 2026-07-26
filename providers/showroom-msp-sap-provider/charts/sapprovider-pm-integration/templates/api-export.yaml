@@ -10,12 +10,12 @@ spec:
   resources:
     - group: sap.gardener
       name: openstackshoots
-      schema: v1alpha1.openstackshoots.sap.gardener
+      schema: {{ .Values.schemaRevision }}.openstackshoots.sap.gardener
       storage:
         crd: {}
     - group: sap.gardener
       name: ironcoreshoots
-      schema: v1alpha1.ironcoreshoots.sap.gardener
+      schema: {{ .Values.schemaRevision }}.ironcoreshoots.sap.gardener
       storage:
         crd: {}
   permissionClaims:
