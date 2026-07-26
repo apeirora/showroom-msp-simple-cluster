@@ -13,6 +13,7 @@ import {
 import '@ui5/webcomponents-fiori/dist/illustrations/UnableToLoad.js';
 
 import { ProviderTab } from './components/ProviderTab';
+import { VmView } from './components/VmView';
 import {
   emptyRuntimeContext,
   subscribeToLuigi,
@@ -20,6 +21,28 @@ import {
 } from './lib/luigi';
 import type { GraphqlClientOptions } from './lib/graphql';
 import { ironcoreShootApi, openstackShootApi } from './lib/shoot';
+
+// The two portal left-menu nodes both load this SPA; the "IronCore VMs" node's
+// URL carries a `#vms` fragment (see the sapprovider-ui pm-content.json) so the
+// SPA can pick the view. Absent/unrecognised fragment => the Shoots view.
+type Route = 'shoots' | 'vms';
+
+const routeFromHash = (): Route =>
+  typeof window !== 'undefined' && window.location.hash.replace(/^#\/?/, '') === 'vms'
+    ? 'vms'
+    : 'shoots';
+
+const useRoute = (): Route => {
+  const [route, setRoute] = useState<Route>(routeFromHash);
+  useEffect(() => {
+    // Luigi may reuse the same iframe between the two same-origin nodes, swapping
+    // only the fragment — re-route on hashchange so the view follows.
+    const onHashChange = () => setRoute(routeFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+  return route;
+};
 
 // Ready-to-use default Gardener Shoot manifests, one per flavor, mirroring the
 // operator's embedded templates with their input defaults resolved (smallest
@@ -105,6 +128,7 @@ spec:
 
 const App = () => {
   const [ctx, setCtx] = useState<RuntimeContext>(emptyRuntimeContext);
+  const route = useRoute();
 
   useEffect(() => subscribeToLuigi(setCtx), []);
 
@@ -142,6 +166,21 @@ const App = () => {
   }
 
   const ready = Boolean(ctx.graphqlUrl);
+
+  if (route === 'vms') {
+    return (
+      <FlexBox direction={FlexBoxDirection.Column} style={{ height: '100vh' }}>
+        <ShellBar primaryTitle="IronCore VMs" secondaryTitle="SAP Integration" />
+        <div style={{ flex: 1, overflow: 'auto', background: 'var(--sapBackgroundColor)' }}>
+          <VmView
+            client={client}
+            namespace={ctx.namespace}
+            ready={Boolean(ctx.graphqlUrl && ctx.namespace)}
+          />
+        </div>
+      </FlexBox>
+    );
+  }
 
   return (
     <FlexBox direction={FlexBoxDirection.Column} style={{ height: '100vh' }}>

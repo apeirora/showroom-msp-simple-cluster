@@ -1,4 +1,4 @@
-import type { ProviderShoot } from '../types';
+import type { ProviderShoot, IronCoreVM } from '../types';
 
 export type ShootFlavor = 'openstack' | 'ironcore';
 
@@ -46,6 +46,49 @@ export const fixtureShoots = (flavor: ShootFlavor): ProviderShoot[] => [
           lastTransitionTime: new Date(Date.now() - 10 * 60_000).toISOString()
         }
       ]
+    }
+  }
+];
+
+export const fixtureVMs = (): IronCoreVM[] => [
+  {
+    metadata: {
+      name: 'demo-vm-0',
+      namespace: 'default',
+      creationTimestamp: new Date(Date.now() - 36 * 3600_000).toISOString(),
+      uid: 'fixture-ironcorevm-1'
+    },
+    status: {
+      phase: 'Ready',
+      machineState: 'Running',
+      internalAddress: '10.0.0.11',
+      externalAddress: '203.0.113.11',
+      sshSecretRef: { name: 'demo-vm-0-ssh' },
+      resolvedMachineClass: {
+        name: 'memory-intel1-2cpu',
+        cpu: 2,
+        memory: '16 GiB',
+        description: '2 vCPU / 16 GiB RAM'
+      }
+    }
+  },
+  {
+    metadata: {
+      name: 'demo-vm-1',
+      namespace: 'default',
+      creationTimestamp: new Date(Date.now() - 15 * 60_000).toISOString(),
+      uid: 'fixture-ironcorevm-2'
+    },
+    status: {
+      phase: 'Provisioning',
+      machineState: 'Pending',
+      internalAddress: '10.0.0.12',
+      resolvedMachineClass: {
+        name: 'memory-intel1-1cpu',
+        cpu: 1,
+        memory: '8 GiB',
+        description: '1 vCPU / 8 GiB RAM'
+      }
     }
   }
 ];
