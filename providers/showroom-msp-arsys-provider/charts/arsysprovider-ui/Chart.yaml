@@ -1,6 +1,0 @@
-apiVersion: v2
-name: arsysprovider-ui
-description: Arsys provider UI for the Platform Mesh portal (React + UI5 micro-frontend for ArsysUbuntuMachine CRUD, served by nginx).
-type: application
-version: 0.1.0
-appVersion: 0.1.0
