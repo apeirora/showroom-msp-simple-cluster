@@ -4,6 +4,23 @@ A generic SSH-machine pool operator. Admins register pre-existing Ubuntu hosts a
 
 API group: `ubuntumachines.apeirora.eu/v1alpha1` both kinds **namespace-scoped**.
 
+## Status: currently unwired
+
+> ⚠️ This operator is **not connected to any live flow** right now. The active
+> providers wire their VM address straight into `UbuntuCluster.spec.hosts`
+> (cloudferro → `OpenStackVM.status.address`, arsys → `ArsysUbuntuMachine.status.address`),
+> so nothing registers `UbuntuMachine`s and nothing consumes `UbuntuMachineClaim`s
+> today — there is no live producer or consumer.
+>
+> The "bring-your-own-SSH-host pool" SimpleCluster flavor exists only as an
+> example (`samples/ubuntu-machines/` and the **unpublished** `simple-cluster-scpc-config`
+> chart's `scpc-ubuntu-machines`). It ships no pm-integration / sync-agent, so it
+> is **not offered in the marketplace**.
+>
+> The operator is kept here as a ready-to-use, provider-agnostic SSH-host-pool
+> backend for when that flavor is wired up (each provider registering its VM as an
+> `UbuntuMachine` and `UbuntuCluster` consuming bound claims).
+
 ## CRDs
 
 ### `UbuntuMachine` (admin-managed)
