@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
+	umv1alpha1 "github.com/apeirora/showroom-simple-cluster/ubuntu-machines/api/v1alpha1"
 )
 
 // ConditionReady is the type SCPC consumers read by default

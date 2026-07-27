@@ -1,1 +1,0 @@
-{"root":["./src/App.tsx","./src/main.tsx","./src/types.ts","./src/components/CreateShootDialog.tsx","./src/components/DeleteConfirmDialog.tsx","./src/components/ShootDetail.tsx","./src/components/ShootList.tsx","./src/lib/fixtures.ts","./src/lib/graphql.ts","./src/lib/luigi.ts","./src/lib/shoot.ts"],"version":"5.9.3"}

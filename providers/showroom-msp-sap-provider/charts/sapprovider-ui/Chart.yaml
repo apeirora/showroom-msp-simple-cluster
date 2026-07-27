@@ -1,6 +1,0 @@
-apiVersion: v2
-name: sapprovider-ui
-description: SAP Integration provider UI for the Platform Mesh portal (React + UI5 micro-frontend with OpenStack/IronCore tabs for Shoot CRUD, served by nginx).
-type: application
-version: 0.1.0
-appVersion: 0.1.0
