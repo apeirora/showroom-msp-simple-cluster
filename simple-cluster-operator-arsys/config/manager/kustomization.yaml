@@ -1,6 +1,0 @@
-resources:
-  - manager.yaml
-images:
-  - name: controller
-    newName: arsys-ubuntu-machine-operator
-    newTag: dev

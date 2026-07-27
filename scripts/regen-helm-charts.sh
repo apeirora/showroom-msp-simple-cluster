@@ -9,7 +9,6 @@
 #     ├── kind-cluster-operator/
 #     ├── simple-cluster-operator-openstack/
 #     ├── simple-cluster-operator-ubuntu/
-#     ├── simple-cluster-operator-ironcore/
 #     └── sshkey-operator/
 #   charts/ubuntu-machines-operator/
 #
@@ -27,7 +26,6 @@ declare -A REST_OPERATORS=(
   [simple-cluster-operator-kind]=simple-cluster-system/charts/kind-cluster-operator
   [simple-cluster-operator-openstack]=simple-cluster-system/charts/simple-cluster-operator-openstack
   [simple-cluster-operator-ubuntu]=simple-cluster-system/charts/simple-cluster-operator-ubuntu
-  [simple-cluster-operator-ironcore]=simple-cluster-system/charts/simple-cluster-operator-ironcore
   [sshkey-operator]=simple-cluster-system/charts/sshkey-operator
 )
 
@@ -49,15 +47,9 @@ done
 
 regenerate_one ubuntu-machines ubuntu-machines-operator
 regenerate_one sshkey-operator sshkey-operator
-regenerate_one simple-cluster-operator-arsys arsys-ubuntu-machine-operator
-# The kubebuilder helm plugin produces a metrics service name that is 64 chars
-# (one over the Kubernetes 63-char limit). Shorten it by dropping "-controller-manager".
-find charts/arsys-ubuntu-machine-operator/templates -name "*.yaml" -exec \
-  sed -i 's/arsys-ubuntu-machine-operator-controller-manager-metrics-service/arsys-ubuntu-machine-operator-metrics-service/g' {} +
 
 echo
 echo "OK. Charts regenerated:"
 echo "  charts/simple-cluster-system   (umbrella for the 5 simple-cluster-system operators)"
 echo "  charts/ubuntu-machines-operator"
 echo "  charts/sshkey-operator"
-echo "  charts/arsys-ubuntu-machine-operator"

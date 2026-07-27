@@ -47,9 +47,6 @@ jobs:
           - context: simple-cluster-operator-ubuntu
             image: simple-cluster-operator-ubuntu
             platforms: linux/amd64
-          - context: simple-cluster-operator-ironcore
-            image: simple-cluster-operator-ironcore
-            platforms: linux/amd64
           - context: ubuntu-machines
             image: ubuntu-machines
             platforms: linux/amd64
@@ -59,38 +56,8 @@ jobs:
           - context: bind-watcher-operator
             image: bind-watcher-operator
             platforms: linux/amd64
-          # arsys builds from the repo root: its go.mod has a
-          # `replace => ../ubuntu-machines`, so the Dockerfile COPYs that sibling.
-          - context: .
-            dockerfile: simple-cluster-operator-arsys/Dockerfile
-            image: arsys-ubuntu-machine-operator
-            platforms: linux/amd64
           - context: ui
             image: simple-cluster-ui
-            platforms: linux/amd64
-          - context: providers/showroom-msp-dati-provider
-            image: dati-provider-operator
-            platforms: linux/amd64
-          - context: providers/showroom-msp-dati-provider/ui
-            image: datiprovider-ui
-            platforms: linux/amd64
-          - context: providers/showroom-msp-sap-provider
-            image: sap-provider-operator
-            platforms: linux/amd64
-          - context: providers/showroom-msp-sap-provider/ui
-            image: sapprovider-ui
-            platforms: linux/amd64
-          - context: providers/showroom-msp-cloudferro-provider
-            image: cloudferro-provider-operator
-            platforms: linux/amd64
-          - context: providers/showroom-msp-cloudferro-provider/ui
-            image: cloudferroprovider-ui
-            platforms: linux/amd64
-          - context: providers/showroom-msp-arsys-provider
-            image: arsys-provider-operator
-            platforms: linux/amd64
-          - context: providers/showroom-msp-arsys-provider/ui
-            image: arsysprovider-ui
             platforms: linux/amd64
     steps:
       - name: Check out repository
@@ -143,33 +110,18 @@ jobs:
         run: |
           set -euo pipefail
           V="${VERSION}"
-          # Chart paths relative to the repo root. The dati-provider charts live
-          # under providers/ but publish in lockstep at the same release version.
+          # Chart paths relative to the repo root. The cloud providers (dati, sap,
+          # cloudferro, arsys) now live in their own repositories and publish there.
+          # ubuntu-machines / sshkey / ubuntu / openstack stay here as the shared
+          # compute operators those providers depend on at runtime.
           CHARTS=(
             charts/simple-cluster-system
             charts/ubuntu-machines-operator
             charts/sshkey-operator
             charts/bind-watcher-operator
-            charts/arsys-ubuntu-machine-operator
             charts/simple-cluster-pm-integration
             charts/simple-cluster-ui
             charts/simple-cluster-sync-agent
-            providers/showroom-msp-dati-provider/charts/datiprovider-operator
-            providers/showroom-msp-dati-provider/charts/datiprovider-pm-integration
-            providers/showroom-msp-dati-provider/charts/datiprovider-sync-agent
-            providers/showroom-msp-dati-provider/charts/datiprovider-ui
-            providers/showroom-msp-sap-provider/charts/sapprovider-operator
-            providers/showroom-msp-sap-provider/charts/sapprovider-pm-integration
-            providers/showroom-msp-sap-provider/charts/sapprovider-sync-agent
-            providers/showroom-msp-sap-provider/charts/sapprovider-ui
-            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-operator
-            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-pm-integration
-            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-sync-agent
-            providers/showroom-msp-cloudferro-provider/charts/cloudferroprovider-ui
-            providers/showroom-msp-arsys-provider/charts/arsysprovider-operator
-            providers/showroom-msp-arsys-provider/charts/arsysprovider-pm-integration
-            providers/showroom-msp-arsys-provider/charts/arsysprovider-sync-agent
-            providers/showroom-msp-arsys-provider/charts/arsysprovider-ui
           )
           mkdir -p .cr-release-packages
           for c in "${CHARTS[@]}"; do

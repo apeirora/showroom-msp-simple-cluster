@@ -37,30 +37,6 @@ jobs:
       - name: Test
         run: make test
 
-  build-arsys:
-    runs-on: ubuntu-latest
-    # The arsys operator pulls in the sibling ubuntu-machines module via a
-    # local `replace`, so the full checkout is needed to build it.
-    defaults:
-      run:
-        working-directory: simple-cluster-operator-arsys
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: simple-cluster-operator-arsys/go.mod
-          cache: true
-          cache-dependency-path: simple-cluster-operator-arsys/go.sum
-
-      - name: Build
-        run: make build
-
-      - name: Vet
-        run: make vet
-
   build-sshkey:
     runs-on: ubuntu-latest
     defaults:
@@ -98,50 +74,6 @@ jobs:
           go-version-file: bind-watcher-operator/go.mod
           cache: true
           cache-dependency-path: bind-watcher-operator/go.sum
-
-      - name: Build
-        run: make build
-
-      - name: Test
-        run: make test
-
-  build-cloudferro-provider:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: providers/showroom-msp-cloudferro-provider
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: providers/showroom-msp-cloudferro-provider/go.mod
-          cache: true
-          cache-dependency-path: providers/showroom-msp-cloudferro-provider/go.sum
-
-      - name: Build
-        run: make build
-
-      - name: Test
-        run: make test
-
-  build-arsys-provider:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: providers/showroom-msp-arsys-provider
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: providers/showroom-msp-arsys-provider/go.mod
-          cache: true
-          cache-dependency-path: providers/showroom-msp-arsys-provider/go.sum
 
       - name: Build
         run: make build
