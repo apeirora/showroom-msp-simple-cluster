@@ -33,14 +33,6 @@ simple-cluster-operator-ubuntu:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator-ubuntu
 
-simple-cluster-operator-ironcore:
-  metrics:
-    enable: false
-  controllerManager:
-    container:
-      image:
-        repository: ghcr.io/apeirora/simple-cluster-operator-ironcore
-
 sshkey-operator:
   metrics:
     enable: false

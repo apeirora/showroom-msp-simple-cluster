@@ -1,9 +1,0 @@
-apiVersion: v2
-name: datiprovider-operator
-description: >-
-  Standalone deployment of the dati.gardener Shoot controller: watches Shoot
-  CRs synced from KCP account workspaces and materialises a namespaced
-  SimpleClusterProviderConfig ("dati") per namespace for simple-cluster.
-type: application
-version: 0.1.0
-appVersion: 0.1.0

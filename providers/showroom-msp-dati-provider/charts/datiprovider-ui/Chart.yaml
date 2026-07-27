@@ -1,6 +1,0 @@
-apiVersion: v2
-name: datiprovider-ui
-description: Dati provider UI for the Platform Mesh portal (React + UI5 micro-frontend serving Shoot CRUD, served by nginx).
-type: application
-version: 0.1.0
-appVersion: 0.1.0
