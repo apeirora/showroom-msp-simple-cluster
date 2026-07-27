@@ -17,7 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
+	umv1alpha1 "github.com/apeirora/showroom-simple-cluster/ubuntu-machines/api/v1alpha1"
 )
 
 // UbuntuMachineReconciler keeps a freshly-created UbuntuMachine's status
