@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.29.0...v0.30.0) (2026-07-27)
+
+
+### Features
+
+* document that ubuntu-machines is currently unwired ([#141](https://github.com/apeirora/showroom-msp-simple-cluster/issues/141)) ([9dff660](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9dff66020715296bbb4389ae0ff7ee485777cd3b))
+
 ## [0.29.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.28.0...v0.29.0) (2026-07-26)
 
 
