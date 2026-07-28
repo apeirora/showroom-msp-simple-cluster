@@ -53,7 +53,7 @@ clusterConfig:
   # installs a provider and creates its CR, that provider appears automatically.
   # Add an entry per provider family the portal should discover.
   providerSources:
-    - group: dati.gardener
+    - group: dati.eu
       version: v1alpha1
       listField: Shoots
       label: Dati (Gardener Shoot)
@@ -61,23 +61,23 @@ clusterConfig:
       # type resolves in the gateway schema (its APIExport is bound), so dati is
       # selectable on install without first creating a Shoot instance.
       providerConfigName: dati
-    - group: sap.gardener
+    - group: sap.eu
       version: v1alpha1
       listField: OpenStackShoots
       label: SAP Gardener (OpenStack)
       providerConfigName: sap-gardener-openstack
-    - group: sap.gardener
+    - group: sap.eu
       version: v1alpha1
       listField: IronCoreShoots
       label: SAP Gardener (IronCore)
       providerConfigName: sap-gardener-ironcore
-    - group: openstack.apeirora.eu
+    - group: cloudferro.eu
       version: v1alpha1
       listField: OpenStackVMs
       label: CloudFerro
       providerConfigName: cloudferro
       namespaced: true
-    - group: arsys.apeirora.eu
+    - group: arsys.eu
       version: v1alpha1
       listField: ArsysUbuntuMachines
       label: Arsys (virtual)

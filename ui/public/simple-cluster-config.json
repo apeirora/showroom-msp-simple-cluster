@@ -7,28 +7,28 @@
   ],
   "providerSources": [
     {
-      "group": "dati.gardener",
+      "group": "dati.eu",
       "version": "v1alpha1",
       "listField": "Shoots",
       "label": "Dati (Gardener Shoot)",
       "providerConfigName": "dati"
     },
     {
-      "group": "sap.gardener",
+      "group": "sap.eu",
       "version": "v1alpha1",
       "listField": "OpenStackShoots",
       "label": "SAP Gardener (OpenStack)",
       "providerConfigName": "sap-gardener-openstack"
     },
     {
-      "group": "sap.gardener",
+      "group": "sap.eu",
       "version": "v1alpha1",
       "listField": "IronCoreShoots",
       "label": "SAP Gardener (IronCore)",
       "providerConfigName": "sap-gardener-ironcore"
     },
     {
-      "group": "openstack.apeirora.eu",
+      "group": "cloudferro.eu",
       "version": "v1alpha1",
       "listField": "OpenStackVMs",
       "label": "CloudFerro",
@@ -36,7 +36,7 @@
       "namespaced": true
     },
     {
-      "group": "arsys.apeirora.eu",
+      "group": "arsys.eu",
       "version": "v1alpha1",
       "listField": "ArsysUbuntuMachines",
       "label": "Arsys (virtual)",
