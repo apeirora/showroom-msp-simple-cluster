@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openstack.apeirora.eu
+  - cloudferro.eu
   resources:
   - openstackvms
   verbs:
@@ -36,13 +36,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openstack.apeirora.eu
+  - cloudferro.eu
   resources:
   - openstackvms/finalizers
   verbs:
   - update
 - apiGroups:
-  - openstack.apeirora.eu
+  - cloudferro.eu
   resources:
   - openstackvms/status
   verbs:

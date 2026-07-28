@@ -1,5 +1,5 @@
-apiVersion: arsys.apeirora.eu/v1alpha1
-kind: ArsysUbuntuMachine
+apiVersion: arsys.eu/v1alpha1
+kind: UbuntuMachine
 metadata:
   name: aum-cloud
   labels:

@@ -1,6 +1,6 @@
 /*
  * Live provider discovery. Each installed provider ships its own CR family
- * (e.g. dati.gardener/Shoot). A source's type resolving in the gateway schema
+ * (e.g. dati.eu/Shoot). A source's type resolving in the gateway schema
  * means its APIExport is bound, i.e. the provider is installed — that alone
  * is enough to offer src.providerConfigName, whether or not any CR instance
  * exists yet. Existing instances additionally advertise the
@@ -23,7 +23,7 @@ export interface ProviderDiscovery {
 }
 
 // Kubernetes group -> GraphQL identifier: dots and dashes become underscores
-// (e.g. "dati.gardener" -> "dati_gardener").
+// (e.g. "dati.eu" -> "dati_eu").
 const groupId = (group: string): string => group.replace(/[.-]/g, '_');
 
 interface ProviderItem {

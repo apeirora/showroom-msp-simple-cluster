@@ -89,7 +89,7 @@ export interface SimpleCluster {
 // via status.providerConfigs. The create dialog discovers the live provider
 // list by querying every configured source.
 export interface ProviderSource {
-  // Kubernetes API group, e.g. "dati.gardener".
+  // Kubernetes API group, e.g. "dati.eu".
   group: string;
   // API version, e.g. "v1alpha1".
   version: string;

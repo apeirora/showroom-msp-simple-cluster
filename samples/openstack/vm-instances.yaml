@@ -5,7 +5,7 @@
 # the keypair into that Secret on first reconcile and registers a single
 # Nova keypair `default-openstack-vm-instances-ssh` (name derived from
 # the Secret's <ns>-<name>).
-apiVersion: openstack.apeirora.eu/v1alpha1
+apiVersion: cloudferro.eu/v1alpha1
 kind: OpenStackVM
 metadata:
   name: instance-1
@@ -27,7 +27,7 @@ spec:
   floatingIP: true
 
 ---
-apiVersion: openstack.apeirora.eu/v1alpha1
+apiVersion: cloudferro.eu/v1alpha1
 kind: OpenStackVM
 metadata:
   name: instance-2
@@ -49,7 +49,7 @@ spec:
   floatingIP: true
 
 ---
-apiVersion: openstack.apeirora.eu/v1alpha1
+apiVersion: cloudferro.eu/v1alpha1
 kind: OpenStackVM
 metadata:
   name: instance-3
@@ -69,7 +69,7 @@ spec:
   image: "Ubuntu 24.04 LTS"
 
 ---
-apiVersion: openstack.apeirora.eu/v1alpha1
+apiVersion: cloudferro.eu/v1alpha1
 kind: OpenStackVM
 metadata:
   name: instance-4
