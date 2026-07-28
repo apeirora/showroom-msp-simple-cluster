@@ -19,7 +19,7 @@ func TestKcpBase(t *testing.T) {
 func TestPrefixNoSeparator(t *testing.T) {
 	// The multi-provider splits cluster names on '#', so the prefix must not
 	// contain it (nor the internal key separators).
-	p := prefix("root:providers:dati|shoots.dati.gardener")
+	p := prefix("root:providers:dati|shoots.dati.eu")
 	for _, bad := range []string{"#", "|", ":"} {
 		if containsRune(p, bad) {
 			t.Errorf("prefix %q contains forbidden %q", p, bad)
