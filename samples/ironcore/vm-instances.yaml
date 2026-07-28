@@ -2,7 +2,7 @@
 # Both leave networking to the operator: it creates the Network and a root
 # Prefix (NetworkCIDR, default 10.0.0.0/24) and allocates each NIC a /32.
 ---
-apiVersion: ironcore.apeirora.eu/v1alpha1
+apiVersion: sap.eu/v1alpha1
 kind: IronCoreVM
 metadata:
   name: ic-instance-1
@@ -27,7 +27,7 @@ spec:
     systemctl enable ssh 2>/dev/null || systemctl enable sshd 2>/dev/null || true
     systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 ---
-apiVersion: ironcore.apeirora.eu/v1alpha1
+apiVersion: sap.eu/v1alpha1
 kind: IronCoreVM
 metadata:
   name: ic-instance-2

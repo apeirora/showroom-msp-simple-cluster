@@ -31,13 +31,13 @@ spec:
             name: ironcore-sample-ssh
 
     - name: vmcp
-      apiVersion: ironcore.apeirora.eu/v1alpha1
+      apiVersion: sap.eu/v1alpha1
       kind: IronCoreVM
       repeat: "{{ .SC.controlPlane.nodes }}"
       dependsOn:
         - sshkey
       template: |
-        apiVersion: ironcore.apeirora.eu/v1alpha1
+        apiVersion: sap.eu/v1alpha1
         kind: IronCoreVM
         spec:
           ironcoreKubeconfig:
@@ -57,13 +57,13 @@ spec:
             machineClassPattern: '{{ .Inputs.machineClassPattern }}'
 
     - name: vmworker
-      apiVersion: ironcore.apeirora.eu/v1alpha1
+      apiVersion: sap.eu/v1alpha1
       kind: IronCoreVM
       repeat: "{{ .SC.workers.nodes }}"
       dependsOn:
         - sshkey
       template: |
-        apiVersion: ironcore.apeirora.eu/v1alpha1
+        apiVersion: sap.eu/v1alpha1
         kind: IronCoreVM
         spec:
           ironcoreKubeconfig:
