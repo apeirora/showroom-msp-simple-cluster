@@ -8,8 +8,9 @@ API group: `ubuntumachines.apeirora.eu/v1alpha1` both kinds **namespace-scoped**
 
 > ⚠️ This operator is **not connected to any live flow** right now. The active
 > providers wire their VM address straight into `UbuntuCluster.spec.hosts`
-> (cloudferro → `OpenStackVM.status.address`, arsys → `ArsysUbuntuMachine.status.address`),
-> so nothing registers `UbuntuMachine`s and nothing consumes `UbuntuMachineClaim`s
+> (cloudferro → `OpenStackVM.status.address`, arsys → its own `UbuntuMachine` in
+> group `arsys.eu` — unrelated to this operator's `UbuntuMachine`),
+> so nothing registers this operator's `UbuntuMachine`s and nothing consumes `UbuntuMachineClaim`s
 > today — there is no live producer or consumer.
 >
 > The "bring-your-own-SSH-host pool" SimpleCluster flavor exists only as an

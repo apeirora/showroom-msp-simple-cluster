@@ -22,16 +22,16 @@ const (
 	// KeypairFinalizerName is set on every SSH-key Secret the operator
 	// manages. On Secret deletion the operator deletes the matching
 	// Nova keypair, then removes the finalizer so K8s GC completes.
-	KeypairFinalizerName = "openstack.apeirora.eu/keypair-cleanup"
+	KeypairFinalizerName = "cloudferro.eu/keypair-cleanup"
 
 	// SSHSecretCredentialsNameAnno + SSHSecretCredentialsNamespaceAnno
 	// record where the OpenStack credentials live, so the Secret
 	// reconciler can authenticate to delete the keypair without a VM CR.
-	SSHSecretCredentialsNameAnno      = "openstack.apeirora.eu/credentials-name"
-	SSHSecretCredentialsNamespaceAnno = "openstack.apeirora.eu/credentials-namespace"
+	SSHSecretCredentialsNameAnno      = "cloudferro.eu/credentials-name"
+	SSHSecretCredentialsNamespaceAnno = "cloudferro.eu/credentials-namespace"
 	// SSHSecretKeypairNameAnno records the Nova keypair name the Secret
 	// is bound to, so cleanup can target it after the source VM is gone.
-	SSHSecretKeypairNameAnno = "openstack.apeirora.eu/keypair-name"
+	SSHSecretKeypairNameAnno = "cloudferro.eu/keypair-name"
 
 	ConditionReady = "Ready"
 	ConditionError = "Error"

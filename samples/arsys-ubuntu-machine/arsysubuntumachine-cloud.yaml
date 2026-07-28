@@ -1,5 +1,5 @@
 apiVersion: arsys.eu/v1alpha1
-kind: ArsysUbuntuMachine
+kind: UbuntuMachine
 metadata:
   name: aum-cloud
   labels:

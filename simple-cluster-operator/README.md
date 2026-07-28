@@ -1,5 +1,12 @@
 # simple-cluster-operator
-Allows user to create kubernetes cluster easily.
+
+Core operator of the simple-cluster stack: reconciles the `SimpleCluster` (SC) and
+`SimpleClusterProviderConfig` (SCPC) CRDs (group `showroom.apeirora.eu/v1alpha1`),
+templating an SC⊕SCPC into an arbitrary downstream resource on a local or remote
+cluster and syncing the resulting cluster's kubeconfig back to the SC namespace.
+
+> For the whole-stack picture — architecture, providers, installation,
+> configuration and release procedure — see the [top-level README](../README.md).
 
 ## Getting Started
 

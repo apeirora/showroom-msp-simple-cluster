@@ -30,13 +30,13 @@ spec:
             name: openstack-sample-ssh
 
     - name: vmcp
-      apiVersion: openstack.apeirora.eu/v1alpha1
+      apiVersion: cloudferro.eu/v1alpha1
       kind: OpenStackVM
       repeat: "{{ .SC.controlPlane.nodes }}"
       dependsOn:
         - sshkey
       template: |
-        apiVersion: openstack.apeirora.eu/v1alpha1
+        apiVersion: cloudferro.eu/v1alpha1
         kind: OpenStackVM
         spec:
           credentialsRef:
@@ -57,13 +57,13 @@ spec:
               - "{{ .Resources.sshkey.publicKey | trim }}"
 
     - name: vmworker
-      apiVersion: openstack.apeirora.eu/v1alpha1
+      apiVersion: cloudferro.eu/v1alpha1
       kind: OpenStackVM
       repeat: "{{ .SC.workers.nodes }}"
       dependsOn:
         - sshkey
       template: |
-        apiVersion: openstack.apeirora.eu/v1alpha1
+        apiVersion: cloudferro.eu/v1alpha1
         kind: OpenStackVM
         spec:
           credentialsRef:

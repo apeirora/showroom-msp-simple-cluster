@@ -24,7 +24,7 @@ rules:
   - authentication.gardener.cloud
   - core.gardener.cloud
   - kind.apeirora.eu
-  - openstack.apeirora.eu
+  - cloudferro.eu
   - sshkeys.apeirora.eu
   - ubuntu.apeirora.eu
   - ubuntumachines.apeirora.eu

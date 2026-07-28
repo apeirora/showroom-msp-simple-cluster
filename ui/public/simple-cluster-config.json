@@ -38,7 +38,7 @@
     {
       "group": "arsys.eu",
       "version": "v1alpha1",
-      "listField": "ArsysUbuntuMachines",
+      "listField": "UbuntuMachines",
       "label": "Arsys (virtual)",
       "providerConfigName": "arsys-virtual",
       "namespaced": true

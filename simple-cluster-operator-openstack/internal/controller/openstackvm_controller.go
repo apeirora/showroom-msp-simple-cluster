@@ -52,9 +52,9 @@ type OpenStackVMReconciler struct {
 	Recorder record.EventRecorder
 }
 
-// +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvms,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvms/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=openstack.apeirora.eu,resources=openstackvms/finalizers,verbs=update
+// +kubebuilder:rbac:groups=cloudferro.eu,resources=openstackvms,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cloudferro.eu,resources=openstackvms/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=cloudferro.eu,resources=openstackvms/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch
