@@ -115,7 +115,10 @@ previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml
 is manually re-applied afterwards.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
+Contributions go via pull requests with Conventional-Commit titles (release-please
+derives the changelog and version bump from them). Before opening a PR, run
+`make test` and `make lint`, and regenerate manifests with `make manifests generate`
+if you changed API types.
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
