@@ -3,7 +3,7 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.9.0
-domain: apeirora.eu
+domain: eu
 layout:
 - go.kubebuilder.io/v4
 plugins:
@@ -15,8 +15,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: apeirora.eu
-  group: openstack
+  domain: eu
+  group: cloudferro
   kind: OpenStackVM
   path: github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1
   version: v1alpha1

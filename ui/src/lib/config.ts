@@ -9,7 +9,7 @@ const FALLBACK: ClusterConfig = {
   providers: ['cloudferro', 'gardener-sap-ironcore', 'gardener-sap-openstack', 'kind'],
   providerSources: [
     {
-      group: 'dati.gardener',
+      group: 'dati.eu',
       version: 'v1alpha1',
       listField: 'Shoots',
       label: 'Dati (Gardener Shoot)',

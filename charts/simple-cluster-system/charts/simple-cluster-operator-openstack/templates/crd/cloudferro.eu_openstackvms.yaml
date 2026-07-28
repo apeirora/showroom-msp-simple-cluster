@@ -10,9 +10,9 @@ metadata:
     "helm.sh/resource-policy": keep
     {{- end }}
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: openstackvms.openstack.apeirora.eu
+  name: openstackvms.cloudferro.eu
 spec:
-  group: openstack.apeirora.eu
+  group: cloudferro.eu
   names:
     kind: OpenStackVM
     listKind: OpenStackVMList

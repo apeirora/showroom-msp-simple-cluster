@@ -40,7 +40,7 @@ var _ = Describe("SSHKey Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "default", // Modify as needed
 		}
 		sshkey := &sshkeysv1alpha1.SSHKey{}
 
@@ -53,14 +53,14 @@ var _ = Describe("SSHKey Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					// Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
+			// Cleanup logic after each test, like removing the resource instance.
 			resource := &sshkeysv1alpha1.SSHKey{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
