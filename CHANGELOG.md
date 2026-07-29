@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.0...v0.30.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* align provider API groups to *.eu and add top-level README ([#143](https://github.com/apeirora/showroom-msp-simple-cluster/issues/143)) ([c3b5ec7](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c3b5ec7ac9862a6f86c7868baadebc28bbb4fbef))
+
 ## [0.30.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.29.0...v0.30.0) (2026-07-27)
 
 
