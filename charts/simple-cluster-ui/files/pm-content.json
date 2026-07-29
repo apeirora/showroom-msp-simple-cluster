@@ -10,7 +10,7 @@
                 {
                     "pathSegment": "showroom_apeirora_eu_simpleclusters",
                     "navigationContext": "showroom_apeirora_eu_simpleclusters",
-                    "label": "Simple Clusters",
+                    "label": "Clusters",
                     "icon": "data:image/svg+xml;base64,{{ $logo }}",
                     "category": {
                         "label": {{ $sidebarTitle | quote }},
