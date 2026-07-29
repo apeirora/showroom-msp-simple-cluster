@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.1...v0.30.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ui:** simplify sidebar resource labels ([#146](https://github.com/apeirora/showroom-msp-simple-cluster/issues/146)) ([a097ff9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a097ff996a83deb3e093d5ccfeac8e23d96a154a))
+
 ## [0.30.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.0...v0.30.1) (2026-07-28)
 
 
