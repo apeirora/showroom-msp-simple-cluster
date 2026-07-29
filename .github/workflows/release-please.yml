@@ -20,10 +20,20 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      # The tag ruleset restricts tag creation to the apeirora-showroom-bot
+      # GitHub App. release-please must push the release tag as that App, so we
+      # mint an installation token here instead of using GITHUB_TOKEN.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+
       - id: release
         uses: googleapis/release-please-action@v4.3.0
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           skip-github-pull-request: false
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
