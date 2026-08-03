@@ -90,6 +90,8 @@ type SimpleClusterReconciler struct {
 // +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=authentication.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sap.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=dati.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 
 // nolint:gocyclo // straight-line orchestration; extracting fragments hurts readability more than it helps
 func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
