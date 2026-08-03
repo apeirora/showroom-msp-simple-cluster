@@ -28,6 +28,8 @@ rules:
   - sshkeys.apeirora.eu
   - ubuntu.apeirora.eu
   - ubuntumachines.apeirora.eu
+  - sap.eu
+  - dati.eu
   resources:
   - '*'
   verbs:
