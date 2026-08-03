@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.31.0...v0.32.0) (2026-08-03)
+
+
+### Features
+
+* downstream rbac sap dati ([#150](https://github.com/apeirora/showroom-msp-simple-cluster/issues/150)) ([5ad1e6a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ad1e6ac1cea5d2c10b2c96883eaff6849e743a7))
+
 ## [0.31.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.2...v0.31.0) (2026-08-03)
 
 
