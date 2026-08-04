@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.0...v0.33.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* never create target resources while SimpleCluster is being deleted ([#156](https://github.com/apeirora/showroom-msp-simple-cluster/issues/156)) ([0ba8c6a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0ba8c6a0005457878d45c39f8818ec6de620f24f))
+
 ## [0.33.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.32.0...v0.33.0) (2026-08-04)
 
 
