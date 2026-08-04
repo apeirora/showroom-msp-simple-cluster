@@ -50,6 +50,7 @@ const phaseColor = (
 };
 
 const derivePhase = (cluster: SimpleCluster): string => {
+  if (cluster.metadata.deletionTimestamp) return 'Deleting';
   const st = cluster.status;
   if (st?.phase) return st.phase;
   if (typeof st?.observedGeneration === 'number') return 'Pending';

@@ -49,6 +49,7 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
   const s = cluster.spec ?? {};
   const st = cluster.status ?? {};
   const hasKubeconfig = Boolean(st.kubeconfigSecretRef?.name);
+  const phase = cluster.metadata.deletionTimestamp ? 'Deleting' : st.phase;
 
   return (
     <Dialog
@@ -88,8 +89,8 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
         <Panel headerText="Cluster" collapsed={false}>
           <Row label="Name">{cluster.metadata.name}</Row>
           <Row label="Phase">
-            <ObjectStatus state={phaseState(st.phase)} inverted>
-              {st.phase ?? 'Unknown'}
+            <ObjectStatus state={phaseState(phase)} inverted>
+              {phase ?? 'Unknown'}
             </ObjectStatus>
           </Row>
           <Row label="Provider">
