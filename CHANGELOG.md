@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.33.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.32.0...v0.33.0) (2026-08-04)
+
+
+### Features
+
+* label SimpleCluster children with owning cluster name ([#155](https://github.com/apeirora/showroom-msp-simple-cluster/issues/155)) ([ceb7c8f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ceb7c8f340849b5572f772e1e7e6938b8846f625))
+* UI show Deleting phase from metadata.deletionTimestamp ([#153](https://github.com/apeirora/showroom-msp-simple-cluster/issues/153)) ([44bdc8c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/44bdc8c43fd37d93f4e69330f6c649fa2df4770f))
+
+
+### Bug Fixes
+
+* default worker zone wdf4b — wdf4a is decommissioned ([#152](https://github.com/apeirora/showroom-msp-simple-cluster/issues/152)) ([29ab665](https://github.com/apeirora/showroom-msp-simple-cluster/commit/29ab665c2d8bfc4466f03c975cdfc2f7c617190c))
+
 ## [0.32.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.31.0...v0.32.0) (2026-08-03)
 
 
