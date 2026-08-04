@@ -64,6 +64,10 @@ type SimpleClusterReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	RESTConfig *rest.Config
+	// APIReader reads straight from the API server, bypassing the cache. It
+	// backs the pre-create deletion re-check so an in-flight pass cannot order
+	// new infrastructure for a SimpleCluster whose deletion has just begun.
+	APIReader client.Reader
 	// FallbackSCPCNamespace is consulted when an SCPC is not found in the
 	// SimpleCluster's own namespace. Transitional: it lets chart-managed
 	// shared SCPCs keep working while providers migrate to creating
@@ -221,6 +225,17 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			existing, gerr := ri.Get(ctx, desired.GetName(), metav1.GetOptions{})
 			switch {
 			case apierrors.IsNotFound(gerr):
+				// Re-check deletion straight from the API server right before
+				// creating: a target Create can order real infrastructure, so a
+				// pass that started before the user deleted the SC must not
+				// create anything. The delete event drives reconcileDelete.
+				allowed, aerr := r.creationAllowed(ctx, &sc)
+				if aerr != nil {
+					return ctrl.Result{}, aerr
+				}
+				if !allowed {
+					return ctrl.Result{}, nil
+				}
 				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
 				if cerr != nil {
 					return r.failSC(ctx, &sc, "CreateError",
@@ -310,6 +325,26 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		requeue = scRequeueWorking
 	}
 	return ctrl.Result{RequeueAfter: requeue}, nil
+}
+
+// creationAllowed re-reads the SimpleCluster uncached (via APIReader) and
+// reports whether a target resource may still be created. It returns false
+// once deletion has begun — or the SC is already gone — so an in-flight pass
+// never orders new infrastructure for a SimpleCluster the user is deleting.
+// The read is cheap because it only runs when a create is about to happen.
+func (r *SimpleClusterReconciler) creationAllowed(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) (bool, error) {
+	reader := r.APIReader
+	if reader == nil {
+		reader = r.Client
+	}
+	var fresh showroomv1alpha1.SimpleCluster
+	if err := reader.Get(ctx, client.ObjectKeyFromObject(sc), &fresh); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return fresh.DeletionTimestamp.IsZero(), nil
 }
 
 // syncKubeconfig fetches the kubeconfig from the source resource, writes

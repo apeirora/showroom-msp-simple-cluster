@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,6 +29,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
@@ -335,6 +338,39 @@ data:
 			Expect(k8sClient.Get(ctx, scKey, deleting)).To(Succeed())
 			Expect(deleting.DeletionTimestamp).NotTo(BeNil())
 			Expect(deleting.Status.Phase).To(Equal(showroomv1alpha1.PhaseDeleting))
+		})
+
+		It("creates no target resource when the SC is being deleted mid-pass", func() {
+			// APIReader reports the SC as deleting while r.Client still sees it
+			// alive, mimicking a delete that lands after the pass began reading.
+			// The guard must block the create; demo-config must never appear.
+			base, err := client.NewWithWatch(cfg, client.Options{Scheme: k8sClient.Scheme()})
+			Expect(err).NotTo(HaveOccurred())
+			apiReader := interceptor.NewClient(base, interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey,
+					obj client.Object, opts ...client.GetOption) error {
+					if err := c.Get(ctx, key, obj, opts...); err != nil {
+						return err
+					}
+					if sc, ok := obj.(*showroomv1alpha1.SimpleCluster); ok && key.Name == scName {
+						sc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					}
+					return nil
+				},
+			})
+
+			r := &SimpleClusterReconciler{
+				Client:     k8sClient,
+				APIReader:  apiReader,
+				Scheme:     k8sClient.Scheme(),
+				RESTConfig: cfg,
+			}
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: scKey})
+			Expect(err).NotTo(HaveOccurred())
+
+			cm := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "demo-config", Namespace: "default"}, cm)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("marks dependents WaitingForDependencies until predecessors are Ready", func() {
