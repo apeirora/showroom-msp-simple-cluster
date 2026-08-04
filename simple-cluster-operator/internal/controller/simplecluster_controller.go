@@ -333,7 +333,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // never orders new infrastructure for a SimpleCluster the user is deleting.
 // The read is cheap because it only runs when a create is about to happen.
 func (r *SimpleClusterReconciler) creationAllowed(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) (bool, error) {
-	reader := client.Reader(r.APIReader)
+	reader := r.APIReader
 	if reader == nil {
 		reader = r.Client
 	}
