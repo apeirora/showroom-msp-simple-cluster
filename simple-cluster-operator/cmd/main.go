@@ -191,6 +191,7 @@ func main() {
 	}
 	if err := (&controller.SimpleClusterReconciler{
 		Client:                mgr.GetClient(),
+		APIReader:             mgr.GetAPIReader(),
 		Scheme:                mgr.GetScheme(),
 		RESTConfig:            mgr.GetConfig(),
 		FallbackSCPCNamespace: scpcFallbackNamespace,
