@@ -32,6 +32,10 @@ const (
 	AnnoSimpleCluster = "simple-cluster-name"
 	// AnnoSimpleClusterProvider names the SCPC whose template produced R.
 	AnnoSimpleClusterProvider = "simple-cluster-provider"
+	// LabelSimpleCluster carries the owning SimpleCluster's name on every child it
+	// produces, so children can be selected and, in the portal, protected from
+	// direct deletion (their lifecycle is owned by the SimpleCluster).
+	LabelSimpleCluster = "showroom.apeirora.eu/simple-cluster"
 )
 
 // Predecessor is a sibling ResourceSpec's rendered output, plumbed to a
@@ -118,6 +122,15 @@ func renderOne(
 	annos[AnnoSimpleCluster] = sc.Namespace + "/" + sc.Name
 	annos[AnnoSimpleClusterProvider] = scpc.Name
 	obj.SetAnnotations(annos)
+
+	// Preserve any template-defined labels (e.g. the up-sync owner-cluster label)
+	// and add the owning SimpleCluster's name.
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[LabelSimpleCluster] = sc.Name
+	obj.SetLabels(labels)
 	return obj, nil
 }
 
