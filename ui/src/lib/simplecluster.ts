@@ -14,7 +14,7 @@ const CLUSTER_LIST_QUERY = `
       v1alpha1 {
         SimpleClusters(namespace: $ns) {
           items {
-            metadata { name namespace creationTimestamp uid resourceVersion }
+            metadata { name namespace creationTimestamp deletionTimestamp uid resourceVersion }
             spec {
               providerConfigRefs
               controlPlane { nodes requested { cpu memory } }

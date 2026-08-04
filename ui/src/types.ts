@@ -77,6 +77,7 @@ export interface SimpleCluster {
     name: string;
     namespace?: string;
     creationTimestamp?: string;
+    deletionTimestamp?: string;
     resourceVersion?: string;
     uid?: string;
   };
