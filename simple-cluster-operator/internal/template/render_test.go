@@ -81,6 +81,9 @@ data:
 	if annos[AnnoSimpleCluster] != "users/foo" {
 		t.Errorf("%s = %q want users/foo", AnnoSimpleCluster, annos[AnnoSimpleCluster])
 	}
+	if got := obj.GetLabels()[LabelSimpleCluster]; got != "foo" {
+		t.Errorf("%s = %q want foo", LabelSimpleCluster, got)
+	}
 	data, _, _ := unstructured.NestedStringMap(obj.Object, "data")
 	if data["workers"] != "3" {
 		t.Errorf("SC.workers.nodes not substituted: %q", data["workers"])
