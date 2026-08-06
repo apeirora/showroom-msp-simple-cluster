@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.1...v0.33.2) (2026-08-06)
+
+
+### Bug Fixes
+
+* align ironcore sample SCPC with working shoots ([#158](https://github.com/apeirora/showroom-msp-simple-cluster/issues/158)) ([3970540](https://github.com/apeirora/showroom-msp-simple-cluster/commit/39705401ccb9fea79dd7abfd28b507d559a8f2ea))
+
 ## [0.33.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.0...v0.33.1) (2026-08-04)
 
 
