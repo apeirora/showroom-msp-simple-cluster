@@ -47,15 +47,13 @@ spec:
           cloudProfile:
             name: {{ .Inputs.cloudProfile }}
             kind: CloudProfile
-          credentialsBindingName: my-ironcore-secret
+          credentialsBindingName: wdf4-ora-dev
           region: {{ .Inputs.region }}
           kubernetes:
             version: "{{ .Inputs.k8sVersion }}"
           addons:
             nginxIngress:
-              enabled: true
-              loadBalancerSourceRanges:
-                - 0.0.0.0/0
+              enabled: false
           provider:
             type: ironcore
             workers:
@@ -66,10 +64,22 @@ spec:
                   type: {{ .Inputs.machineType }}
                   image:
                     name: {{ .Inputs.machineImage }}
+                volume:
+                  type: general-purpose
+                  size: 10Gi
                 zones:
                   - {{ .Inputs.zone }}
           networking:
             type: calico
+            providerConfig:
+              apiVersion: calico.networking.extensions.gardener.cloud/v1alpha1
+              kind: NetworkConfig
+              overlay:
+                enabled: false
+              typha:
+                enabled: false
+              vxlan:
+                enabled: true
             nodes: 10.250.0.0/16
             pods: 100.64.0.0/12
             services: 100.104.0.0/13
