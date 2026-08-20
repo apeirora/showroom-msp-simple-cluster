@@ -72,6 +72,12 @@ export interface CreateSimpleClusterInput {
   controlPlaneNodes?: number;
   controlPlaneCpu?: string;
   controlPlaneMemory?: string;
+  /**
+   * Labels to create the object with. This is how an extension is switched on at
+   * creation time: an operator on the MSP side watches for the label and installs the
+   * addon once the cluster is ready.
+   */
+  labels?: Record<string, string>;
 }
 
 const CREATE_SIMPLECLUSTER_MUTATION = `
@@ -79,7 +85,21 @@ const CREATE_SIMPLECLUSTER_MUTATION = `
     showroom_apeirora_eu {
       v1alpha1 {
         createSimpleCluster(namespace: $ns, object: $object) {
-          metadata { name namespace }
+          metadata { name namespace labels }
+        }
+      }
+    }
+  }
+`;
+
+// The gateway turns `object` into a JSON merge patch, so this sends only the labels and
+// leaves everything else on the object alone.
+const LABEL_SIMPLECLUSTER_MUTATION = `
+  mutation LabelSimpleCluster($ns: String!, $name: String!, $object: ShowroomApeiroraEuV1alpha1SimpleCluster_Input!) {
+    showroom_apeirora_eu {
+      v1alpha1 {
+        updateSimpleCluster(namespace: $ns, name: $name, object: $object) {
+          metadata { name labels }
         }
       }
     }
@@ -90,6 +110,16 @@ const CREATE_SIMPLECLUSTER_MUTATION = `
 // value must itself be valid JSON. Plain "2Gi" is not ("1" only passes by
 // parsing as a number), so string quantities are JSON-encoded on input.
 const quantity = (v: string): string => JSON.stringify(v);
+
+interface CreateResponse {
+  showroom_apeirora_eu?: {
+    v1alpha1?: {
+      createSimpleCluster?: {
+        metadata?: { labels?: Record<string, string> | null } | null;
+      } | null;
+    } | null;
+  } | null;
+}
 
 export const createSimpleCluster = async (
   opts: GraphqlClientOptions,
@@ -124,14 +154,34 @@ export const createSimpleCluster = async (
     };
   }
 
+  const labels = input.labels ?? {};
+  const wanted = Object.keys(labels);
   const object = {
-    metadata: { name: input.name, namespace: input.namespace },
+    metadata: {
+      name: input.name,
+      namespace: input.namespace,
+      ...(wanted.length ? { labels } : {})
+    },
     spec
   };
-  await graphqlFetch(opts, {
+  const created = await graphqlFetch<CreateResponse>(opts, {
     query: CREATE_SIMPLECLUSTER_MUTATION,
     variables: { ns: input.namespace, object }
   });
+
+  // Labels are how an extension gets switched on, so losing them silently would mean a
+  // ticked checkbox that installs nothing. Rather than trusting that the create
+  // resolver persists them, look at what came back and set them separately if it did
+  // not. Costs one extra round trip only in the case where it is the difference
+  // between working and not.
+  const persisted = created?.showroom_apeirora_eu?.v1alpha1?.createSimpleCluster?.metadata?.labels ?? {};
+  const missing = wanted.filter((k) => persisted[k] !== labels[k]);
+  if (missing.length) {
+    await graphqlFetch(opts, {
+      query: LABEL_SIMPLECLUSTER_MUTATION,
+      variables: { ns: input.namespace, name: input.name, object: { metadata: { labels } } }
+    });
+  }
 };
 
 const DELETE_SIMPLECLUSTER_MUTATION = `
