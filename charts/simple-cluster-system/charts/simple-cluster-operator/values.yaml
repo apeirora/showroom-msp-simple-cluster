@@ -75,3 +75,16 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
+
+# [ADDON CATALOGUE]: extensions (e.g. Crypto Broker) publish a ConfigMap in
+# sourceNamespace saying which label switches them on. The operator collects those into
+# one ConfigMap the create dialog reads, so offering a new extension is an install
+# rather than an edit here. Disable on a landscape without the portal UI.
+addonCatalog:
+  enable: true
+  # Where the aggregate is written. Defaults to the release namespace, which is where
+  # the UI runs.
+  namespace: ""
+  configMapName: simple-cluster-addons
+  sourceNamespace: kube-system
+  interval: 2m
