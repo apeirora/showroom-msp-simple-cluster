@@ -80,6 +80,103 @@ service cluster; their kinds are what provider SCPCs template into:
 | Arsys Hosting | `UbuntuMachine` | `arsys.eu` |
 | CloudFerro Hosting | `OpenStackVM` | `cloudferro.eu` |
 
+### Extensions offered at creation time
+
+A cluster can have extensions installed on it — Crypto Broker is the first — and the
+create dialog offers one checkbox per extension the landscape has. Neither this repo nor
+the UI knows which extensions exist: **each extension announces itself**, and the
+operator collects those announcements into one document the dialog reads. Adding an
+extension is installing its chart; nothing here changes.
+
+```
+    extension's chart                 simple-cluster-operator            UI pod
+ ┌────────────────────────┐        ┌────────────────────────┐    ┌────────────────────┐
+ │ ConfigMap kube-system/ │ list   │ AddonCatalog runnable  │    │ /addons/simple-    │
+ │ cluster-addon-<name>   │──────► │ every 2m, uncached     │───►│ cluster-addons.json│
+ │ label: …/cluster-addon │        │ → ConfigMap            │ mnt│ (directory mount)  │
+ └────────────────────────┘        │   simple-cluster-addons│    └─────────┬──────────┘
+                                   └────────────────────────┘              │ fetch
+                                                                           ▼
+                                                            create dialog: one checkbox
+                                                            per entry; ticking it adds
+                                                            the entry's label to the new
+                                                            SimpleCluster
+```
+
+**1. An extension publishes a catalogue entry.** A ConfigMap in `kube-system` labelled
+`showroom.apeirora.eu/cluster-addon: "true"`, with the entry under `addon.yaml`:
+
+```yaml
+id: crypto-broker                                # addon id
+label: showroom.apeirora.eu/crypto-broker        # setting this on a cluster installs it
+displayName: Crypto Broker
+description: Key management and crypto services, installed on the cluster.
+bindName: crypto-broker                          # APIBinding an entitled account has
+entitlement:                                     # fallback: a Kind only that account sees
+  group: crypto-broker.apeirora.eu
+  version: v1alpha1
+  listField: CryptoBrokers
+  namespaced: true
+targetKinds:                                     # where the checkbox may appear
+  - {apiVersion: showroom.apeirora.eu/v1alpha1, kind: SimpleCluster}
+```
+
+`id` and `label` are required; everything else is optional (`displayName` defaults to
+`id`). An entry missing either is skipped with a log line — one broken extension does not
+cost the others their checkbox. The set of keys is **closed**: a key an extension invents
+is dropped on the way through, so growing the contract means a field in `CatalogEntry` and
+a release of this operator.
+
+The extension should render this from the **same values its own operator watches**, so the
+label a dialog offers and the label that triggers the install cannot drift apart.
+
+**2. The operator aggregates.** `AddonCatalog` (`simple-cluster-operator/internal/controller/addoncatalog.go`)
+is a leader-elected runnable that lists those ConfigMaps and writes their union into
+`simple-cluster-addons` (key `simple-cluster-addons.json`), entries sorted by `id` so an
+unchanged catalogue is not rewritten. A malformed entry is logged and skipped — one
+broken extension must not cost the others their checkbox.
+
+It **polls rather than watches**, deliberately: watching would put ConfigMaps into the
+manager cache, and this operator creates ConfigMaps as ordinary downstream resources — a
+label-filtered cache would silently stop returning those, an unfiltered one would hold
+every ConfigMap in the cluster. Flags (see *Configuration*): `--addon-catalog-namespace`
+(empty ⇒ aggregator off), `--addon-catalog-configmap`, `--addon-catalog-source-namespace`,
+`--addon-catalog-interval`.
+
+**3. The UI chart mounts the result** at `/usr/share/nginx/html/addons` as a **directory
+mount, without `subPath`** — a subPath mount is a copy taken at start-up and would never
+pick up a newly installed extension. The volume is `optional: true`, so the pod starts
+whether or not the aggregate exists yet.
+
+**4. The dialog offers and writes.** `ui/src/lib/addons.ts` fetches the file, keeps the
+entries whose `targetKinds` include the kind being created, and asks KCP whether this
+account is entitled to each. Every entry is rendered; unentitled ones are **disabled with
+the reason as a tooltip** rather than hidden, so "why is Crypto Broker not offered?" has
+an answer on screen. Ticking a box adds its `label` to `metadata.labels` of the
+`SimpleCluster` being created — that is the entire install action.
+
+**Entitlement** is asked in two ways, and the order matters: APIBindings are listed once
+for all extensions and matched against `bindName` exactly or by prefix (kcp appends a
+generated suffix — a real binding is `crypto-broker-crypto-broker-pzmzw`). A **match is
+conclusive**; a miss falls through to a per-extension probe of the `entitlement` Kind, and
+only both saying no makes it a no. Unlike provider discovery this **fails closed**: an
+inconclusive answer leaves the box disabled, because an offered checkbox is a promise.
+
+**What happens next is the extension's own business.** The addon operator sees the label
+and installs onto the cluster once it is ready; switching an extension off, its version
+and its install status live in the extension's own micro-frontend, not here. The checkbox
+is opt-in at creation time only.
+
+#### Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| No Extensions section at all | Catalogue empty — no extension is installed, or the aggregator never ran. The browser console distinguishes the two: a 404 is logged as a deployment fault, `{"addons":[]}` is the normal empty answer |
+| Section says the catalogue could not be read | The `simple-cluster-addons` ConfigMap is missing in the UI's namespace: check `--addon-catalog-namespace` matches where the UI runs, and the operator's RBAC on ConfigMaps |
+| An extension is installed but not listed | Its ConfigMap is missing the marker label, is not in `--addon-catalog-source-namespace` (default `kube-system`), or its `addon.yaml` has no `id`/`label` — the operator logs the entry it skipped |
+| Listed but always disabled | Entitlement said no or was inconclusive. A probe for a **namespaced** Kind without `namespaced: true` is a schema error that reads exactly like "not bound" |
+| Box ticked, nothing installs | The catalogue's `label` and the addon operator's watched label have drifted apart, or the addon operator is not running |
+
 ## Repository layout
 
 Monorepo of 7 Go modules — each with its own `go.mod` and `Makefile`; **there is no
@@ -172,6 +269,15 @@ images with the `ghcr-showroom-secret`. Environment is selected by
 - `clusterConfig.providers[]` — static fallback list (used when `providerSources` is
   empty / for bind-only providers invisible to schema discovery).
 - `clusterConfig.cpu[]`, `memory[]`, `controlPlane{}`, `workers{}`.
+- `addonCatalog.enabled`, `addonCatalog.configMapName` — mounts the aggregated extension
+  catalogue at `/addons/`. The name must match the operator's `--addon-catalog-configmap`,
+  and the operator must write into the UI's namespace.
+
+**Extension catalogue** (`charts/simple-cluster-system/charts/simple-cluster-operator/values.yaml`,
+`addonCatalog.*`): `enable`, `namespace` (empty ⇒ the release namespace, which is where the
+UI runs), `configMapName`, `sourceNamespace` (default `kube-system`), `interval` (default
+`2m`). These render the operator's `--addon-catalog-*` flags; leaving `enable: false` turns
+the aggregator off entirely, which is right for a landscape without the portal.
 
 In GitOps the UI values come from per-env overlays:
 `overlays/<env>/ui-values.yaml` (host/TLS/ingress) and
