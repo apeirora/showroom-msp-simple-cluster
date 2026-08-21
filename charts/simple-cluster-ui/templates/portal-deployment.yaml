@@ -51,6 +51,14 @@ spec:
             - name: cluster-config
               mountPath: /usr/share/nginx/html/simple-cluster-config.json
               subPath: simple-cluster-config.json
+            {{- if .Values.addonCatalog.enabled }}
+            # Mounted as a directory, deliberately without subPath: this file is written
+            # by the operator as extensions come and go, and a subPath mount is a copy
+            # taken at start-up that never changes again.
+            - name: addon-catalog
+              mountPath: /usr/share/nginx/html/addons
+              readOnly: true
+            {{- end }}
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
       volumes:
@@ -66,4 +74,13 @@ spec:
             items:
               - key: simple-cluster-config.json
                 path: simple-cluster-config.json
+        {{- if .Values.addonCatalog.enabled }}
+        # Written by simple-cluster-operator, not by this chart, so it may not exist yet
+        # (or at all, if the aggregator is off). Optional keeps the pod starting either
+        # way; the UI treats a missing file as "no extensions to offer".
+        - name: addon-catalog
+          configMap:
+            name: {{ .Values.addonCatalog.configMapName }}
+            optional: true
+        {{- end }}
 {{- end }}

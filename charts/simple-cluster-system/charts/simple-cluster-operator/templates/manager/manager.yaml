@@ -31,6 +31,15 @@ spec:
             {{- range .Values.controllerManager.container.args }}
             - {{ . }}
             {{- end }}
+            {{- if .Values.addonCatalog.enable }}
+            {{- /* Where the aggregated catalogue is written; the UI mounts it from
+                   there. Empty (the flag's default) turns the aggregator off, so a
+                   landscape without the portal pays nothing for it. */}}
+            - --addon-catalog-namespace={{ .Values.addonCatalog.namespace | default .Release.Namespace }}
+            - --addon-catalog-configmap={{ .Values.addonCatalog.configMapName }}
+            - --addon-catalog-source-namespace={{ .Values.addonCatalog.sourceNamespace }}
+            - --addon-catalog-interval={{ .Values.addonCatalog.interval }}
+            {{- end }}
           command:
             - /manager
           image: {{ .Values.controllerManager.container.image.repository }}:{{ coalesce .Values.global.imageTag .Values.controllerManager.container.image.tag .Chart.AppVersion }}

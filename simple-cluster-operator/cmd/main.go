@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -62,6 +63,10 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var scpcFallbackNamespace string
+	var addonCatalogNamespace string
+	var addonCatalogName string
+	var addonCatalogSource string
+	var addonCatalogInterval time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -83,6 +88,15 @@ func main() {
 	flag.StringVar(&scpcFallbackNamespace, "scpc-fallback-namespace", "simple-cluster-system-scpc-configs",
 		"Namespace searched for an SCPC when it is not found in a SimpleCluster's own "+
 			"namespace. Empty disables the fallback.")
+	flag.StringVar(&addonCatalogNamespace, "addon-catalog-namespace", "",
+		"Namespace the aggregated addon catalogue is written to, normally the one the UI "+
+			"runs in. Empty disables the aggregator entirely.")
+	flag.StringVar(&addonCatalogName, "addon-catalog-configmap", "simple-cluster-addons",
+		"Name of the ConfigMap holding the aggregated addon catalogue.")
+	flag.StringVar(&addonCatalogSource, "addon-catalog-source-namespace", "kube-system",
+		"Namespace extensions publish their catalogue entries in.")
+	flag.DurationVar(&addonCatalogInterval, "addon-catalog-interval", 2*time.Minute,
+		"How often the addon catalogue is rebuilt.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -198,6 +212,21 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SimpleCluster")
 		os.Exit(1)
+	}
+	// Off unless told where to write: on a cluster without the portal UI there is
+	// nothing to serve the catalogue to.
+	if addonCatalogNamespace != "" {
+		if err := mgr.Add(&controller.AddonCatalog{
+			Reader:          mgr.GetAPIReader(),
+			Writer:          mgr.GetClient(),
+			SourceNamespace: addonCatalogSource,
+			TargetNamespace: addonCatalogNamespace,
+			TargetName:      addonCatalogName,
+			Interval:        addonCatalogInterval,
+		}); err != nil {
+			setupLog.Error(err, "unable to start the addon catalogue aggregator")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
