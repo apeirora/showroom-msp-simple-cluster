@@ -7,6 +7,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - create
@@ -19,14 +30,14 @@ rules:
 - apiGroups:
   - arsys.eu
   - authentication.gardener.cloud
-  - core.gardener.cloud
-  - kind.apeirora.eu
   - cloudferro.eu
+  - core.gardener.cloud
+  - dati.eu
+  - kind.apeirora.eu
+  - sap.eu
   - sshkeys.apeirora.eu
   - ubuntu.apeirora.eu
   - ubuntumachines.apeirora.eu
-  - sap.eu
-  - dati.eu
   resources:
   - '*'
   verbs:
