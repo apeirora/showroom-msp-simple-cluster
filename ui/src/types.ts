@@ -130,3 +130,37 @@ export interface ClusterConfig {
     default: number;
   };
 }
+
+/**
+ * One installable extension, as its own chart published it. Mirrors the ConfigMap the
+ * operator aggregates: the two live in different repositories, so the contract is the
+ * document, not a shared type.
+ */
+export interface AddonCatalogEntry {
+  /** Addon id, e.g. "crypto-broker". */
+  id: string;
+  /** The label to set on the cluster object. Setting it is the whole install action. */
+  label: string;
+  displayName?: string;
+  description?: string;
+  /** APIBinding an account needs for this extension. */
+  bindName?: string;
+  /** Fallback: a Kind that only resolves for an account that has the extension. */
+  entitlement?: {
+    group: string;
+    version: string;
+    listField: string;
+    namespaced?: boolean;
+  };
+  /** Cluster kinds that may carry the label. Absent means "any". */
+  targetKinds?: Array<{ apiVersion: string; kind: string }>;
+}
+
+/** 'unknown' is not 'not-entitled': one is a failed check, the other a real answer. */
+export type EntitlementState = 'entitled' | 'not-entitled' | 'unknown';
+
+export interface AddonEntitlement {
+  state: EntitlementState;
+  /** Why the box is disabled, shown as its tooltip. Empty when it is not. */
+  detail: string;
+}

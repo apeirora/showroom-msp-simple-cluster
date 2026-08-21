@@ -43,6 +43,15 @@ branding:
   sidebar:
     title: "Simple Cluster"
 
+# The catalogue of installable extensions, served as /addons/simple-cluster-addons.json.
+# Unlike clusterConfig this chart does not author it: simple-cluster-operator aggregates
+# what each installed extension publishes, and this only mounts the result. The
+# configMapName must match the operator's --addon-catalog-configmap, and the operator
+# must write into this release's namespace.
+addonCatalog:
+  enabled: true
+  configMapName: simple-cluster-addons
+
 # Predefined choices surfaced in the create dialog (served as
 # simple-cluster-config.json). Editing these tunes the dropdowns without
 # rebuilding the container image.
