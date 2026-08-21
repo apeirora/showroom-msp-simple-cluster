@@ -55,8 +55,12 @@ const (
 //
 // Deliberately mirrored rather than shared: the extension and this operator ship from
 // different repositories, and a struct in a Go module neither imports is not a contract
-// they can both hold. The contract is the YAML, and unknown fields are carried through
-// untouched so an extension can add one without a release here.
+// they can both hold. The contract is the YAML.
+//
+// Note what that costs: this struct is closed, so a key an extension invents is dropped
+// on the way through rather than reaching the UI. Growing the contract means a field
+// here and a release of this operator -- which is the price of the aggregate being a
+// document with a known shape rather than whatever anybody wrote in kube-system.
 type CatalogEntry struct {
 	ID          string `json:"id"`
 	Label       string `json:"label"`
