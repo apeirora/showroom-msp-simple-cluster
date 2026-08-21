@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.2...v0.34.0) (2026-08-21)
+
+
+### Features
+
+* offer installable extensions when creating a cluster ([#160](https://github.com/apeirora/showroom-msp-simple-cluster/issues/160)) ([537bbe6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/537bbe67de58c9b33761a84adc67928dc71b6001))
+
 ## [0.33.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.1...v0.33.2) (2026-08-06)
 
 
