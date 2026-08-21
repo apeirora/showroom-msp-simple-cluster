@@ -14,13 +14,15 @@ import {
   Select,
   StepInput
 } from '@ui5/webcomponents-react';
-import type { ClusterConfig } from '../types';
+import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig } from '../types';
 
 const RFC_1123 = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 
 export interface CreateValues {
   name: string;
   provider: string;
+  /** Labels for the new object; one per extension ticked. */
+  labels: Record<string, string>;
   workerNodes: number;
   workerAutoscaling: boolean;
   workerMin: number;
@@ -40,6 +42,13 @@ interface Props {
   // discovery is enabled, otherwise the static config list).
   providers: string[];
   providersLoading: boolean;
+  // Installable extensions offered for this kind, and whether this workspace has each
+  // one. Empty hides the section entirely.
+  addons: AddonCatalogEntry[];
+  entitlements: Map<string, AddonEntitlement>;
+  addonsLoading: boolean;
+  // The catalogue could not be read at all — a deployment fault, not an empty landscape.
+  catalogUnavailable: boolean;
   onClose: () => void;
   onSubmit: (values: CreateValues) => void;
 }
@@ -53,10 +62,15 @@ export const CreateClusterDialog = ({
   config,
   providers,
   providersLoading,
+  addons,
+  entitlements,
+  addonsLoading,
+  catalogUnavailable,
   onClose,
   onSubmit
 }: Props) => {
   const [name, setName] = useState('');
+  const [enabledAddons, setEnabledAddons] = useState<Set<string>>(new Set());
   const [provider, setProvider] = useState(providers[0] ?? '');
 
   // Keep the selection valid as the discovered provider list arrives or
@@ -92,9 +106,35 @@ export const CreateClusterDialog = ({
     Boolean(controlPlaneCpu) &&
     Boolean(controlPlaneMemory);
 
+  // Only a box that is both ticked and entitled becomes a label. Entitlement can change
+  // between opening the dialog and submitting it (the check is asynchronous), and a
+  // label written for an extension the workspace does not have would install nothing
+  // while looking like it had.
+  const addonLabels = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const entry of addons) {
+      if (!enabledAddons.has(entry.id)) continue;
+      if (entitlements.get(entry.id)?.state !== 'entitled') continue;
+      out[entry.label] = 'true';
+    }
+    return out;
+  }, [addons, enabledAddons, entitlements]);
+
+  const toggleAddon = (id: string, on: boolean) =>
+    setEnabledAddons((prev) => {
+      const next = new Set(prev);
+      if (on) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+
   const reset = () => {
     setName('');
     setNameTouched(false);
+    setEnabledAddons(new Set());
     setProvider(providers[0] ?? '');
     setWorkerNodes(config.workers.default);
     setWorkerAutoscaling(false);
@@ -117,6 +157,7 @@ export const CreateClusterDialog = ({
     onSubmit({
       name,
       provider,
+      labels: addonLabels,
       workerNodes,
       workerAutoscaling,
       workerMin,
@@ -201,6 +242,56 @@ export const CreateClusterDialog = ({
             </Select>
           )}
         </FlexBox>
+
+        {/*
+          * Hidden entirely when no extension is installed on the landscape, so the
+          * common case sees no change. Extensions this workspace does not have are
+          * shown disabled rather than omitted: "why is Crypto Broker not offered?"
+          * then has an answer on screen instead of being invisible.
+          */}
+        {(addonsLoading || addons.length > 0 || catalogUnavailable) && (
+          <>
+            <Label>Extensions</Label>
+            {catalogUnavailable ? (
+              <MessageStrip design="Information" hideCloseButton>
+                The list of installable extensions could not be read, so none are offered
+                here. The cluster itself is unaffected.
+              </MessageStrip>
+            ) : addonsLoading ? (
+              <FlexBox style={{ gap: 8, alignItems: 'center' }}>
+                <BusyIndicator active size="S" />
+                <span style={{ fontSize: '0.85rem' }}>Checking available extensions…</span>
+              </FlexBox>
+            ) : (
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 2 }}>
+                {addons.map((entry) => {
+                  const entitlement = entitlements.get(entry.id);
+                  const entitled = entitlement?.state === 'entitled';
+                  const hint = entitled ? entry.description : entitlement?.detail;
+                  return (
+                    <span key={entry.id} title={hint ?? undefined}>
+                      <CheckBox
+                        text={entry.displayName ?? entry.id}
+                        checked={enabledAddons.has(entry.id)}
+                        disabled={!entitled}
+                        onChange={(e) =>
+                          toggleAddon(
+                            entry.id,
+                            Boolean((e.target as unknown as HTMLInputElement).checked)
+                          )
+                        }
+                      />
+                    </span>
+                  );
+                })}
+                <span style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
+                  Installed once the cluster is ready. Can be changed later from the
+                  extension's own page.
+                </span>
+              </FlexBox>
+            )}
+          </>
+        )}
 
         <Label>Control plane</Label>
         <FlexBox style={{ gap: '0.75rem', flexWrap: 'wrap' }}>

@@ -32,7 +32,8 @@ import {
 import { fetchKubeconfig } from './lib/secret';
 import { fallbackClusterConfig, loadClusterConfig } from './lib/config';
 import { fetchAvailableProviders } from './lib/providers';
-import type { ClusterConfig, SimpleCluster } from './types';
+import { entriesForKind, loadAddonCatalog, resolveEntitlements } from './lib/addons';
+import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig, SimpleCluster } from './types';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -50,6 +51,14 @@ const App = () => {
   // discovery has not produced a list, so the static config list is used.
   const [discoveredProviders, setDiscoveredProviders] = useState<string[] | null>(null);
   const [providersLoading, setProvidersLoading] = useState(false);
+
+  // Extensions offerable at creation time, and whether this workspace has each of them.
+  const [addons, setAddons] = useState<AddonCatalogEntry[]>([]);
+  const [entitlements, setEntitlements] = useState<Map<string, AddonEntitlement>>(new Map());
+  const [addonsLoading, setAddonsLoading] = useState(false);
+  // Told apart from "no extensions installed": one is a deployment fault worth saying
+  // out loud, the other is the normal case and says nothing.
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<SimpleCluster | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -118,11 +127,31 @@ const App = () => {
     [usingDynamicProviders, discoveredProviders, config.providers]
   );
 
+  // The catalogue is global and the entitlement per account, so both are resolved
+  // together: without an entitlement an entry can only be rendered disabled anyway.
+  const discoverAddons = useCallback(async () => {
+    setAddonsLoading(true);
+    try {
+      const catalog = await loadAddonCatalog();
+      setCatalogUnavailable(!catalog.available);
+      const offered = entriesForKind(catalog.entries, 'SimpleCluster');
+      setAddons(offered);
+      setEntitlements(await resolveEntitlements(client, ctx.namespace ?? '', offered));
+    } catch (err) {
+      console.warn('[simple-cluster-ui] extension discovery failed', err);
+      setAddons([]);
+      setCatalogUnavailable(true);
+    } finally {
+      setAddonsLoading(false);
+    }
+  }, [client, ctx.namespace]);
+
   const openCreate = useCallback(() => {
     setCreateOpen(true);
-    // Refresh so providers installed since page load appear.
+    // Refresh so providers and extensions installed since page load appear.
     void discoverProviders();
-  }, [discoverProviders]);
+    void discoverAddons();
+  }, [discoverProviders, discoverAddons]);
 
   const reload = useCallback(async () => {
     if (!ctx.graphqlUrl || !ctx.namespace) return;
@@ -180,6 +209,7 @@ const App = () => {
         namespace: ctx.namespace,
         name: values.name,
         provider: values.provider,
+        labels: values.labels,
         workerNodes: values.workerNodes,
         workerAutoscaling: values.workerAutoscaling,
         workerMin: values.workerMin,
@@ -308,6 +338,10 @@ const App = () => {
         config={config}
         providers={providers}
         providersLoading={providersLoading}
+        addons={addons}
+        entitlements={entitlements}
+        addonsLoading={addonsLoading}
+        catalogUnavailable={catalogUnavailable}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

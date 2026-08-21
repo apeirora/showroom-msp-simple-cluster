@@ -1,4 +1,4 @@
-import type { SimpleCluster } from '../types';
+import type { AddonCatalogEntry, AddonEntitlement, SimpleCluster } from '../types';
 
 export const fixturesEnabled = (): boolean => {
   const env = (import.meta as any).env ?? {};
@@ -104,3 +104,44 @@ export const fixtureSimpleClusters = (): SimpleCluster[] => [
     }
   }
 ];
+
+/**
+ * Two extensions, covering both renderings the dialog has: one this workspace has, and
+ * one it does not and therefore cannot tick.
+ */
+export const fixtureCatalog = (): AddonCatalogEntry[] => [
+  {
+    id: 'crypto-broker',
+    label: 'showroom.apeirora.eu/crypto-broker',
+    displayName: 'Crypto Broker',
+    description: 'Key management and crypto services, installed on the cluster.',
+    bindName: 'crypto-broker',
+    targetKinds: [{ apiVersion: 'showroom.apeirora.eu/v1alpha1', kind: 'SimpleCluster' }]
+  },
+  {
+    id: 'private-llm',
+    label: 'showroom.apeirora.eu/private-llm',
+    displayName: 'Private LLM',
+    description: 'A model served inside the cluster.',
+    bindName: 'private-llm',
+    targetKinds: [{ apiVersion: 'showroom.apeirora.eu/v1alpha1', kind: 'SimpleCluster' }]
+  }
+];
+
+export const fixtureEntitlements = (
+  entries: AddonCatalogEntry[]
+): Map<string, AddonEntitlement> => {
+  const out = new Map<string, AddonEntitlement>();
+  for (const entry of entries) {
+    out.set(
+      entry.id,
+      entry.id === 'crypto-broker'
+        ? { state: 'entitled', detail: '' }
+        : {
+            state: 'not-entitled',
+            detail: `Not available in this workspace. Install ${entry.displayName ?? entry.id} from the marketplace first.`
+          }
+    );
+  }
+  return out;
+};
