@@ -171,8 +171,8 @@ is opt-in at creation time only.
 
 | Symptom | Likely cause |
 |---|---|
-| No Extensions section at all | Catalogue empty — no extension is installed, or the aggregator never ran. The browser console distinguishes the two: a 404 is logged as a deployment fault, `{"addons":[]}` is the normal empty answer |
-| Section says the catalogue could not be read | The `simple-cluster-addons` ConfigMap is missing in the UI's namespace: check `--addon-catalog-namespace` matches where the UI runs, and the operator's RBAC on ConfigMaps |
+| No Extensions section at all | The catalogue was read successfully but contains no extension for `SimpleCluster`; `{"addons":[]}` is the normal empty answer |
+| Section says the catalogue could not be read | The aggregate is unavailable, for example because the aggregator has not run, the `simple-cluster-addons` ConfigMap is missing in the UI's namespace, or the UI cannot read it. Check that `--addon-catalog-namespace` matches where the UI runs and that the operator has ConfigMap RBAC |
 | An extension is installed but not listed | Its ConfigMap is missing the marker label, is not in `--addon-catalog-source-namespace` (default `kube-system`), or its `addon.yaml` has no `id`/`label` — the operator logs the entry it skipped |
 | Listed but always disabled | Entitlement said no or was inconclusive. A probe for a **namespaced** Kind without `namespaced: true` is a schema error that reads exactly like "not bound" |
 | Box ticked, nothing installs | The catalogue's `label` and the addon operator's watched label have drifted apart, or the addon operator is not running |
