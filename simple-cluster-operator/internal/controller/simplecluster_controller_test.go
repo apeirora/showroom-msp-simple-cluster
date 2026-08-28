@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
+	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
 
 var _ = Describe("SimpleCluster Controller", func() {
@@ -338,6 +339,12 @@ data:
 			Expect(k8sClient.Get(ctx, scKey, deleting)).To(Succeed())
 			Expect(deleting.DeletionTimestamp).NotTo(BeNil())
 			Expect(deleting.Status.Phase).To(Equal(showroomv1alpha1.PhaseDeleting))
+
+			By("releasing the child from the delete guard before asking for its deletion")
+			held := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(ctx, cmKey, held)).To(Succeed())
+			Expect(held.Annotations).To(HaveKeyWithValue(rendertpl.AnnoAllowDelete, "true"))
+			Expect(held.DeletionTimestamp).NotTo(BeNil())
 		})
 
 		It("creates no target resource when the SC is being deleted mid-pass", func() {
