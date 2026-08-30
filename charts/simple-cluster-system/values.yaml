@@ -8,6 +8,9 @@ simple-cluster-operator:
     container:
       image:
         repository: ghcr.io/apeirora/simple-cluster-operator
+  ordCatalog:
+    enable: true
+    configMapName: simple-cluster-ord
 
 kind-cluster-operator:
   metrics:

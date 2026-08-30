@@ -59,6 +59,13 @@ spec:
               mountPath: /usr/share/nginx/html/addons
               readOnly: true
             {{- end }}
+            {{- if .Values.ordCatalog.enabled }}
+            # Mounted as a directory so kubelet can atomically refresh the files when
+            # provider configurations or their availability change.
+            - name: ord-catalog
+              mountPath: /usr/share/nginx/html/ord
+              readOnly: true
+            {{- end }}
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
       volumes:
@@ -81,6 +88,12 @@ spec:
         - name: addon-catalog
           configMap:
             name: {{ .Values.addonCatalog.configMapName }}
+            optional: true
+        {{- end }}
+        {{- if .Values.ordCatalog.enabled }}
+        - name: ord-catalog
+          configMap:
+            name: {{ .Values.ordCatalog.configMapName }}
             optional: true
         {{- end }}
 {{- end }}

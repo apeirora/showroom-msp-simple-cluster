@@ -10,6 +10,12 @@ metadata:
   enabled: true
   contentPath: "/pm-content.json"
 
+ord:
+  configPath: "/.well-known/open-resource-discovery"
+
+detailViewExtension:
+  path: "/ui-extensions/ord/"
+
 branding:
   marketplace:
     title: "Simple Cluster"
