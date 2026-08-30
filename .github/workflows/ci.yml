@@ -135,4 +135,4 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: Test ORD chart wiring
-        run: bash hack/test-ord-charts.sh
+        run: bash ../hack/test-ord-charts.sh
