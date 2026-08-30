@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import {
   configUrlFor,
+  formatCount,
   layoutGraph,
   loadProviderOptions,
   parseProviderData,
 } from "../ui/public/ui-extensions/ord/renderer.js";
+
+assert.equal(formatCount(1, "provider"), "1 provider");
+assert.equal(formatCount(3, "dependency", "dependencies"), "3 dependencies");
 
 const provider = {
   providerMetadata: {

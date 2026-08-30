@@ -215,7 +215,7 @@ function renderOption({ capability, graph }, open) {
     element(
       "p",
       "meta",
-      `${formatCount(graph.resources.length, "resource")} · ${formatCount(edgeCount(graph.resources), "dependency")}`,
+      `${formatCount(graph.resources.length, "resource")} · ${formatCount(edgeCount(graph.resources), "dependency", "dependencies")}`,
     ),
   );
   summary.append(heading);
@@ -252,8 +252,8 @@ function edgeCount(resources) {
   return resources.reduce((total, resource) => total + resource.dependsOn.length, 0);
 }
 
-function formatCount(count, noun) {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+export function formatCount(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function render(context) {
