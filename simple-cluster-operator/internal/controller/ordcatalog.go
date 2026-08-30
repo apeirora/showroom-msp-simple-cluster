@@ -412,15 +412,15 @@ func sameGraph(a, b []providerGraphNode) bool {
 }
 
 func providerAvailable(scpc *showroomv1alpha1.SimpleClusterProviderConfig) (bool, string) {
+	if scpc.Status.Reachable != nil && !*scpc.Status.Reachable {
+		return false, "The provider target is not reachable."
+	}
 	condition := apimeta.FindStatusCondition(scpc.Status.Conditions, showroomv1alpha1.ConditionReady)
 	if condition != nil {
 		if condition.Status == metav1.ConditionTrue {
-			if scpc.Status.Reachable != nil && !*scpc.Status.Reachable {
-				return false, "The provider target is not reachable."
-			}
-			return true, condition.Message
+			return true, "The provider configuration is ready."
 		}
-		return false, condition.Message
+		return false, "The provider configuration is not ready."
 	}
 	if scpc.Status.Reachable != nil {
 		return *scpc.Status.Reachable, "Availability is based on the SCPC reachability probe."

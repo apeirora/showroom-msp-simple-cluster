@@ -127,6 +127,18 @@ func TestORDCatalogDoesNotAdvertiseAnUnreachableReadyProvider(t *testing.T) {
 	}
 }
 
+func TestORDCatalogDoesNotPublishConditionMessages(t *testing.T) {
+	scpc := ordSCPC("account-a", "provider", false, showroomv1alpha1.ResourceSpec{
+		Name: "cluster", APIVersion: "example.eu/v1", Kind: "Cluster",
+	})
+	scpc.Status.Reachable = nil
+	scpc.Status.Conditions[0].Message = "internal endpoint https://secret.example"
+	available, reason := providerAvailable(scpc)
+	if available || reason != "The provider configuration is not ready." {
+		t.Fatalf("provider availability exposed internal status: %t, %q", available, reason)
+	}
+}
+
 func TestGeneratedORDDocumentMatchesValidatedFixture(t *testing.T) {
 	files, _, err := buildORDCatalog([]showroomv1alpha1.SimpleClusterProviderConfig{
 		*ordSCPC("account-a", "cloudferro", true,
