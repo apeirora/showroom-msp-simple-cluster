@@ -67,6 +67,10 @@ func main() {
 	var addonCatalogName string
 	var addonCatalogSource string
 	var addonCatalogInterval time.Duration
+	var ordCatalogNamespace string
+	var ordCatalogName string
+	var ordCatalogSystemVersion string
+	var ordCatalogInterval time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -97,6 +101,14 @@ func main() {
 		"Namespace extensions publish their catalogue entries in.")
 	flag.DurationVar(&addonCatalogInterval, "addon-catalog-interval", 2*time.Minute,
 		"How often the addon catalogue is rebuilt.")
+	flag.StringVar(&ordCatalogNamespace, "ord-catalog-namespace", "",
+		"Namespace the generated ORD files are written to. Empty disables ORD publication.")
+	flag.StringVar(&ordCatalogName, "ord-catalog-configmap", "simple-cluster-ord",
+		"Name of the ConfigMap holding the generated ORD files.")
+	flag.StringVar(&ordCatalogSystemVersion, "ord-catalog-system-version", "",
+		"Semantic version reported by the generated system-version ORD document.")
+	flag.DurationVar(&ordCatalogInterval, "ord-catalog-interval", 2*time.Minute,
+		"How often the ORD catalogue is rebuilt.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -225,6 +237,23 @@ func main() {
 			Interval:        addonCatalogInterval,
 		}); err != nil {
 			setupLog.Error(err, "unable to start the addon catalogue aggregator")
+			os.Exit(1)
+		}
+	}
+	if ordCatalogNamespace != "" {
+		if ordCatalogSystemVersion == "" {
+			setupLog.Error(nil, "--ord-catalog-system-version is required when ORD publication is enabled")
+			os.Exit(1)
+		}
+		if err := mgr.Add(&controller.ORDCatalog{
+			Reader:          mgr.GetAPIReader(),
+			Writer:          mgr.GetClient(),
+			TargetNamespace: ordCatalogNamespace,
+			TargetName:      ordCatalogName,
+			SystemVersion:   ordCatalogSystemVersion,
+			Interval:        ordCatalogInterval,
+		}); err != nil {
+			setupLog.Error(err, "unable to start the ORD catalogue publisher")
 			os.Exit(1)
 		}
 	}

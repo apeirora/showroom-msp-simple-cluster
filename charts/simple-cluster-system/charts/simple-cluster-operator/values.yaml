@@ -88,3 +88,11 @@ addonCatalog:
   configMapName: simple-cluster-addons
   sourceNamespace: kube-system
   interval: 2m
+
+# [ORD CATALOGUE]: descriptive metadata generated from the installed SCPCs.
+# The UI mounts this ConfigMap and exposes the standard ORD discovery routes.
+ordCatalog:
+  enable: true
+  namespace: ""
+  configMapName: simple-cluster-ord
+  interval: 2m
