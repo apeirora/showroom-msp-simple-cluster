@@ -40,3 +40,12 @@ sshkey-operator:
     container:
       image:
         repository: ghcr.io/apeirora/sshkey-operator
+
+# Admission guard that refuses DELETE of objects rendered for a SimpleCluster
+# (label showroom.apeirora.eu/simple-cluster). Requires Kubernetes >= 1.30; on
+# older clusters the manifests are skipped.
+childDeleteGuard:
+  enable: true
+  # The one identity allowed to delete such objects: the operator itself, which
+  # removes them when the owning SimpleCluster is deleted.
+  operatorServiceAccount: simple-cluster-operator-controller-manager
