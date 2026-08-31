@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.35.0...v0.36.0) (2026-08-31)
+
+
+### Features
+
+* move the child delete guard from MSP to KCP ([#167](https://github.com/apeirora/showroom-msp-simple-cluster/issues/167)) ([8605311](https://github.com/apeirora/showroom-msp-simple-cluster/commit/860531112e31a5ccd1c9e7b44e440898550d86a8))
+
 ## [0.35.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.34.0...v0.35.0) (2026-08-31)
 
 
