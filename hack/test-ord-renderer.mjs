@@ -4,11 +4,58 @@ import {
   formatCount,
   layoutGraph,
   loadProviderOptions,
+  matchMarketplaceProvider,
   parseProviderData,
+  providerIconUrl,
 } from "../ui/public/ui-extensions/ord/renderer.js";
 
 assert.equal(formatCount(1, "provider"), "1 provider");
 assert.equal(formatCount(3, "dependency", "dependencies"), "3 dependencies");
+
+const marketplaceProviders = [
+  {
+    name: "arsys",
+    providerMetadata: { spec: { displayName: "Arsys Hosting" } },
+  },
+  {
+    name: "shoots.dati.eu",
+    providerMetadata: { spec: { displayName: "Dati Hosting" } },
+  },
+  {
+    name: "sap.eu",
+    providerMetadata: { spec: { displayName: "SAP Hosting" } },
+  },
+];
+assert.equal(
+  matchMarketplaceProvider("arsys-virtual", marketplaceProviders)?.name,
+  "arsys",
+);
+assert.equal(
+  matchMarketplaceProvider("dati", marketplaceProviders)?.name,
+  "shoots.dati.eu",
+);
+assert.equal(
+  matchMarketplaceProvider("sap-gardener-ironcore", marketplaceProviders)?.name,
+  "sap.eu",
+);
+assert.equal(matchMarketplaceProvider("kind", marketplaceProviders), undefined);
+
+assert.equal(
+  providerIconUrl({
+    providerMetadata: {
+      spec: { icon: { light: { data: "data:image/png;base64,aGVsbG8=" } } },
+    },
+  }),
+  "data:image/png;base64,aGVsbG8=",
+);
+assert.equal(
+  providerIconUrl({
+    providerMetadata: {
+      spec: { icon: { light: { data: "javascript:alert(1)" } } },
+    },
+  }),
+  undefined,
+);
 
 const provider = {
   providerMetadata: {

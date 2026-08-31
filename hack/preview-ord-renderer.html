@@ -30,10 +30,18 @@
                       }
                     }
                   }
-                }
+                },
               },
-              providers: []
-            }
+              providers: [
+                {
+                  name: "cloudferro",
+                  providerMetadata: {
+                    metadata: { name: "cloudferro" },
+                    spec: { displayName: "CloudFerro Hosting" }
+                  }
+                }
+              ]
+            },
           }, window.location.origin);
         }
         if (event.data?.data?.id === "platform-mesh.provider-details.resize.v1") {
