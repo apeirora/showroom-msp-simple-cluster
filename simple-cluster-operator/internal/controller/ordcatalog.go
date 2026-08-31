@@ -394,7 +394,7 @@ func mergeProviderVariants(name string, scpcs []showroomv1alpha1.SimpleClusterPr
 func graphNodes(resources []showroomv1alpha1.ResourceSpec) []providerGraphNode {
 	nodes := make([]providerGraphNode, 0, len(resources))
 	for i := range resources {
-		dependencies := append([]string(nil), resources[i].DependsOn...)
+		dependencies := append([]string{}, resources[i].DependsOn...)
 		sort.Strings(dependencies)
 		nodes = append(nodes, providerGraphNode{
 			Name: resources[i].Name, APIVersion: resources[i].APIVersion,
