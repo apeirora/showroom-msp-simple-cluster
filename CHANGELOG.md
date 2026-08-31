@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.34.0...v0.35.0) (2026-08-31)
+
+
+### Features
+
+* Issue 344 ([#165](https://github.com/apeirora/showroom-msp-simple-cluster/issues/165)) ([aa07614](https://github.com/apeirora/showroom-msp-simple-cluster/commit/aa07614fea4cf35d05378639c0293150d44a050b))
+
 ## [0.34.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.2...v0.34.0) (2026-08-21)
 
 
