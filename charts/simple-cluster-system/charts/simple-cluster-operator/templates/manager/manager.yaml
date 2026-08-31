@@ -40,6 +40,12 @@ spec:
             - --addon-catalog-source-namespace={{ .Values.addonCatalog.sourceNamespace }}
             - --addon-catalog-interval={{ .Values.addonCatalog.interval }}
             {{- end }}
+            {{- if .Values.ordCatalog.enable }}
+            - --ord-catalog-namespace={{ .Values.ordCatalog.namespace | default .Release.Namespace }}
+            - --ord-catalog-configmap={{ .Values.ordCatalog.configMapName }}
+            - --ord-catalog-system-version={{ coalesce .Values.global.imageTag .Chart.AppVersion }}
+            - --ord-catalog-interval={{ .Values.ordCatalog.interval }}
+            {{- end }}
           command:
             - /manager
           image: {{ .Values.controllerManager.container.image.repository }}:{{ coalesce .Values.global.imageTag .Values.controllerManager.container.image.tag .Chart.AppVersion }}

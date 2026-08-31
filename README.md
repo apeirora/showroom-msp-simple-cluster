@@ -290,6 +290,8 @@ in-repo `kind`/`ubuntu-machines` SCPCs remain templated here.
 
 ## Release procedure
 
+The [ORD dependency graph guide](docs/ord-dependency-graphs.md) describes provider metadata, onboarding, and the ORD 1.16.3 limitations.
+
 release-please + a publish workflow; all charts and images ship **in lockstep at one
 version**.
 

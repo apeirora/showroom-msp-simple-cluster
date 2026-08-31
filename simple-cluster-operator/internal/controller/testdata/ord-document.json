@@ -1,0 +1,89 @@
+{
+  "$schema": "https://open-resource-discovery.org/spec-v1/interfaces/Document.schema.json",
+  "openResourceDiscovery": "1.16",
+  "perspective": "system-version",
+  "describedSystemVersion": { "version": "0.35.0" },
+  "vendors": [
+    { "ordId": "apeirora:vendor:apeirora:", "title": "ApeiroRA" }
+  ],
+  "products": [
+    {
+      "ordId": "apeirora.eu:product:simple-cluster:",
+      "title": "Simple Cluster",
+      "shortDescription": "Provider-independent Kubernetes cluster provisioning",
+      "vendor": "apeirora:vendor:apeirora:"
+    }
+  ],
+  "packages": [
+    {
+      "ordId": "apeirora.eu:package:simple-cluster:v1",
+      "title": "Simple Cluster",
+      "shortDescription": "Kubernetes clusters provisioned through selectable infrastructure providers",
+      "description": "Simple Cluster selects an enabled provider configuration and orchestrates its declared resource DAG.",
+      "version": "1.0.0",
+      "vendor": "apeirora:vendor:apeirora:",
+      "partOfProducts": ["apeirora.eu:product:simple-cluster:"],
+      "tags": ["kubernetes", "cluster", "infrastructure", "showroom"]
+    }
+  ],
+  "apiResources": [
+    {
+      "ordId": "apeirora.eu:apiResource:simple-cluster:v1",
+      "title": "SimpleCluster API",
+      "shortDescription": "Kubernetes API for requesting provider-backed clusters",
+      "description": "The Kubernetes Resource Model API used to create, inspect, and delete SimpleCluster resources.",
+      "version": "1.0.0",
+      "visibility": "public",
+      "releaseStatus": "active",
+      "partOfPackage": "apeirora.eu:package:simple-cluster:v1",
+      "apiProtocol": "rest",
+      "implementationStandard": "custom",
+      "customImplementationStandard": "apeirora.eu:kubernetes-resource-model:v1"
+    },
+    {
+      "ordId": "apeirora.eu:apiResource:cloudferro.eu.v1alpha1-OpenStackVM:v1",
+      "title": "OpenStackVM API",
+      "shortDescription": "Kubernetes API contract cloudferro.eu/v1alpha1 OpenStackVM",
+      "description": "A provider-specific Kubernetes Resource Model contract referenced by a Simple Cluster provider configuration.",
+      "version": "1.0.0",
+      "visibility": "public",
+      "releaseStatus": "active",
+      "partOfPackage": "apeirora.eu:package:simple-cluster:v1",
+      "apiProtocol": "rest",
+      "implementationStandard": "custom",
+      "customImplementationStandard": "apeirora.eu:kubernetes-resource-model:v1"
+    }
+  ],
+  "capabilities": [
+    {
+      "ordId": "apeirora.eu:capability:simple-cluster-cloudferro:v1",
+      "type": "apeirora.eu:simple-cluster-provider-config:v1",
+      "title": "Cloudferro",
+      "shortDescription": "Simple Cluster provider configuration cloudferro",
+      "description": "Descriptive view of the resources and dependency edges declared by the cloudferro SimpleClusterProviderConfig. Simple Cluster, not ORD, owns provisioning and ordering.",
+      "version": "1.0.0",
+      "visibility": "public",
+      "releaseStatus": "active",
+      "partOfPackage": "apeirora.eu:package:simple-cluster:v1",
+      "disabled": false,
+      "relatedApiResources": [
+        {
+          "ordId": "apeirora.eu:apiResource:simple-cluster:v1",
+          "relationType": "apeirora.eu:provisioned-by"
+        },
+        {
+          "ordId": "apeirora.eu:apiResource:cloudferro.eu.v1alpha1-OpenStackVM:v1",
+          "relationType": "apeirora.eu:uses-resource"
+        }
+      ],
+      "definitions": [
+        {
+          "type": "apeirora.eu:simple-cluster-provider-config-definition:v1",
+          "mediaType": "application/json",
+          "url": "/ord/provider-config-cloudferro.json",
+          "accessStrategies": [{ "type": "open" }]
+        }
+      ]
+    }
+  ]
+}

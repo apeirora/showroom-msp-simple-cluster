@@ -8,6 +8,14 @@ spec:
   displayName: {{ $marketplaceTitle | quote }}
   description: |
 {{ $marketplaceDescription | nindent 4 }}
+  documentation:
+    - displayName: ORD
+      url: {{ printf "%s://%s%s" .Values.PUBLIC_SCHEME .Values.PUBLIC_HOST .Values.ord.configPath | quote }}
+  data:
+    ord:
+      configUrl: {{ printf "%s://%s%s" .Values.PUBLIC_SCHEME .Values.PUBLIC_HOST .Values.ord.configPath | quote }}
+  detailViewExtensions:
+    - url: {{ printf "%s://%s%s?v=%s" .Values.PUBLIC_SCHEME .Values.PUBLIC_HOST .Values.detailViewExtension.path .Chart.Version | quote }}
   icon:
     light:
       data: "data:image/svg+xml;base64,{{ (.Files.Get "files/icon.svg") | b64enc }}"

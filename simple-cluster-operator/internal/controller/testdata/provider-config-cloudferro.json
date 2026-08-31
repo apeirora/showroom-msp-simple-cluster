@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "name": "cloudferro",
+  "available": true,
+  "availabilityReason": "At least one installed provider configuration is ready.",
+  "resources": [
+    {
+      "name": "control-plane",
+      "apiVersion": "cloudferro.eu/v1alpha1",
+      "kind": "OpenStackVM",
+      "dependsOn": []
+    },
+    {
+      "name": "workers",
+      "apiVersion": "cloudferro.eu/v1alpha1",
+      "kind": "OpenStackVM",
+      "dependsOn": ["control-plane"]
+    },
+    {
+      "name": "cluster",
+      "apiVersion": "ubuntu.apeirora.eu/v1alpha1",
+      "kind": "UbuntuCluster",
+      "dependsOn": ["control-plane", "workers"]
+    }
+  ],
+  "kubeconfigResourceName": "cluster"
+}
