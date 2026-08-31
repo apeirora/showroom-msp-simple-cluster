@@ -756,21 +756,25 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 		return false, fmt.Errorf("resource %q: get %s: %w", resourceName, targetName, err)
 	}
 
-	// First time we see this target after SC was marked for deletion: patch
+	// First time we see this target after SC was marked for deletion: announce that this
+	// child may go (the admission guard refuses deletes of labelled children otherwise, and
+	// the sync-agent carries the annotation to the object's KCP mirror), patch
 	// deletionAnnotations (Gardener-style opt-in) and issue Delete. Subsequent
 	// reconciles skip the work — a non-zero deletionTimestamp means our prior
 	// Delete already landed.
 	if existing.GetDeletionTimestamp().IsZero() {
-		if len(rs.DeletionAnnotations) > 0 {
-			patchBytes, perr := json.Marshal(map[string]any{
-				"metadata": map[string]any{"annotations": rs.DeletionAnnotations},
-			})
-			if perr != nil {
-				return true, fmt.Errorf("resource %q: marshal deletionAnnotations: %w", resourceName, perr)
-			}
-			if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
-				return true, fmt.Errorf("resource %q: patch deletionAnnotations: %w", resourceName, perr)
-			}
+		annotations := map[string]any{rendertpl.AnnoAllowDelete: "true"}
+		for k, v := range rs.DeletionAnnotations {
+			annotations[k] = v
+		}
+		patchBytes, perr := json.Marshal(map[string]any{
+			"metadata": map[string]any{"annotations": annotations},
+		})
+		if perr != nil {
+			return true, fmt.Errorf("resource %q: marshal deletion annotations: %w", resourceName, perr)
+		}
+		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
+			return true, fmt.Errorf("resource %q: patch deletion annotations: %w", resourceName, perr)
 		}
 		if derr := ri.Delete(ctx, targetName, metav1.DeleteOptions{}); derr != nil && !apierrors.IsNotFound(derr) {
 			return true, fmt.Errorf("resource %q: delete %s: %w", resourceName, targetName, derr)

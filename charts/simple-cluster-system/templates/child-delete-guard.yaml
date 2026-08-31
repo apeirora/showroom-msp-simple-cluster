@@ -1,0 +1,76 @@
+{{- /*
+Refuses DELETE of any object the operator rendered for a SimpleCluster. Every such
+object carries showroom.apeirora.eu/simple-cluster=<name>, stamped in the operator's
+single render choke point, so this policy covers every provider and Kind without
+listing them — a new provider is protected with no change here.
+
+Deleting a child directly is not just unsafe, it is expensive: the reconcile loop
+re-Creates the missing resource, which for a Gardener Shoot or a VM means ordering
+new infrastructure rather than restoring the old one.
+
+Break glass: annotate the object with showroom.apeirora.eu/allow-delete="true", or
+disable this guard with childDeleteGuard.enable=false.
+*/}}
+{{- if .Values.childDeleteGuard.enable }}
+{{- if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/ValidatingAdmissionPolicy" }}
+{{- $name := "simple-cluster-child-delete-guard" }}
+{{- $label := "showroom.apeirora.eu/simple-cluster" }}
+{{- $allow := "showroom.apeirora.eu/allow-delete" }}
+{{- $operator := printf "system:serviceaccount:%s:%s" .Release.Namespace .Values.childDeleteGuard.operatorServiceAccount }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
+        operations: ["DELETE"]
+        scope: "*"
+  # DELETE populates oldObject; object is null. The label is also checked here and not
+  # only in the binding's objectSelector: were the selector ever dropped, the policy
+  # still cannot deny anything the operator did not create.
+  matchConditions:
+    - name: managed-by-a-simplecluster
+      expression: >-
+        has(oldObject.metadata.labels) && '{{ $label }}' in oldObject.metadata.labels
+    # The operator removes these objects when the owning SimpleCluster is deleted. The two
+    # kube-system controllers are exempt for a different reason: they delete on behalf of
+    # the API server itself (namespace teardown, owner-reference garbage collection), and
+    # refusing them would leave a namespace Terminating forever.
+    - name: not-a-legitimate-deleter
+      expression: >-
+        !(request.userInfo.username in ['{{ $operator }}',
+        'system:serviceaccount:kube-system:namespace-controller',
+        'system:serviceaccount:kube-system:generic-garbage-collector'])
+    - name: not-already-terminating
+      expression: >-
+        !has(oldObject.metadata.deletionTimestamp)
+    - name: no-break-glass-annotation
+      expression: >-
+        !(has(oldObject.metadata.annotations) && '{{ $allow }}' in oldObject.metadata.annotations
+        && oldObject.metadata.annotations['{{ $allow }}'] == 'true')
+  validations:
+    - expression: "false"
+      reason: Forbidden
+      messageExpression: >-
+        'this object is managed by SimpleCluster "' + oldObject.metadata.labels['{{ $label }}'] +
+        '"; delete the SimpleCluster instead'
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny"]
+  matchResources:
+    objectSelector:
+      matchExpressions:
+        - key: {{ $label }}
+          operator: Exists
+{{- end }}
+{{- end }}

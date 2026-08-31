@@ -36,6 +36,10 @@ const (
 	// produces, so children can be selected and, in the portal, protected from
 	// direct deletion (their lifecycle is owned by the SimpleCluster).
 	LabelSimpleCluster = "showroom.apeirora.eu/simple-cluster"
+	// AnnoAllowDelete releases a child from the admission guard that refuses to delete
+	// objects carrying LabelSimpleCluster. The operator stamps it on a child it is about
+	// to delete, and a human can stamp it by hand to break glass.
+	AnnoAllowDelete = "showroom.apeirora.eu/allow-delete"
 )
 
 // Predecessor is a sibling ResourceSpec's rendered output, plumbed to a
