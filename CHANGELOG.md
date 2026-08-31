@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.37.0...v0.37.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **ord:** serialize empty dependencies as arrays ([#170](https://github.com/apeirora/showroom-msp-simple-cluster/issues/170)) ([cab2906](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cab290697543743059c1fc34c37fb4dc2d573a48))
+
 ## [0.37.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.36.0...v0.37.0) (2026-08-31)
 
 
