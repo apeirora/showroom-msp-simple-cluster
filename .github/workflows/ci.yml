@@ -34,11 +34,6 @@ jobs:
       - name: Build
         run: make build
 
-      # The admission-policy test renders the guard from charts/simple-cluster-system
-      # and skips itself when helm is missing.
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
       - name: Test
         run: make test
 
