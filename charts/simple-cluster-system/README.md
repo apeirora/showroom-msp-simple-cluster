@@ -33,38 +33,20 @@ and copies the generated `dist/chart/` directory into this umbrella.
 
 ## Delete guard
 
-`templates/child-delete-guard.yaml` installs a `ValidatingAdmissionPolicy` that refuses
-`DELETE` of any object the operator rendered for a SimpleCluster — every such object
-carries `showroom.apeirora.eu/simple-cluster=<name>`. Deleting one directly does not
-merely remove it: the reconcile loop re-creates the missing resource, which for a
-Gardener Shoot or a VM means ordering new infrastructure.
+Objects the operator renders for a SimpleCluster carry
+`showroom.apeirora.eu/simple-cluster=<name>`, and a `ValidatingAdmissionPolicy` refuses to
+delete them: deleting one directly does not merely remove it, because the reconcile loop
+re-creates the missing resource, which for a Gardener Shoot or a VM means ordering new
+infrastructure.
 
-The policy matches on the label rather than on a list of Kinds, so a new provider is
-covered without changing it. Deletion is still allowed for:
+That policy lives in KCP, not here — one copy in each provider's APIExport workspace, which
+kcp applies to every account that binds the export. This chart deliberately installs no
+guard on the MSP cluster: the portal deletes through KCP, so that is where a user has to be
+stopped, while an administrator with an MSP kubeconfig keeps a way to clear leftovers by
+hand.
 
-* the operator itself, which removes the children when the SimpleCluster goes away;
-* `kube-system`'s namespace and garbage-collection controllers, so a namespace teardown
-  cannot wedge;
-* objects already terminating, so a stuck resource can still be force-deleted;
-* objects annotated `showroom.apeirora.eu/allow-delete: "true"`. The operator stamps this
-  itself on every child it is about to delete during a SimpleCluster cascade — the
-  showroom-sync-agent carries that annotation onto the child's KCP mirror, which is judged
-  by a separate policy over there. A human can stamp it by hand to break glass.
-
-The break-glass annotation is the only escape hatch a non-operator identity has, so it is
-also what the deny message points at. Set `childDeleteGuard.enable=false` to switch the
-guard off entirely; on clusters older than Kubernetes 1.30 the manifests are skipped
-automatically.
-
-The policy matches every group and resource with `failurePolicy: Fail`, so it is verified
-to stay inert outside its label: `simple-cluster-operator/test/admission` renders it from
-this chart and asserts against a real API server that unlabelled objects — including ones
-in `kube-system` and cluster-scoped Kinds — remain deletable, that a bulk
-`deletecollection` cannot sweep a child away, and that the policy type-checks clean.
-
-It assumes the release namespace is the operator's namespace: the exempted identity is
-`system:serviceaccount:{{ .Release.Namespace }}:{{ .Values.childDeleteGuard.operatorServiceAccount }}`.
-
-This guard protects the MSP cluster. The portal deletes through the GraphQL gateway
-against KCP, i.e. it removes the up-mirror rather than the object here — that path is
-still guarded only by the provider UIs, which grey out the Delete button.
+The operator's side of the contract is the release stamp. Before deleting a child during a
+SimpleCluster cascade it annotates it `showroom.apeirora.eu/allow-delete: "true"`
+(`AnnoAllowDelete` in `internal/template`), and showroom-sync-agent carries that annotation
+onto the child's KCP mirror before deleting it there — so the policy lets the cascade
+through while refusing everyone else. A human can stamp it by hand to break glass.

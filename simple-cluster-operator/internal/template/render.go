@@ -37,8 +37,9 @@ const (
 	// direct deletion (their lifecycle is owned by the SimpleCluster).
 	LabelSimpleCluster = "showroom.apeirora.eu/simple-cluster"
 	// AnnoAllowDelete releases a child from the admission guard that refuses to delete
-	// objects carrying LabelSimpleCluster. The operator stamps it on a child it is about
-	// to delete, and a human can stamp it by hand to break glass.
+	// objects carrying LabelSimpleCluster. The guard runs in KCP, so the stamp the operator
+	// puts on a child here is carried onto that child's KCP mirror by showroom-sync-agent;
+	// a human can stamp either side by hand to break glass.
 	AnnoAllowDelete = "showroom.apeirora.eu/allow-delete"
 )
 
