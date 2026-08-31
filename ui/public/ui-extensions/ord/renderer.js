@@ -141,6 +141,15 @@ export function layoutGraph(resources) {
   }));
 }
 
+export function dependencyEdges(resources) {
+  const names = new Set(resources.map((resource) => resource.name));
+  return resources.flatMap((target) =>
+    target.dependsOn
+      .filter((source) => names.has(source))
+      .map((source) => ({ source, target: target.name })),
+  );
+}
+
 function validateGraph(graph) {
   if (
     !graph ||
@@ -221,6 +230,16 @@ function element(tag, className, value) {
   return node;
 }
 
+function svgElement(tag, attributes = {}) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [name, value] of Object.entries(attributes)) {
+    node.setAttribute(name, String(value));
+  }
+  return node;
+}
+
+let activeGraphObserver;
+
 function renderOptions(app, catalog, providers) {
   app.replaceChildren();
   const panel = element("section", "panel");
@@ -258,7 +277,14 @@ function renderOptions(app, catalog, providers) {
         candidate.classList.toggle("result--selected", selected);
         candidate.setAttribute("aria-pressed", String(selected));
       });
-      flow.replaceChildren(renderFlow(option, marketplaceProvider));
+      const rendered = renderFlow(option, marketplaceProvider);
+      flow.replaceChildren(rendered.content);
+      activeGraphObserver?.disconnect();
+      const draw = () =>
+        drawDependencyEdges(rendered.graph, rendered.resources);
+      activeGraphObserver = new ResizeObserver(draw);
+      activeGraphObserver.observe(rendered.graph);
+      window.requestAnimationFrame(draw);
     });
     return row;
   });
@@ -319,7 +345,7 @@ function renderFlow({ capability, graph }, marketplaceProvider) {
   const header = element("header", "flow__header");
   const title = element("div", "flow__title");
   title.append(
-    element("h3", "eyebrow", "Provisioning flow"),
+    element("h3", "eyebrow", "Dependency graph"),
     element("p", "panel__name", capability.title || graph.name),
   );
   header.append(title);
@@ -337,16 +363,33 @@ function renderFlow({ capability, graph }, marketplaceProvider) {
     element(
       "p",
       "meta flow__hint",
-      "Simple Cluster provisions these resources in dependency order.",
+      "Resources and dependencies declared by this provider option.",
     ),
   );
   const resources = layoutGraph(graph.resources);
   const maxLevel = Math.max(0, ...resources.map((resource) => resource.level));
-  const stages = element("div", "flow__stages");
-  stages.style.setProperty("--columns", String(maxLevel + 1));
-  stages.setAttribute("aria-label", `${capability.title} dependency graph`);
+  const dependencyGraph = element("div", "dependency-graph");
+  const skipEdgeCount = dependencyEdges(resources).filter((edge) => {
+    const source = resources.find((resource) => resource.name === edge.source);
+    const target = resources.find((resource) => resource.name === edge.target);
+    return target.level - source.level > 1;
+  }).length;
+  dependencyGraph.style.setProperty(
+    "--edge-gutter",
+    `${Math.max(28, 14 + skipEdgeCount * 7)}px`,
+  );
+  dependencyGraph.setAttribute(
+    "aria-label",
+    `${capability.title} dependency graph`,
+  );
+  dependencyGraph.setAttribute("role", "group");
+  const edges = svgElement("svg", {
+    class: "dependency-edges",
+    "aria-hidden": "true",
+  });
+  dependencyGraph.append(edges);
   for (let level = 0; level <= maxLevel; level += 1) {
-    const stage = element("div", "flow__stage");
+    const stage = element("div", "dependency-level");
     for (const resource of resources.filter(
       (candidate) => candidate.level === level,
     )) {
@@ -356,6 +399,7 @@ function renderFlow({ capability, graph }, marketplaceProvider) {
           ? "node node--output"
           : "node",
       );
+      node.dataset.resourceName = resource.name;
       node.append(
         element("strong", "", resource.name),
         element("span", "meta", `${resource.kind} · ${resource.apiVersion}`),
@@ -371,11 +415,129 @@ function renderFlow({ capability, graph }, marketplaceProvider) {
       }
       stage.append(node);
     }
-    stages.append(stage);
+    dependencyGraph.append(stage);
   }
-  body.append(stages);
+  body.append(dependencyGraph);
   fragment.append(header, body);
-  return fragment;
+  return { content: fragment, graph: dependencyGraph, resources };
+}
+
+function drawDependencyEdges(graph, resources) {
+  const svg = graph.querySelector(".dependency-edges");
+  if (!svg) return;
+  const graphRect = graph.getBoundingClientRect();
+  if (!graphRect.width || !graphRect.height) return;
+
+  const nodes = new Map(
+    [...graph.querySelectorAll("[data-resource-name]")].map((node) => [
+      node.dataset.resourceName,
+      node.getBoundingClientRect(),
+    ]),
+  );
+  const edges = dependencyEdges(resources);
+  const incoming = groupEdges(edges, "target");
+  const outgoing = groupEdges(edges, "source");
+  const skipEdges = edges.filter((edge) => {
+    const source = resources.find((resource) => resource.name === edge.source);
+    const target = resources.find((resource) => resource.name === edge.target);
+    return target.level - source.level > 1;
+  });
+
+  svg.replaceChildren(createArrowMarker());
+  svg.setAttribute("viewBox", `0 0 ${graphRect.width} ${graphRect.height}`);
+  for (const edge of edges) {
+    const source = relativeRect(nodes.get(edge.source), graphRect);
+    const target = relativeRect(nodes.get(edge.target), graphRect);
+    if (!source || !target) continue;
+    const sourceResource = resources.find(
+      (resource) => resource.name === edge.source,
+    );
+    const targetResource = resources.find(
+      (resource) => resource.name === edge.target,
+    );
+    const skipsLevel = targetResource.level - sourceResource.level > 1;
+    const path = svgElement("path", {
+      class: "dependency-edge",
+      d: skipsLevel
+        ? routedEdgePath(
+            source,
+            target,
+            graphRect.width,
+            skipEdges.indexOf(edge),
+          )
+        : adjacentEdgePath(
+            source,
+            target,
+            outgoing.get(edge.source).indexOf(edge),
+            outgoing.get(edge.source).length,
+            incoming.get(edge.target).indexOf(edge),
+            incoming.get(edge.target).length,
+          ),
+      "marker-end": "url(#dependency-arrow)",
+    });
+    svg.append(path);
+  }
+}
+
+function groupEdges(edges, key) {
+  const groups = new Map();
+  for (const edge of edges) {
+    const group = groups.get(edge[key]) ?? [];
+    group.push(edge);
+    groups.set(edge[key], group);
+  }
+  return groups;
+}
+
+function relativeRect(rect, parent) {
+  if (!rect) return undefined;
+  return {
+    left: rect.left - parent.left,
+    right: rect.right - parent.left,
+    top: rect.top - parent.top,
+    bottom: rect.bottom - parent.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function adjacentEdgePath(
+  source,
+  target,
+  outgoingIndex,
+  outgoingCount,
+  incomingIndex,
+  incomingCount,
+) {
+  const startX =
+    source.left + (source.width * (outgoingIndex + 1)) / (outgoingCount + 1);
+  const endX =
+    target.left + (target.width * (incomingIndex + 1)) / (incomingCount + 1);
+  const middleY = source.bottom + (target.top - source.bottom) / 2;
+  return `M ${startX} ${source.bottom} C ${startX} ${middleY}, ${endX} ${middleY}, ${endX} ${target.top}`;
+}
+
+function routedEdgePath(source, target, graphWidth, lane) {
+  const laneX = graphWidth - 7 - lane * 7;
+  const startY = source.top + source.height / 2;
+  const endY = target.top + target.height / 2;
+  return `M ${source.right} ${startY} H ${laneX} V ${endY} H ${target.right}`;
+}
+
+function createArrowMarker() {
+  const defs = svgElement("defs");
+  const marker = svgElement("marker", {
+    id: "dependency-arrow",
+    markerWidth: 7,
+    markerHeight: 7,
+    refX: 6,
+    refY: 3.5,
+    orient: "auto",
+    markerUnits: "strokeWidth",
+  });
+  marker.append(svgElement("path", { d: "M 0 0 L 7 3.5 L 0 7 z" }));
+  defs.append(marker);
+  return defs;
 }
 
 function renderProviderIcon(provider, displayName) {

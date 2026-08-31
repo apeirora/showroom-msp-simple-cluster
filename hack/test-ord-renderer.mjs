@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   configUrlFor,
+  dependencyEdges,
   formatCount,
   layoutGraph,
   loadProviderOptions,
@@ -86,6 +87,24 @@ assert.deepEqual(
   layoutGraph(resources).map(({ name, level }) => [name, level]),
   [["workers", 1], ["cluster", 2], ["cp", 0]],
 );
+assert.deepEqual(dependencyEdges(resources), [
+  { source: "cp", target: "workers" },
+  { source: "cp", target: "cluster" },
+  { source: "workers", target: "cluster" },
+]);
+const parallelResources = [
+  { name: "control-plane", dependsOn: [] },
+  { name: "workers", dependsOn: [] },
+  { name: "cluster", dependsOn: ["control-plane", "workers"] },
+];
+assert.deepEqual(
+  layoutGraph(parallelResources).map(({ name, level }) => [name, level]),
+  [["control-plane", 0], ["workers", 0], ["cluster", 1]],
+);
+assert.deepEqual(dependencyEdges(parallelResources), [
+  { source: "control-plane", target: "cluster" },
+  { source: "workers", target: "cluster" },
+]);
 
 const responses = new Map([
   [

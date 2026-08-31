@@ -218,34 +218,47 @@ main {
   margin: 0 0 0.7rem;
 }
 
-.flow__stages {
-  display: grid;
-  grid-template-columns: repeat(var(--columns, 1), minmax(8.5rem, 1fr));
-  gap: 1.25rem;
-  overflow-x: auto;
-  padding: 0.1rem 0;
-}
-
-.flow__stage {
+.dependency-graph {
   position: relative;
   display: grid;
-  align-content: start;
-  gap: 0.45rem;
-  min-width: 8.5rem;
+  width: min(100%, 44rem);
+  gap: 2.75rem;
+  margin: 0 auto;
+  padding: 0.1rem var(--edge-gutter, 2rem) 0.1rem 0;
 }
 
-.flow__stage + .flow__stage::before {
-  content: "›";
+.dependency-edges {
   position: absolute;
-  left: -0.85rem;
-  top: 50%;
-  color: #0064d9;
-  font-size: 1.5rem;
-  line-height: 1;
-  transform: translateY(-50%);
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dependency-edge {
+  fill: none;
+  stroke: #5b738b;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.dependency-edges marker path {
+  fill: #5b738b;
+}
+
+.dependency-level {
+  position: relative;
+  display: grid;
+  z-index: 1;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: 0.65rem;
 }
 
 .node {
+  min-width: 0;
   padding: 0.55rem 0.65rem;
   border: 1px solid #d5dadd;
   border-radius: 0.35rem;
@@ -322,22 +335,5 @@ main {
   .result > .arrow {
     grid-column: 3;
     grid-row: 2;
-  }
-
-  .flow__stages {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-    overflow-x: visible;
-  }
-
-  .flow__stage {
-    min-width: 0;
-  }
-
-  .flow__stage + .flow__stage::before {
-    content: "⌄";
-    left: 50%;
-    top: -1.1rem;
-    transform: translateX(-50%);
   }
 }
