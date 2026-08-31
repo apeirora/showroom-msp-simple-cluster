@@ -100,6 +100,10 @@ func TestORDCatalogPreservesProviderDAGEdgesAndAvailability(t *testing.T) {
 	if cluster.Name != "cluster" || len(cluster.DependsOn) != 2 || cluster.DependsOn[0] != "cp" || cluster.DependsOn[1] != "workers" {
 		t.Fatalf("dependsOn edges were not preserved: %+v", cluster)
 	}
+	cp := graph.Resources[1]
+	if cp.Name != "cp" || cp.DependsOn == nil {
+		t.Fatalf("leaf resource dependsOn must be an empty JSON array: %+v", cp)
+	}
 }
 
 func TestORDCatalogRejectsAmbiguousProviderGraphs(t *testing.T) {
