@@ -1,0 +1,63 @@
+# Refuses DELETE of any object the simple-cluster-operator rendered for a SimpleCluster.
+#
+# Apply into the workspace that owns the APIExport, NOT into the accounts:
+#   root:providers:cloudferro, root:providers:dati, root:providers:sap, root:providers:arsys
+# kcp resolves policies for a bound resource from its APIExport's workspace, so one copy
+# per export covers every account that binds it, now and in the future.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: simple-cluster-child-delete-guard
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
+        operations: ["DELETE"]
+        scope: "*"
+  # DELETE populates oldObject; object is null. The label is checked here as well as in the
+  # binding's objectSelector: were the selector ever dropped, the policy still cannot deny
+  # anything the operator did not create.
+  #
+  # There is deliberately no exemption for showroom-sync-agent: when a SimpleCluster is
+  # deleted, the operator stamps the allow-delete annotation on the child and the agent
+  # carries it onto this mirror before deleting it. That keeps the decision with the
+  # operator instead of handing a blanket pass to the shared kcp-admin certificate.
+  matchConditions:
+    - name: managed-by-a-simplecluster
+      expression: >-
+        has(oldObject.metadata.labels) && 'showroom.apeirora.eu/simple-cluster' in oldObject.metadata.labels
+    # kcp tears down a namespace (and collects owner-referenced objects) through its own
+    # loopback identity. Refusing it leaves the namespace Terminating forever with the
+    # object still there -- measured on cc-d2, and fixed by this line.
+    - name: not-the-apiserver-itself
+      expression: >-
+        request.userInfo.username != 'system:apiserver'
+    - name: not-already-terminating
+      expression: >-
+        !has(oldObject.metadata.deletionTimestamp)
+    - name: no-break-glass-annotation
+      expression: >-
+        !(has(oldObject.metadata.annotations) && 'showroom.apeirora.eu/allow-delete' in oldObject.metadata.annotations
+        && oldObject.metadata.annotations['showroom.apeirora.eu/allow-delete'] == 'true')
+  validations:
+    - expression: "false"
+      reason: Forbidden
+      messageExpression: >-
+        'this object is managed by SimpleCluster "' + oldObject.metadata.labels['showroom.apeirora.eu/simple-cluster'] +
+        '"; delete the SimpleCluster instead'
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: simple-cluster-child-delete-guard
+spec:
+  policyName: simple-cluster-child-delete-guard
+  validationActions: ["Deny"]
+  matchResources:
+    objectSelector:
+      matchExpressions:
+        - key: showroom.apeirora.eu/simple-cluster
+          operator: Exists
