@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Cluster ORD renderer preview</title>
+    <style>
+      body { margin: 2rem auto; max-width: 900px; font-family: Arial, sans-serif; }
+      iframe { width: 100%; min-height: 560px; border: 0; }
+    </style>
+  </head>
+  <body>
+    <iframe id="extension" src="/ui-extensions/ord/"></iframe>
+    <script>
+      const frame = document.querySelector("#extension");
+      window.addEventListener("message", (event) => {
+        if (event.source !== frame.contentWindow) return;
+        if (event.data?.msg === "luigi.get-context") {
+          frame.contentWindow.postMessage({
+            msg: "luigi.init",
+            context: {
+              protocolVersion: "platform-mesh.provider-details.v1",
+              currentProvider: {
+                name: "simpleclusters.showroom.apeirora.eu",
+                providerMetadata: {
+                  spec: {
+                    data: {
+                      ord: {
+                        configUrl: `${window.location.origin}/.well-known/open-resource-discovery`
+                      }
+                    }
+                  }
+                },
+              },
+              providers: [
+                {
+                  name: "cloudferro",
+                  providerMetadata: {
+                    metadata: { name: "cloudferro" },
+                    spec: { displayName: "CloudFerro Hosting" }
+                  }
+                }
+              ]
+            },
+          }, window.location.origin);
+        }
+        if (event.data?.data?.id === "platform-mesh.provider-details.resize.v1") {
+          frame.style.height = `${event.data.data.height}px`;
+        }
+      });
+    </script>
+  </body>
+</html>
