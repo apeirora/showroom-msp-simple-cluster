@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.36.0...v0.37.0) (2026-08-31)
+
+
+### Features
+
+* expose Simple Cluster dependency metadata through ORD ([#164](https://github.com/apeirora/showroom-msp-simple-cluster/issues/164)) ([09460f2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/09460f2c6c8cbc8c970e66215ed425ab5206afda))
+
 ## [0.36.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.35.0...v0.36.0) (2026-08-31)
 
 
