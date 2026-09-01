@@ -4,7 +4,7 @@
 
 All members of the project community must abide by the [SAP Open Source Code of Conduct](https://github.com/SAP/.github/blob/main/CODE_OF_CONDUCT.md).
 Only by respecting each other we can develop a productive, collaborative community.
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting [a project maintainer](REUSE.toml).
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting [a project maintainer](.github/CODEOWNERS).
 
 ## Engaging in Our Project
 
@@ -36,3 +36,53 @@ The following rule governs code contributions:
 * We use GitHub issues to track bugs and enhancement requests.
 
 * Please provide as much context as possible when you open an issue. The information you provide must be comprehensive enough to reproduce that issue for the assignee.
+
+## Developing
+
+Each operator is a separate Go module with its own `Makefile`; there is no
+top-level `Makefile`. See [Local development](docs/installation-local.md) for the
+per-module workflow, and the
+[provider implementation guide](docs/provider-guide.md) if you are adding a way
+of provisioning clusters.
+
+Before opening a pull request:
+
+```sh
+cd <module> && make build && make vet && make test
+```
+
+If you changed dependencies, regenerate the SBOM and the licence audit — CI
+fails otherwise:
+
+```sh
+./hack/generate-sbom.sh
+python3 hack/generate-third-party-licenses.py
+```
+
+If you changed operator scaffolding (CRDs, RBAC, the manager deployment),
+regenerate the derived charts, which CI does not do for you:
+
+```sh
+./scripts/regen-helm-charts.sh
+```
+
+## Pull request titles
+
+Titles must follow [Conventional Commits](https://www.conventionalcommits.org/)
+— `feat:`, `fix:`, `docs:`, `chore:`, and so on. This is enforced by CI and
+drives the version of the next release; see [Versioning](docs/versioning.md).
+The repository squash-merges, so the title becomes the commit message.
+
+## What CI requires
+
+Builds and tests for all seven Go modules, the UI and all eight Helm charts, plus
+four compliance gates: REUSE licence compliance, a gitleaks secret scan,
+`govulncheck` / `npm audit`, and a check that the committed SBOM still matches
+the declared dependencies. See [Release flow](docs/release-flow.md).
+
+## Licensing
+
+Contributions are licensed under Apache-2.0. The repository is
+[REUSE](https://reuse.software/) compliant: `REUSE.toml` covers the whole tree,
+so new files need no per-file header. Third-party material added to the tree
+needs its own annotation in `REUSE.toml`.

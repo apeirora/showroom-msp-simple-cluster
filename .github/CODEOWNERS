@@ -1,0 +1,16 @@
+# Repository ownership. These accounts are requested for review on every pull
+# request and are the contacts for security reports (see SECURITY.md).
+*                       @m-szalik
+
+# Platform Mesh / KCP integration
+/kcp/                   @m-szalik
+/charts/simple-cluster-pm-integration/  @m-szalik
+/charts/simple-cluster-sync-agent/      @m-szalik
+
+# Release, compliance and supply-chain tooling
+/.github/workflows/     @m-szalik
+/.ocm/                  @m-szalik
+/hack/                  @m-szalik
+/sbom/                  @m-szalik
+/REUSE.toml             @m-szalik
+/LICENSES/              @m-szalik
