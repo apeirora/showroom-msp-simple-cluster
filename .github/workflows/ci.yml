@@ -13,35 +13,25 @@ permissions:
   checks: write
   pull-requests: write
 
-defaults:
-  run:
-    working-directory: simple-cluster-operator
-
 jobs:
-  build-and-test:
+  # ---------------------------------------------------------------- Go modules
+  go:
+    name: Go (${{ matrix.module }})
     runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: simple-cluster-operator/go.mod
-          cache: true
-          cache-dependency-path: simple-cluster-operator/go.sum
-
-      - name: Build
-        run: make build
-
-      - name: Test
-        run: make test
-
-  build-sshkey:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - simple-cluster-operator
+          - simple-cluster-operator-kind
+          - simple-cluster-operator-openstack
+          - simple-cluster-operator-ubuntu
+          - ubuntu-machines
+          - sshkey-operator
+          - bind-watcher-operator
     defaults:
       run:
-        working-directory: sshkey-operator
+        working-directory: ${{ matrix.module }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -49,40 +39,28 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: sshkey-operator/go.mod
+          go-version-file: ${{ matrix.module }}/go.mod
           cache: true
-          cache-dependency-path: sshkey-operator/go.sum
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Build
         run: make build
 
-      - name: Test
-        run: make test
-
-  build-bind-watcher:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: bind-watcher-operator
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: bind-watcher-operator/go.mod
-          cache: true
-          cache-dependency-path: bind-watcher-operator/go.sum
-
-      - name: Build
-        run: make build
+      - name: Vet
+        run: make vet
 
       - name: Test
         run: make test
 
   lint:
+    name: Lint (${{ matrix.module }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - simple-cluster-operator
+          - sshkey-operator
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -90,17 +68,19 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: simple-cluster-operator/go.mod
+          go-version-file: ${{ matrix.module }}/go.mod
           cache: true
-          cache-dependency-path: simple-cluster-operator/go.sum
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4.0
-          working-directory: simple-cluster-operator
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
 
-  build-ui:
+  # ------------------------------------------------------------------------ UI
+  ui:
+    name: UI
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -119,13 +99,49 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Type-check
+        run: npm run typecheck
+
       - name: Test ORD renderer
         run: npm run test:ord
 
       - name: Build
         run: npm run build
 
-  test-charts:
+  # -------------------------------------------------------------- Helm charts
+  helm:
+    name: Helm (${{ matrix.chart }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - bind-watcher-operator
+          - simple-cluster-pm-integration
+          - simple-cluster-scpc-config
+          - simple-cluster-sync-agent
+          - simple-cluster-system
+          - simple-cluster-ui
+          - sshkey-operator
+          - ubuntu-machines-operator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint, template and package chart
+        run: |
+          set -euo pipefail
+          chart_dir="charts/${{ matrix.chart }}"
+          helm dependency update "$chart_dir"
+          helm lint "$chart_dir"
+          helm template "ci-${{ matrix.chart }}" "$chart_dir" --namespace default >/dev/null
+          helm package "$chart_dir" --destination "dist/${{ matrix.chart }}"
+
+  charts-ord:
+    name: Helm (ORD wiring)
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -135,4 +151,102 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: Test ORD chart wiring
-        run: bash ../hack/test-ord-charts.sh
+        run: bash hack/test-ord-charts.sh
+
+  # ---------------------------------------------------------- Compliance gates
+  reuse:
+    name: Gate — REUSE compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: REUSE lint
+        uses: fsfe/reuse-action@v5
+
+  secrets:
+    name: Gate — Secret scan
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: v8.30.1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Run gitleaks directly rather than through gitleaks-action: the action
+      # requires a GITLEAKS_LICENSE secret for organisation-owned repositories,
+      # and pinning the image keeps a new upstream release from turning this
+      # gate red on an unrelated pull request.
+      #
+      # Scans the tree, which is what a per-change gate should do.
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" \
+            "zricethezav/gitleaks:${GITLEAKS_VERSION}" \
+            dir /repo --config /repo/.gitleaks.toml --redact
+
+  vulnerabilities:
+    name: Gate — Vulnerabilities (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - simple-cluster-operator
+          - simple-cluster-operator-kind
+          - simple-cluster-operator-openstack
+          - simple-cluster-operator-ubuntu
+          - ubuntu-machines
+          - sshkey-operator
+          - bind-watcher-operator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: govulncheck
+        working-directory: ${{ matrix.module }}
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          govulncheck ./...
+
+  vulnerabilities-ui:
+    name: Gate — Vulnerabilities (ui)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  dependencies:
+    name: Gate — Dependency licences
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: simple-cluster-operator/go.mod
+
+      - name: Check the SBOM and licence audit are current
+        run: bash hack/check-sbom-current.sh

@@ -36,6 +36,12 @@ linters:
           - dupl
           - lll
         path: internal/*
+      # Repeated literals in table-driven tests are the fixture, not a missing
+      # constant; the same goes for near-identical test cases.
+      - linters:
+          - dupl
+          - goconst
+        path: _test\.go
     paths:
       - third_party$
       - builtin$

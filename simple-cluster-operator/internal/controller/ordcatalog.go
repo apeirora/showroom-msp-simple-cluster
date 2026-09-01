@@ -62,6 +62,15 @@ type ORDCatalog struct {
 	Interval        time.Duration
 }
 
+// Fixed ORD document values. Every describable this operator emits is published
+// at the same version, visibility and release status, under one vendor.
+const (
+	ordVersion       = "1.0.0"
+	ordVisibility    = "public"
+	ordReleaseStatus = "active"
+	ordVendorID      = "apeirora:vendor:apeirora:"
+)
+
 func (a *ORDCatalog) NeedLeaderElection() bool { return true }
 
 func (a *ORDCatalog) Start(ctx context.Context) error {
@@ -270,9 +279,9 @@ func buildORDCatalog(scpcs []showroomv1alpha1.SimpleClusterProviderConfig, syste
 			Title:               displayName(name),
 			ShortDescription:    "Simple Cluster provider configuration " + name,
 			Description:         "Descriptive view of the resources and dependency edges declared by the " + name + " SimpleClusterProviderConfig. Simple Cluster, not ORD, owns provisioning and ordering.",
-			Version:             "1.0.0",
-			Visibility:          "public",
-			ReleaseStatus:       "active",
+			Version:             ordVersion,
+			Visibility:          ordVisibility,
+			ReleaseStatus:       ordReleaseStatus,
 			PartOfPackage:       ordPackageID,
 			Disabled:            !variant.available,
 			RelatedAPIResources: relatedResources,
@@ -288,7 +297,7 @@ func buildORDCatalog(scpcs []showroomv1alpha1.SimpleClusterProviderConfig, syste
 		ORDID: ordProviderAPIID, Title: "SimpleCluster API",
 		ShortDescription: "Kubernetes API for requesting provider-backed clusters",
 		Description:      "The Kubernetes Resource Model API used to create, inspect, and delete SimpleCluster resources.",
-		Version:          "1.0.0", Visibility: "public", ReleaseStatus: "active",
+		Version:          ordVersion, Visibility: ordVisibility, ReleaseStatus: ordReleaseStatus,
 		PartOfPackage: ordPackageID, APIProtocol: "rest",
 		ImplementationStandard:       "custom",
 		CustomImplementationStandard: "apeirora.eu:kubernetes-resource-model:v1",
@@ -304,7 +313,7 @@ func buildORDCatalog(scpcs []showroomv1alpha1.SimpleClusterProviderConfig, syste
 			ORDID: id, Title: contract.Kind + " API",
 			ShortDescription: "Kubernetes API contract " + contract.APIVersion + " " + contract.Kind,
 			Description:      "A provider-specific Kubernetes Resource Model contract referenced by a Simple Cluster provider configuration.",
-			Version:          "1.0.0", Visibility: "public", ReleaseStatus: "active",
+			Version:          ordVersion, Visibility: ordVisibility, ReleaseStatus: ordReleaseStatus,
 			PartOfPackage: ordPackageID, APIProtocol: "rest",
 			ImplementationStandard:       "custom",
 			CustomImplementationStandard: "apeirora.eu:kubernetes-resource-model:v1",
@@ -316,17 +325,17 @@ func buildORDCatalog(scpcs []showroomv1alpha1.SimpleClusterProviderConfig, syste
 		OpenResourceDiscovery:  ordConfigurationV1,
 		Perspective:            "system-version",
 		DescribedSystemVersion: ordSystemVersion{Version: systemVersion},
-		Vendors:                []ordVendor{{ORDID: "apeirora:vendor:apeirora:", Title: "ApeiroRA"}},
+		Vendors:                []ordVendor{{ORDID: ordVendorID, Title: "ApeiroRA"}},
 		Products: []ordProduct{{
 			ORDID: "apeirora.eu:product:simple-cluster:", Title: "Simple Cluster",
 			ShortDescription: "Provider-independent Kubernetes cluster provisioning",
-			Vendor:           "apeirora:vendor:apeirora:",
+			Vendor:           ordVendorID,
 		}},
 		Packages: []ordPackage{{
 			ORDID: ordPackageID, Title: "Simple Cluster",
 			ShortDescription: "Kubernetes clusters provisioned through selectable infrastructure providers",
 			Description:      "Simple Cluster selects an enabled provider configuration and orchestrates its declared resource DAG.",
-			Version:          "1.0.0", Vendor: "apeirora:vendor:apeirora:",
+			Version:          ordVersion, Vendor: ordVendorID,
 			PartOfProducts: []string{"apeirora.eu:product:simple-cluster:"},
 			Tags:           []string{"kubernetes", "cluster", "infrastructure", "showroom"},
 		}},

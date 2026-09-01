@@ -24,6 +24,10 @@ build: ## Build the binary.
 test: ## Run tests.
 	go test -race -covermode=atomic -coverprofile=cover.out ./...
 
+.PHONY: vet
+vet: ## Run go vet against the codebase.
+	go vet ./...
+
 .PHONY: lint
 lint: ## Vet the codebase.
 	go vet ./...

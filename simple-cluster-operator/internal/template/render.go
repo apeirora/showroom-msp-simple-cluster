@@ -59,6 +59,14 @@ type Predecessor struct {
 // Repeat template is evaluated to N and the body is rendered N times with
 // .Index and .Prev in scope. Each returned object has apiVersion/kind/name/
 // namespace forced from the ResourceSpec and tracking annotations applied.
+// Render-context keys. Named so the template surface documented in
+// docs/architecture.md has exactly one definition in code.
+const (
+	ctxKeyInputs    = "Inputs"
+	ctxKeyNodes     = "nodes"
+	ctxKeyRequested = "requested"
+)
+
 func Render(
 	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 	sc *showroomv1alpha1.SimpleCluster,
@@ -195,7 +203,7 @@ func buildContext(
 
 	var targetName string
 	if resource.NameTemplate != "" {
-		nameCtx := map[string]any{"SC": scContext(sc), "Inputs": inputs}
+		nameCtx := map[string]any{"SC": scContext(sc), ctxKeyInputs: inputs}
 		rendered, nerr := RenderString(resource.Name+".nameTemplate", resource.NameTemplate, nameCtx)
 		if nerr != nil {
 			return nil, fmt.Errorf("nameTemplate: %w", nerr)
@@ -249,8 +257,8 @@ func buildContext(
 	}
 
 	return map[string]any{
-		"SC":     scCtx,
-		"Inputs": inputs,
+		"SC":         scCtx,
+		ctxKeyInputs: inputs,
 		"Target": map[string]any{
 			"name":      targetName,
 			"namespace": targetNamespace,
@@ -270,11 +278,11 @@ func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 		"namespace": sc.Namespace,
 		"uid":       string(sc.UID),
 		"workers": map[string]any{
-			"nodes":       sc.Spec.Workers.MinNodes(),
-			"min":         sc.Spec.Workers.MinNodes(),
-			"max":         sc.Spec.Workers.MaxNodes(),
-			"autoscaling": sc.Spec.Workers.AutoscalingEnabled(),
-			"requested":   nodeResourcesContext(sc.Spec.Workers.Requested),
+			ctxKeyNodes:     sc.Spec.Workers.MinNodes(),
+			"min":           sc.Spec.Workers.MinNodes(),
+			"max":           sc.Spec.Workers.MaxNodes(),
+			"autoscaling":   sc.Spec.Workers.AutoscalingEnabled(),
+			ctxKeyRequested: nodeResourcesContext(sc.Spec.Workers.Requested),
 		},
 		"labels": sc.Labels,
 	}
@@ -286,13 +294,13 @@ func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 	// SelectProfile (which maxes worker and CP asks) is unaffected.
 	if cp := sc.Spec.ControlPlane; cp != nil {
 		scCtx["controlPlane"] = map[string]any{
-			"nodes":     cp.Nodes,
-			"requested": nodeResourcesContext(cp.Requested),
+			ctxKeyNodes:     cp.Nodes,
+			ctxKeyRequested: nodeResourcesContext(cp.Requested),
 		}
 	} else {
 		scCtx["controlPlane"] = map[string]any{
-			"nodes":     int32(1),
-			"requested": nodeResourcesContext(sc.Spec.Workers.Requested),
+			ctxKeyNodes:     int32(1),
+			ctxKeyRequested: nodeResourcesContext(sc.Spec.Workers.Requested),
 		}
 	}
 	return scCtx
@@ -307,8 +315,8 @@ func renderNamespace(resourceName, raw string, scCtx, inputs map[string]any) (st
 		return raw, nil
 	}
 	out, err := RenderString(resourceName+".namespace", raw, map[string]any{
-		"SC":     scCtx,
-		"Inputs": inputs,
+		"SC":         scCtx,
+		ctxKeyInputs: inputs,
 	})
 	if err != nil {
 		return "", fmt.Errorf("render namespace %q: %w", raw, err)
