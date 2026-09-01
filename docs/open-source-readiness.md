@@ -9,7 +9,7 @@ result is auditable after publication.
 | | |
 |---|---|
 | Reviewed tree | `open-source` branch, based on `main` at `99a631e9` (v0.37.1) |
-| History | all 497 commits reachable from all refs, back to `86a457aa` (2026-05-19) |
+| History | every commit reachable from every ref at scan time — 497 then, 534 once this branch was added — back to `86a457aa` (2026-05-19) |
 | Date | 2026-09-01 |
 
 Passes run:
@@ -34,17 +34,19 @@ Passes run:
 |---|---|---|---|
 | F-01 | High | Real OpenSSH ed25519 **private key** committed in `samples/openstack/openstack-sample-ssh-secret.yaml` | **Resolved.** Key material removed from the working tree; the sample now carries a placeholder and an `ssh-keygen` recipe. Redacted from history in the publication rewrite. Key was demo-only and never granted access to anything beyond throwaway showroom VMs; it is treated as compromised and must not be reused. |
 | F-02 | High | Real OpenSSH ed25519 **private key** committed in `samples/ubuntu-cluster-standalone/sshkey-sample-prv-key.yaml` (historic paths `samples/ubuntu/`, `samples/ubuntu-machines-cluster/`) | **Resolved.** Same treatment as F-01. |
-| F-03 | Medium | AI-assistant attribution trailer in 3 commit messages (`29ab665c`, `271f5b15`, `d2949503`) | **Resolved** by history rewrite before publication. |
+| F-03 | Medium | AI-assistant attribution trailer in 3 commit messages (`29ab665c`, `271f5b15`, `d2949503`) | **Resolved** by the history rewrite in [`hack/history-rewrite/`](../hack/history-rewrite/README.md). |
 | F-04 | Medium | Internal landscape identifiers `cc-d2` / `cc-two`, Gardener project namespace `garden-pm-cc-d2` | **Resolved.** Replaced with neutral placeholders across `README.md`, `kcp/`, `charts/simple-cluster-pm-integration/Chart.yaml` and the Gardener samples. |
 | F-05 | Medium | Real public IPv4 addresses of showroom hosts (`34.58.121.214`, `46.60.23.143`, `46.60.23.242`, `46.60.18.73/.74`) | **Resolved.** Replaced with RFC 5737 documentation addresses (`203.0.113.0/24`) in samples, docs and unit tests. |
 | F-06 | Medium | CloudFerro tenant network identifier `cloud_080745_1` used as a sample default | **Resolved.** Replaced with `<your-neutron-network>`. |
-| F-07 | Low | Commit message `29ab665c` names an internal availability zone, a live shoot (`sh-c8900d38`) and an issue in the private `apeirora/showroom` repository | **Resolved** by history rewrite before publication. |
+| F-07 | Low | Commit message `29ab665c` names a live shoot (`sh-c8900d38`), the cluster it belonged to, and issues in the private `apeirora/showroom` repository | **Resolved** by the history rewrite: those names are replaced with placeholders. The availability-zone names stay — they are ordinary Gardener sample defaults that also appear in the tree. |
 | F-08 | Low | Developer-local kubeconfig path and personal GHCR namespace in `bind-watcher-operator/hack/{experiment.sh,deploy.yaml}` | **Resolved.** Defaults now point at `$HOME/.kube/` and `ghcr.io/apeirora/`. |
 | F-09 | Low | Internal `TODO.md` at the repository root | **Resolved.** Removed; the items were tracked work, not user-facing documentation. |
 | F-10 | Low | Repository `.gitignore` did not exclude `.claude/`, `.notes/`, `*.env`, `*openrc*` or key files — those paths stayed untracked only because of a maintainer's personal global gitignore | **Resolved.** All added to the repository `.gitignore`. |
 | F-11 | Info | OpenStack application-credential files present in the untracked working tree (`.claude/openstack-cf/.env`, `*-openrc-app-credentials.sh`) | **Never committed** — verified with `--diff-filter=A` across all refs. Credentials to be revoked in the OpenStack project as a precaution; see *Open handoff items*. |
 | F-12 | Info | A live CloudFerro application credential (`OS_APPLICATION_CREDENTIAL_ID` / `_SECRET`) sits in a maintainer's working copy at `samples/openstack/openstack-creds-secret.yaml` | **Never committed** — the file is excluded by `samples/openstack/.gitignore`, and `--diff-filter=A` across all refs confirms it was never added. The credential is to be revoked; see *Open handoff items*. |
 | F-13 | Info | `imports/` holds real Gardener kubeconfigs with live bearer tokens in a maintainer's working copy | **Never committed** — `imports/` has been in `.gitignore` since it was created, confirmed by `--diff-filter=A` across all refs. Tokens to be rotated; see *Open handoff items*. |
+| F-14 | Info | `govulncheck` reported known CVEs in every Go module (`GO-2026-5970`, `-5026`, `-5019`, `-5020`, `-6061`) | **Resolved.** `golang.org/x/text`, `x/net`, `x/crypto` and `google.golang.org/grpc` bumped to their fixed versions across all seven modules; `govulncheck` is now clean everywhere. |
+| F-15 | Accepted | The history rewrite changes every commit SHA, so all `commit/<sha>` and `compare/<sha>...<sha>` links in `CHANGELOG.md` become dead | **Accepted.** Repairing them means rewriting a generated changelog against the SHA translation map. The map (`filter-repo/commit-map` from the rewrite) is preserved with the publication ticket, so the links can be repaired later if anyone asks. The changelog text itself stays accurate. |
 
 ## Verified clean
 
@@ -67,6 +69,14 @@ Passes run:
 - A final `gitleaks` pass over a clean `git archive` of the publication tree
   reports **no findings**.
 
+## Deliberate non-findings
+
+- **`simple-cluster-operator-kind` declares module path
+  `…/kind-cluster-operator`**, which does not match its directory name. This is
+  intentional, not stale: the module path matches the published image
+  (`ghcr.io/apeirora/kind-cluster-operator`) and the chart name. Renaming it
+  would break that alignment, so it was left alone.
+
 ## Known issues found during the review
 
 Not publication blockers, but recorded so a reader of the public repository is
@@ -84,18 +94,45 @@ not misled:
   CRD descriptions. Left unchanged here because the chart's copy of the CRD can
   only be brought back into step through the broken regeneration script above.
 
-## Open handoff items
+## Publication runbook
 
-These cannot be closed from inside the repository and are tracked with the
-publication ticket:
+The remaining steps cannot be completed from inside the repository. **The order
+matters** — in particular, no pull request may be open when the history rewrite
+is pushed, because a mirror push rewrites every branch and tag and would strand
+that pull request's review comments on commits that no longer exist.
 
-1. **Revoke credentials** that existed outside the repository but alongside it:
+Tracked in publication ticket: `<TICKET>` *(fill in before starting)*.
+
+1. **Four-eye peer review** of this change set — the pull request from
+   `open-source` into `main` — in a meeting, with the outcome recorded in the
+   ticket. Then **merge it**.
+2. **Apply the history rewrite** with no pull request open:
+
+   ```sh
+   hack/history-rewrite/apply-history-rewrite.sh <this-repo> /tmp/rewrite.git
+   ```
+
+   Inspect the result, then push as the script instructs. The tag ruleset
+   restricts tag creation to the `apeirora-showroom-bot` App and must be relaxed
+   for the duration of the push and restored immediately afterwards. Every clone
+   must be re-cloned afterwards.
+
+   **Preserve `/tmp/rewrite.git/filter-repo/commit-map`** — the old-to-new SHA
+   translation, and the only way to repair the `CHANGELOG.md` links that the
+   rewrite breaks (F-15). Attach it to the ticket.
+
+   Confirm afterwards that release-please still resolves the latest release and
+   that the 77 tags were re-created.
+3. **Revoke credentials** that lived alongside the repository but never in it:
    the OpenStack application credentials in F-11 and F-12, the Gardener
    kubeconfig tokens in F-13, and the two demo SSH keys in F-01/F-02.
-2. **Enable GitHub secret scanning and push protection** on the repository
-   (available once it is public).
-3. **Make the CI gates required** — REUSE, secret scan, vulnerability scan,
-   dependency licence check — through the branch-protection ruleset.
-4. **Four-eye peer review** of this change set, with the outcome recorded in the
-   publication ticket.
-5. **Flip the repository to public**, after 1–4 are done.
+4. **Flip the repository to public.**
+5. **Enable GitHub secret scanning and push protection** — only available once
+   the repository is public.
+6. **Make the CI gates required** through the branch-protection ruleset: the
+   `go`, `helm`, `ui` and `lint` jobs plus the four gates — REUSE compliance,
+   secret scan, vulnerability scan and the dependency-licence check.
+
+Two publication jobs, `publish-sbom` and `publish-ocm`, have never executed —
+they run only on a release. Everything else in CI was verified locally before
+this change set was proposed.

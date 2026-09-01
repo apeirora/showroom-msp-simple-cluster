@@ -139,6 +139,7 @@ kubectl --kubeconfig demo.kubeconfig get nodes
 | [ORD dependency graphs](docs/ord-dependency-graphs.md) | Provider metadata and onboarding |
 | [Third-party licences](docs/third-party-licenses.md) | Dependency licence audit |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | SAP Open Source Code of Conduct |
 | [Security](SECURITY.md) | Security policy |
 
 ## Components
