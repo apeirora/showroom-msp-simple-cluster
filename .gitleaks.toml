@@ -1,0 +1,34 @@
+# gitleaks configuration for the CI secret-scanning gate.
+#
+# Extends the default rule set and allowlists three classes of confirmed false
+# positive. Every entry was verified by hand during the pre-publication review;
+# see docs/open-source-readiness.md.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+SAP UI5 accessibility message-bundle keys in built front-end assets that were
+committed before the branded providers moved to their own repositories. These
+are i18n identifiers, not credentials.
+"""
+paths = ['''providers/.*/ui/dist/assets/messagebundle_.*\.js''']
+
+[[allowlists]]
+description = """
+Sample Secret whose base64 payload decodes to the literal placeholder
+'# Replace with your IronCore cluster kubeconfig'.
+"""
+paths = ['''samples/ironcore/ironcore-creds-secret\.yaml''']
+
+[[allowlists]]
+description = """
+Placeholder key material in the sample Secrets. Real key material is neither
+committed nor accepted here — see the samples' own instructions for generating a
+throwaway keypair.
+"""
+regexes = [
+  '''<PASTE YOUR OPENSSH (PRIVATE|PUBLIC) KEY HERE>''',
+  '''<REDACTED: demo SSH private key removed before open-sourcing>''',
+]
