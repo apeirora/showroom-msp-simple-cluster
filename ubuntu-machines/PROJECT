@@ -9,7 +9,7 @@ layout:
 plugins:
   helm.kubebuilder.io/v1-alpha: {}
 projectName: ubuntu-machines
-repo: github.com/apeirora/showroom-simple-cluster/ubuntu-machines
+repo: github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines
 resources:
 - api:
     crdVersion: v1
@@ -18,7 +18,7 @@ resources:
   domain: apeirora.eu
   group: ubuntumachines
   kind: UbuntuMachine
-  path: github.com/apeirora/showroom-simple-cluster/ubuntu-machines/api/v1alpha1
+  path: github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -27,6 +27,6 @@ resources:
   domain: apeirora.eu
   group: ubuntumachines
   kind: UbuntuMachineClaim
-  path: github.com/apeirora/showroom-simple-cluster/ubuntu-machines/api/v1alpha1
+  path: github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1
   version: v1alpha1
 version: "3"

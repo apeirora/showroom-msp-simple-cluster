@@ -5,551 +5,551 @@
 
 ### Bug Fixes
 
-* **ord:** serialize empty dependencies as arrays ([#170](https://github.com/apeirora/showroom-msp-simple-cluster/issues/170)) ([cab2906](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cab290697543743059c1fc34c37fb4dc2d573a48))
+* **ord:** serialize empty dependencies as arrays ([#170](https://github.com/apeirora/showroom-msp-simple-cluster/issues/170)) ([7e3359a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7e3359a335ff6be8f56b9b2123f6de4839590c95))
 
 ## [0.37.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.36.0...v0.37.0) (2026-08-31)
 
 
 ### Features
 
-* expose Simple Cluster dependency metadata through ORD ([#164](https://github.com/apeirora/showroom-msp-simple-cluster/issues/164)) ([09460f2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/09460f2c6c8cbc8c970e66215ed425ab5206afda))
+* expose Simple Cluster dependency metadata through ORD ([#164](https://github.com/apeirora/showroom-msp-simple-cluster/issues/164)) ([0e9fd53](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0e9fd53a65050d3427177c07089ed0925766caf2))
 
 ## [0.36.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.35.0...v0.36.0) (2026-08-31)
 
 
 ### Features
 
-* move the child delete guard from MSP to KCP ([#167](https://github.com/apeirora/showroom-msp-simple-cluster/issues/167)) ([8605311](https://github.com/apeirora/showroom-msp-simple-cluster/commit/860531112e31a5ccd1c9e7b44e440898550d86a8))
+* move the child delete guard from MSP to KCP ([#167](https://github.com/apeirora/showroom-msp-simple-cluster/issues/167)) ([5714ef2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5714ef293e0686326d8575121a3f9946dd3f1a16))
 
 ## [0.35.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.34.0...v0.35.0) (2026-08-31)
 
 
 ### Features
 
-* Issue 344 ([#165](https://github.com/apeirora/showroom-msp-simple-cluster/issues/165)) ([aa07614](https://github.com/apeirora/showroom-msp-simple-cluster/commit/aa07614fea4cf35d05378639c0293150d44a050b))
+* Issue 344 ([#165](https://github.com/apeirora/showroom-msp-simple-cluster/issues/165)) ([e089d00](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e089d002f8500944a8a63bcf01180289786f67a7))
 
 ## [0.34.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.2...v0.34.0) (2026-08-21)
 
 
 ### Features
 
-* offer installable extensions when creating a cluster ([#160](https://github.com/apeirora/showroom-msp-simple-cluster/issues/160)) ([537bbe6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/537bbe67de58c9b33761a84adc67928dc71b6001))
+* offer installable extensions when creating a cluster ([#160](https://github.com/apeirora/showroom-msp-simple-cluster/issues/160)) ([d3f24e2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d3f24e2790013849f3dcd54dd48649b6a7f8921e))
 
 ## [0.33.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.1...v0.33.2) (2026-08-06)
 
 
 ### Bug Fixes
 
-* align ironcore sample SCPC with working shoots ([#158](https://github.com/apeirora/showroom-msp-simple-cluster/issues/158)) ([3970540](https://github.com/apeirora/showroom-msp-simple-cluster/commit/39705401ccb9fea79dd7abfd28b507d559a8f2ea))
+* align ironcore sample SCPC with working shoots ([#158](https://github.com/apeirora/showroom-msp-simple-cluster/issues/158)) ([9f4fb85](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9f4fb8539f105d1c9d0e0868a35aa6a781f1a582))
 
 ## [0.33.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.33.0...v0.33.1) (2026-08-04)
 
 
 ### Bug Fixes
 
-* never create target resources while SimpleCluster is being deleted ([#156](https://github.com/apeirora/showroom-msp-simple-cluster/issues/156)) ([0ba8c6a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0ba8c6a0005457878d45c39f8818ec6de620f24f))
+* never create target resources while SimpleCluster is being deleted ([#156](https://github.com/apeirora/showroom-msp-simple-cluster/issues/156)) ([bd18d85](https://github.com/apeirora/showroom-msp-simple-cluster/commit/bd18d856adbaa910908334be9ffb2ddbe941e9f1))
 
 ## [0.33.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.32.0...v0.33.0) (2026-08-04)
 
 
 ### Features
 
-* label SimpleCluster children with owning cluster name ([#155](https://github.com/apeirora/showroom-msp-simple-cluster/issues/155)) ([ceb7c8f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ceb7c8f340849b5572f772e1e7e6938b8846f625))
-* UI show Deleting phase from metadata.deletionTimestamp ([#153](https://github.com/apeirora/showroom-msp-simple-cluster/issues/153)) ([44bdc8c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/44bdc8c43fd37d93f4e69330f6c649fa2df4770f))
+* label SimpleCluster children with owning cluster name ([#155](https://github.com/apeirora/showroom-msp-simple-cluster/issues/155)) ([8e79bb6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8e79bb65bbbe84727eede309e8e0c23fea3aa893))
+* UI show Deleting phase from metadata.deletionTimestamp ([#153](https://github.com/apeirora/showroom-msp-simple-cluster/issues/153)) ([ed82919](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ed829190262b41c59bf74a0b5ec52330f49a5c07))
 
 
 ### Bug Fixes
 
-* default worker zone wdf4b — wdf4a is decommissioned ([#152](https://github.com/apeirora/showroom-msp-simple-cluster/issues/152)) ([29ab665](https://github.com/apeirora/showroom-msp-simple-cluster/commit/29ab665c2d8bfc4466f03c975cdfc2f7c617190c))
+* default worker zone wdf4b — wdf4a is decommissioned ([#152](https://github.com/apeirora/showroom-msp-simple-cluster/issues/152)) ([5ac774f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ac774ff779668f4a4e746a12975c0b57df9a188))
 
 ## [0.32.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.31.0...v0.32.0) (2026-08-03)
 
 
 ### Features
 
-* downstream rbac sap dati ([#150](https://github.com/apeirora/showroom-msp-simple-cluster/issues/150)) ([5ad1e6a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ad1e6ac1cea5d2c10b2c96883eaff6849e743a7))
+* downstream rbac sap dati ([#150](https://github.com/apeirora/showroom-msp-simple-cluster/issues/150)) ([eca48d4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/eca48d453c6b9196a623960fee528be2820a6e00))
 
 ## [0.31.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.2...v0.31.0) (2026-08-03)
 
 
 ### Features
 
-* downstream rbac sap dati ([#148](https://github.com/apeirora/showroom-msp-simple-cluster/issues/148)) ([1082753](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1082753107f605e91ebd862146106e569af76d68))
+* downstream rbac sap dati ([#148](https://github.com/apeirora/showroom-msp-simple-cluster/issues/148)) ([64b9019](https://github.com/apeirora/showroom-msp-simple-cluster/commit/64b901956b7581bc736c501c632b8c06d20814e8))
 
 ## [0.30.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.1...v0.30.2) (2026-07-29)
 
 
 ### Bug Fixes
 
-* **ui:** simplify sidebar resource labels ([#146](https://github.com/apeirora/showroom-msp-simple-cluster/issues/146)) ([a097ff9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a097ff996a83deb3e093d5ccfeac8e23d96a154a))
+* **ui:** simplify sidebar resource labels ([#146](https://github.com/apeirora/showroom-msp-simple-cluster/issues/146)) ([5e856eb](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5e856eb23185af765c7d36f921139bbbe1d7c9b0))
 
 ## [0.30.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.30.0...v0.30.1) (2026-07-28)
 
 
 ### Bug Fixes
 
-* align provider API groups to *.eu and add top-level README ([#143](https://github.com/apeirora/showroom-msp-simple-cluster/issues/143)) ([c3b5ec7](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c3b5ec7ac9862a6f86c7868baadebc28bbb4fbef))
+* align provider API groups to *.eu and add top-level README ([#143](https://github.com/apeirora/showroom-msp-simple-cluster/issues/143)) ([293dc14](https://github.com/apeirora/showroom-msp-simple-cluster/commit/293dc145e6a20c6fa62417e4009103699937e1d5))
 
 ## [0.30.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.29.0...v0.30.0) (2026-07-27)
 
 
 ### Features
 
-* document that ubuntu-machines is currently unwired ([#141](https://github.com/apeirora/showroom-msp-simple-cluster/issues/141)) ([9dff660](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9dff66020715296bbb4389ae0ff7ee485777cd3b))
+* document that ubuntu-machines is currently unwired ([#141](https://github.com/apeirora/showroom-msp-simple-cluster/issues/141)) ([3bbf5d5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3bbf5d5b8402c4e026556dd22534fbbab8fa88f4))
 
 ## [0.29.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.28.0...v0.29.0) (2026-07-26)
 
 
 ### Features
 
-* ironcore vm resource for sap integration ([#138](https://github.com/apeirora/showroom-msp-simple-cluster/issues/138)) ([18f7e1a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/18f7e1aa891590bc751df843474df21bdd90d1ae))
+* ironcore vm resource for sap integration ([#138](https://github.com/apeirora/showroom-msp-simple-cluster/issues/138)) ([48ed590](https://github.com/apeirora/showroom-msp-simple-cluster/commit/48ed5902389d239212048984037d2559fd74d434))
 
 ## [0.28.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.3...v0.28.0) (2026-07-26)
 
 
 ### Features
 
-* plain gardener shoot spec for provider shoots ([#136](https://github.com/apeirora/showroom-msp-simple-cluster/issues/136)) ([a5378b5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a5378b53f885e9fd9db9c34decb30063e5170164))
+* plain gardener shoot spec for provider shoots ([#136](https://github.com/apeirora/showroom-msp-simple-cluster/issues/136)) ([cf412ae](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cf412ae9fd87fd9288ae9a045b9cf2dae02e4b6c))
 
 ## [0.27.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.2...v0.27.3) (2026-07-26)
 
 
 ### Bug Fixes
 
-* UI drop provider configs column, drop ssh key hint ([#134](https://github.com/apeirora/showroom-msp-simple-cluster/issues/134)) ([06e7972](https://github.com/apeirora/showroom-msp-simple-cluster/commit/06e7972376e4618ff1b5fd4d367ba7f60a711781))
+* UI drop provider configs column, drop ssh key hint ([#134](https://github.com/apeirora/showroom-msp-simple-cluster/issues/134)) ([8ea6d00](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8ea6d00c850c2e071f2031fb4a883e86cc79cb51))
 
 ## [0.27.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.1...v0.27.2) (2026-07-26)
 
 
 ### Bug Fixes
 
-* sap scpc shoot names exceed gardener length limit ([#130](https://github.com/apeirora/showroom-msp-simple-cluster/issues/130)) ([406c3e2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/406c3e2d619f96932a692fdd2dea9d96e8b9108d))
+* sap scpc shoot names exceed gardener length limit ([#130](https://github.com/apeirora/showroom-msp-simple-cluster/issues/130)) ([c9bbd2e](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c9bbd2e4a0d32ec574bc0dd4772307ce84b8fc59))
 
 ## [0.27.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.27.0...v0.27.1) (2026-07-26)
 
 
 ### Bug Fixes
 
-* provider drop-down sources for all installed providers ([#128](https://github.com/apeirora/showroom-msp-simple-cluster/issues/128)) ([4df549a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4df549a05550c138062ff39fe05f38953a8ee3bf))
+* provider drop-down sources for all installed providers ([#128](https://github.com/apeirora/showroom-msp-simple-cluster/issues/128)) ([921186a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/921186a7296dc16cd69025fbed37d8a67fba6175))
 
 ## [0.27.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.26.0...v0.27.0) (2026-07-26)
 
 
 ### Features
 
-* surface vm ssh key and password to workspace users ([#126](https://github.com/apeirora/showroom-msp-simple-cluster/issues/126)) ([961e111](https://github.com/apeirora/showroom-msp-simple-cluster/commit/961e111386bb6d7f870665c0e1b602f9c84c4ba1))
+* surface vm ssh key and password to workspace users ([#126](https://github.com/apeirora/showroom-msp-simple-cluster/issues/126)) ([7419e57](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7419e57811b6a4f68e1d6ac0e607a8b6de42e4a2))
 
 ## [0.26.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.25.0...v0.26.0) (2026-07-26)
 
 
 ### Features
 
-* platform mesh ui for cloudferro and arsys providers ([#124](https://github.com/apeirora/showroom-msp-simple-cluster/issues/124)) ([a7fa13a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a7fa13a8f8730c6ddded8b4237fc6a73924f4d40))
+* platform mesh ui for cloudferro and arsys providers ([#124](https://github.com/apeirora/showroom-msp-simple-cluster/issues/124)) ([5e3cead](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5e3cead75d34161c7d7f77f66e47dfd9f42e04e5))
 
 ## [0.25.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.2...v0.25.0) (2026-07-26)
 
 
 ### Features
 
-* expose OpenStackVM and ArsysUbuntuMachine via provider exports ([#122](https://github.com/apeirora/showroom-msp-simple-cluster/issues/122)) ([1861839](https://github.com/apeirora/showroom-msp-simple-cluster/commit/186183955714fd2ae4e7b94073d81bf71106c926))
+* expose OpenStackVM and ArsysUbuntuMachine via provider exports ([#122](https://github.com/apeirora/showroom-msp-simple-cluster/issues/122)) ([4914558](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4914558837db12be817170c1775cc2db30f08f98))
 
 ## [0.24.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.1...v0.24.2) (2026-07-26)
 
 
 ### Bug Fixes
 
-* shorten generated shoot names to fit Gardener limit ([#120](https://github.com/apeirora/showroom-msp-simple-cluster/issues/120)) ([a7150ff](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a7150ff1c4200fdc6d6a687ce581e1b7c595a360))
+* shorten generated shoot names to fit Gardener limit ([#120](https://github.com/apeirora/showroom-msp-simple-cluster/issues/120)) ([ecb062e](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ecb062e8f577099ae9d3fe78c8e4f95f90392ffd))
 
 ## [0.24.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.24.0...v0.24.1) (2026-07-26)
 
 
 ### Bug Fixes
 
-* rotate immutable APIResourceSchemas via schemaRevision ([#117](https://github.com/apeirora/showroom-msp-simple-cluster/issues/117)) ([b91f83d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/b91f83ddcbb74a90796c4267dd7b972bb5b67f36))
-* rotate immutable APIResourceSchemas via schemaRevision ([#118](https://github.com/apeirora/showroom-msp-simple-cluster/issues/118)) ([c55c1e2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c55c1e277f76b03793e984ce5e233d633c08b96e))
+* rotate immutable APIResourceSchemas via schemaRevision ([#117](https://github.com/apeirora/showroom-msp-simple-cluster/issues/117)) ([4aa94bc](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4aa94bc86fbcbb093a17d536d3031491a667ca40))
+* rotate immutable APIResourceSchemas via schemaRevision ([#118](https://github.com/apeirora/showroom-msp-simple-cluster/issues/118)) ([70a42b0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/70a42b0c6f8f78caaf2f1008c79042f5e2d80ec0))
 
 ## [0.24.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.3...v0.24.0) (2026-07-25)
 
 
 ### Features
 
-* providers: arsys & cloudferro ([#112](https://github.com/apeirora/showroom-msp-simple-cluster/issues/112)) ([94d8ca1](https://github.com/apeirora/showroom-msp-simple-cluster/commit/94d8ca13ce9bb8c4986a7d769b8f3040cfdc1512))
-* sap/dati provider: rebrand labels + per-provider icons ([#110](https://github.com/apeirora/showroom-msp-simple-cluster/issues/110)) ([5b87524](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5b87524069483eefc58ae3f2a18c63e0523f0ce7))
+* providers: arsys & cloudferro ([#112](https://github.com/apeirora/showroom-msp-simple-cluster/issues/112)) ([41ac899](https://github.com/apeirora/showroom-msp-simple-cluster/commit/41ac89934b27809ffde1305ffd3abc42dea8774a))
+* sap/dati provider: rebrand labels + per-provider icons ([#110](https://github.com/apeirora/showroom-msp-simple-cluster/issues/110)) ([816459a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/816459a9653b4c19f2260cb9aa8b83230d0899f6))
 
 ## [0.23.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.2...v0.23.3) (2026-07-24)
 
 
 ### Bug Fixes
 
-* sap provider - go version 1.24 -&gt; 1.25 ([#108](https://github.com/apeirora/showroom-msp-simple-cluster/issues/108)) ([27f1b23](https://github.com/apeirora/showroom-msp-simple-cluster/commit/27f1b2323ed497d89c728e754854988e06d59d65))
+* sap provider - go version 1.24 -&gt; 1.25 ([#108](https://github.com/apeirora/showroom-msp-simple-cluster/issues/108)) ([84ad8f6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/84ad8f60174e1b6d923d213badfb0b9d07adff30))
 
 ## [0.23.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.1...v0.23.2) (2026-07-24)
 
 
 ### Bug Fixes
 
-* sapprovider CRD metadata.name must be plural.group ([#106](https://github.com/apeirora/showroom-msp-simple-cluster/issues/106)) ([5fead54](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5fead543cc2396cf33107004197ec58ff1b8de07))
+* sapprovider CRD metadata.name must be plural.group ([#106](https://github.com/apeirora/showroom-msp-simple-cluster/issues/106)) ([5603de8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5603de8608c72ff79eb9d565e1f763f5f3fcbddb))
 
 ## [0.23.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.23.0...v0.23.1) (2026-07-24)
 
 
 ### Bug Fixes
 
-* Sap provider ci fix ([#104](https://github.com/apeirora/showroom-msp-simple-cluster/issues/104)) ([a42756c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a42756c344bfc311b8d597797f02dc669f0d60e8))
+* Sap provider ci fix ([#104](https://github.com/apeirora/showroom-msp-simple-cluster/issues/104)) ([f133b6b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f133b6b04c6c6c97a019707d867ac416f346de6a))
 
 ## [0.23.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.3...v0.23.0) (2026-07-24)
 
 
 ### Features
 
-* sap provider ([#99](https://github.com/apeirora/showroom-msp-simple-cluster/issues/99)) ([48b978d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/48b978d266379dc1e228933d65056fe84d1ddd44))
+* sap provider ([#99](https://github.com/apeirora/showroom-msp-simple-cluster/issues/99)) ([7828d8a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7828d8a42fe1a86a020795e0a1b58f89edcec207))
 
 ## [0.22.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.2...v0.22.3) (2026-07-23)
 
 
 ### Bug Fixes
 
-* UI fix ([#95](https://github.com/apeirora/showroom-msp-simple-cluster/issues/95)) ([46b197a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/46b197a77549a7446c14beb890eb61346ac05524))
+* UI fix ([#95](https://github.com/apeirora/showroom-msp-simple-cluster/issues/95)) ([8ad653a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8ad653ac2744afe5ce8dc198736f39be2d2e3b62))
 
 ## [0.22.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.1...v0.22.2) (2026-07-23)
 
 
 ### Bug Fixes
 
-* scpc template ([#93](https://github.com/apeirora/showroom-msp-simple-cluster/issues/93)) ([56959c6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/56959c6ea5e0cfdcdf2e350a5a17a1a880dac24e))
+* scpc template ([#93](https://github.com/apeirora/showroom-msp-simple-cluster/issues/93)) ([67a7af6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/67a7af6523879ae8faea8625b1140c9fa712dd74))
 
 ## [0.22.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.22.0...v0.22.1) (2026-07-23)
 
 
 ### Bug Fixes
 
-* bump operator Docker base images to golang 1.25 ([#91](https://github.com/apeirora/showroom-msp-simple-cluster/issues/91)) ([f77d7b2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f77d7b23769a8a8525d558ce5649702c69d2e2c4))
+* bump operator Docker base images to golang 1.25 ([#91](https://github.com/apeirora/showroom-msp-simple-cluster/issues/91)) ([eb188c3](https://github.com/apeirora/showroom-msp-simple-cluster/commit/eb188c3f244df7f79658add47d9d1c42ebe9e9af))
 
 ## [0.22.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.2...v0.22.0) (2026-07-23)
 
 
 ### Features
 
-* Bind detect operator ([#89](https://github.com/apeirora/showroom-msp-simple-cluster/issues/89)) ([96a6a28](https://github.com/apeirora/showroom-msp-simple-cluster/commit/96a6a288029efab2b834ae67e9c579d8e6af0d6c))
+* Bind detect operator ([#89](https://github.com/apeirora/showroom-msp-simple-cluster/issues/89)) ([2b08dec](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2b08decd0fd5a2cef76cafc18d4e56f5d68ed547))
 
 ## [0.21.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.1...v0.21.2) (2026-07-21)
 
 
 ### Bug Fixes
 
-* drop unsupported permissionClaims.all from dati APIExport ([#82](https://github.com/apeirora/showroom-msp-simple-cluster/issues/82)) ([60431a8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/60431a8772786fe379ca35fa78540a75e990c220))
+* drop unsupported permissionClaims.all from dati APIExport ([#82](https://github.com/apeirora/showroom-msp-simple-cluster/issues/82)) ([d01b3cd](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d01b3cda8d65cb83eabefbd94d4992235388284d))
 
 ## [0.21.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.21.0...v0.21.1) (2026-07-21)
 
 
 ### Bug Fixes
 
-* dati marketplace ([#80](https://github.com/apeirora/showroom-msp-simple-cluster/issues/80)) ([69765c0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/69765c0b82aede194f7df805794eda5902776d7e))
+* dati marketplace ([#80](https://github.com/apeirora/showroom-msp-simple-cluster/issues/80)) ([1383b7f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1383b7f4273c13bdb8d56da89df4c0ccac9bd04d))
 
 ## [0.21.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.20.2...v0.21.0) (2026-07-21)
 
 
 ### Features
 
-* rename marketplace integration to 'Dati integration' ([#78](https://github.com/apeirora/showroom-msp-simple-cluster/issues/78)) ([4408fe8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4408fe838a8747376a20a67cef64c170b36925af))
+* rename marketplace integration to 'Dati integration' ([#78](https://github.com/apeirora/showroom-msp-simple-cluster/issues/78)) ([1d72d09](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1d72d09c36ac943b1d860b7f482771b0dae5ddda))
 
-## [0.20.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.20.1...v0.20.2) (2026-07-06)
-
-
-### Bug Fixes
-
-* UI table fix ([c697a04](https://github.com/apeirora/showroom-simple-cluster/commit/c697a04421386b0db3d9f06ed2f705a6cdec36eb))
-
-## [0.20.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.20.0...v0.20.1) (2026-07-06)
+## [0.20.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.20.1...v0.20.2) (2026-07-06)
 
 
 ### Bug Fixes
 
-* JSON-encode quantity values in create mutation ([ba31657](https://github.com/apeirora/showroom-simple-cluster/commit/ba31657078ddde99d1d0bfdd8d990ba98a705f93))
+* UI table fix ([1c9c34c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1c9c34c4579f43f281b66d7d0a5237a4ee607078))
 
-## [0.20.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.2...v0.20.0) (2026-07-06)
+## [0.20.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.20.0...v0.20.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* JSON-encode quantity values in create mutation ([ef478ce](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ef478ce530193182eebd4062742445173475d567))
+
+## [0.20.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.19.2...v0.20.0) (2026-07-06)
 
 
 ### Features
 
-* worker pool autoscaling with min/max range ([cc95982](https://github.com/apeirora/showroom-simple-cluster/commit/cc95982b4f8f27d5b824f0d671b2b3592b8dc185))
+* worker pool autoscaling with min/max range ([a91bc62](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a91bc625313da496dba7f3a2cab1d2b49dd7d296))
 
-## [0.19.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.1...v0.19.2) (2026-07-04)
-
-
-### Bug Fixes
-
-* 404 graphql ([5095600](https://github.com/apeirora/showroom-simple-cluster/commit/50956003d56fd8cbdb8c3b106f2bc2ec862b7a27))
-
-## [0.19.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.19.0...v0.19.1) (2026-07-01)
+## [0.19.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.19.1...v0.19.2) (2026-07-04)
 
 
 ### Bug Fixes
 
-* **cloudferro:** scope SSH key export secret name per SimpleCluster ([895b595](https://github.com/apeirora/showroom-simple-cluster/commit/895b5959a63d364ac4fa5cfb8e589f01a132c6f9))
+* 404 graphql ([c1143ff](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c1143ffbdd8c27d8ce64fb442aa123489699e5f3))
 
-## [0.19.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.18.0...v0.19.0) (2026-06-30)
+## [0.19.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.19.0...v0.19.1) (2026-07-01)
+
+
+### Bug Fixes
+
+* **cloudferro:** scope SSH key export secret name per SimpleCluster ([656c2f3](https://github.com/apeirora/showroom-msp-simple-cluster/commit/656c2f32d31e0f67f0cfd2fa74fb6febab0898b6))
+
+## [0.19.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.18.0...v0.19.0) (2026-06-30)
 
 
 ### Features
 
-* allow public access to nginx ingress LB ([decb6e8](https://github.com/apeirora/showroom-simple-cluster/commit/decb6e851a09fdf51be14a6f9d160a4cbd3b060c))
-* arsys dedicated servers disabled ([5de3f0d](https://github.com/apeirora/showroom-simple-cluster/commit/5de3f0d6229a441606ea20e1e682832ddbe0e6e5)), closes [#277](https://github.com/apeirora/showroom-simple-cluster/issues/277)
-* arsys dedicated servers disabled ([629a3bc](https://github.com/apeirora/showroom-simple-cluster/commit/629a3bcf74b605e25c0d624a7399b7f49a4a7c1b)), closes [#277](https://github.com/apeirora/showroom-simple-cluster/issues/277)
-* install ingress by default ([0087270](https://github.com/apeirora/showroom-simple-cluster/commit/00872706f378b321c433c7fa73ee89703d43a7ab))
-* remove ingress to release port 443 ([c8fdfee](https://github.com/apeirora/showroom-simple-cluster/commit/c8fdfeec3aa6ea0dadca123294c3e792a36acfcc))
-* remove ingress to release port 443 ([3c8edc1](https://github.com/apeirora/showroom-simple-cluster/commit/3c8edc153ca03b0155f28a8f33bcfed6ba4955a2))
-* **ubuntu-machines:** per-claim SSH key injection via sshkey-operator ([5f0c678](https://github.com/apeirora/showroom-simple-cluster/commit/5f0c678a05ff1261cc1e6cee45bd42e669958106))
+* allow public access to nginx ingress LB ([62c25c2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/62c25c2d1dd899306831b4c0dd802d1a800973cf))
+* arsys dedicated servers disabled ([34a7dcf](https://github.com/apeirora/showroom-msp-simple-cluster/commit/34a7dcf43d87a0ec0e33e3e5809ce46c641ad27d)), closes [#277](https://github.com/apeirora/showroom-msp-simple-cluster/issues/277)
+* arsys dedicated servers disabled ([b43c3bb](https://github.com/apeirora/showroom-msp-simple-cluster/commit/b43c3bbe169d0ed23a9872287571e4df0efc89d6)), closes [#277](https://github.com/apeirora/showroom-msp-simple-cluster/issues/277)
+* install ingress by default ([3213e6d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3213e6d986aa2f6662585d10e83dd7492487ea57))
+* remove ingress to release port 443 ([ff297e3](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ff297e3bf7f9749ca54d6882ba6d2100baff6cdc))
+* remove ingress to release port 443 ([a3da828](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a3da828141679b4ca0661748160245ddd4c1cd91))
+* **ubuntu-machines:** per-claim SSH key injection via sshkey-operator ([abca183](https://github.com/apeirora/showroom-msp-simple-cluster/commit/abca18314419be81cc2c6dc38effc74f5c759173))
 
 
 ### Bug Fixes
 
-* **arsys:** rename SSH to AdminSSH in UbuntuMachine spec, tidy go.sum ([59ae020](https://github.com/apeirora/showroom-simple-cluster/commit/59ae0206f9ff68f1712c23a24bb08062882eda89))
+* **arsys:** rename SSH to AdminSSH in UbuntuMachine spec, tidy go.sum ([f46b5c8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f46b5c8b85200b5e55afed3ea6e63ed04eb008d2))
 
-## [0.18.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.17.0...v0.18.0) (2026-06-22)
+## [0.18.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.17.0...v0.18.0) (2026-06-22)
 
 
 ### Features
 
-* open pots 80 and 443 ([24aa258](https://github.com/apeirora/showroom-simple-cluster/commit/24aa258d15a8e5f88874c4aecb4479daf0bf23d2))
+* open pots 80 and 443 ([c42c343](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c42c3435550bf8e6fa200aacf7c622e68dd6eb34))
 
 
 ### Bug Fixes
 
-* dati shoot length reduced ([0f79163](https://github.com/apeirora/showroom-simple-cluster/commit/0f79163b837bf9fa0efbca7dbcf5a6f615ee34c4))
-* sap reduce shoot name length ([aa33f98](https://github.com/apeirora/showroom-simple-cluster/commit/aa33f98101254fd3648753f1df55105edf71c75f))
+* dati shoot length reduced ([411543a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/411543a166149534a67244b701a3ebcb7deb2172))
+* sap reduce shoot name length ([27f651b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/27f651bb00801d817346cf1121f468741b5bbc6d))
 
-## [0.17.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.5...v0.17.0) (2026-06-19)
+## [0.17.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.16.5...v0.17.0) (2026-06-19)
 
 
 ### Features
 
-* set worker externalAddress for arsys-virtual; bump scpc-config 0.11.2 ([efad932](https://github.com/apeirora/showroom-simple-cluster/commit/efad9320d4a44219987e87e0b462033987d3abd2))
+* set worker externalAddress for arsys-virtual; bump scpc-config 0.11.2 ([4ca57c2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4ca57c2a4bb6c81c2c4c83b8984d946ee10a2372))
 
 
 ### Bug Fixes
 
-* sap reduce shoot name length ([7f57e48](https://github.com/apeirora/showroom-simple-cluster/commit/7f57e480dc3057a82a843e5f1566ee0d35d0187a))
+* sap reduce shoot name length ([762d38c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/762d38c61df276a0a2d6346fbe338ded75aac3da))
 
-## [0.16.5](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.4...v0.16.5) (2026-06-19)
-
-
-### Bug Fixes
-
-* retry partial k3s install (probe service active, not binary) ([e5b1fa7](https://github.com/apeirora/showroom-simple-cluster/commit/e5b1fa7330391ed58eddea091211e0f78ce370d0))
-
-## [0.16.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.3...v0.16.4) (2026-06-19)
+## [0.16.5](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.16.4...v0.16.5) (2026-06-19)
 
 
 ### Bug Fixes
 
-* trim newline on sshkey publicKey in openstack scpc ([9592ca4](https://github.com/apeirora/showroom-simple-cluster/commit/9592ca40f0ffcea438589becab08b7c83b53da35))
+* retry partial k3s install (probe service active, not binary) ([645a383](https://github.com/apeirora/showroom-msp-simple-cluster/commit/645a383be1532bcf4405f560ab4d706744a2d416))
 
-## [0.16.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.2...v0.16.3) (2026-06-19)
-
-
-### Bug Fixes
-
-* arsys user/password ([2c079f5](https://github.com/apeirora/showroom-simple-cluster/commit/2c079f58b107a5a988ab63d2baf3694f56b44b73))
-* details UI fix ([9c93475](https://github.com/apeirora/showroom-simple-cluster/commit/9c9347531f566d3befcd878b577d01a5404a89d6))
-* rbac fix ([42ec3c5](https://github.com/apeirora/showroom-simple-cluster/commit/42ec3c522709772e3e6f24c1b835a3570a016f0e))
-* sap reduce shoot name length ([3739e78](https://github.com/apeirora/showroom-simple-cluster/commit/3739e7846408b591945a38e18e9c26f8d74e036f))
-* simple-cluster-operator memory increased ([f14bb3d](https://github.com/apeirora/showroom-simple-cluster/commit/f14bb3da4c58c82c24f420b7dfcc4c1ea176827a))
-
-## [0.16.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.1...v0.16.2) (2026-06-18)
+## [0.16.4](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.16.3...v0.16.4) (2026-06-19)
 
 
 ### Bug Fixes
 
-* dati reduce shoot name length ([54cce36](https://github.com/apeirora/showroom-simple-cluster/commit/54cce36b803fa2023425a2c74610eb2b1dd66183))
-* require control plane create fields and move above workers ([36bee01](https://github.com/apeirora/showroom-simple-cluster/commit/36bee0141fe7bf12dd8b21752c79b7872cf687f0))
-* ui nodes list ([de5ebb5](https://github.com/apeirora/showroom-simple-cluster/commit/de5ebb572258ead738937796eecce0608961ab9c))
+* trim newline on sshkey publicKey in openstack scpc ([a499333](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a499333e2fa583a5c14a719babbeb89353b93e0a))
 
-## [0.16.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.16.0...v0.16.1) (2026-06-18)
+## [0.16.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.16.2...v0.16.3) (2026-06-19)
 
 
 ### Bug Fixes
 
-* build ([b2a4a23](https://github.com/apeirora/showroom-simple-cluster/commit/b2a4a23560f9b343b095261e4097e8baf58e5965))
+* arsys user/password ([fd676a2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/fd676a24db2d26073c7f3fec41b191e2a7eb0043))
+* details UI fix ([ea31af4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ea31af40628471326fefc800cd9af773d0983796))
+* rbac fix ([f0780ec](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f0780ec94a488006b8c4a6527366ca222e8ed4c6))
+* sap reduce shoot name length ([151e5f7](https://github.com/apeirora/showroom-msp-simple-cluster/commit/151e5f761cdf42aa1afda64d39ce8a4928625a82))
+* simple-cluster-operator memory increased ([0fb20ff](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0fb20ff95d2a62974dd7b5b487300523dd1e4f03))
 
-## [0.16.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.2...v0.16.0) (2026-06-18)
+## [0.16.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.16.1...v0.16.2) (2026-06-18)
+
+
+### Bug Fixes
+
+* dati reduce shoot name length ([80bf6be](https://github.com/apeirora/showroom-msp-simple-cluster/commit/80bf6bec0c11fe9808eb2d8754e5f6a0e2cb0d66))
+* require control plane create fields and move above workers ([d55cfdf](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d55cfdfdc899f1f0afb17baece81d7dbf43fc854))
+* ui nodes list ([5ef215f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ef215f0185ed60d25bdbc7b4e2077f9b7b52800))
+
+## [0.16.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.16.0...v0.16.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* build ([aff9220](https://github.com/apeirora/showroom-msp-simple-cluster/commit/aff92206cf045603f21fe87158694f08fe1ab6b4))
+
+## [0.16.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.15.2...v0.16.0) (2026-06-18)
 
 
 ### Features
 
-* expose cluster nodes and IPs in SimpleCluster status and portal ([28e2683](https://github.com/apeirora/showroom-simple-cluster/commit/28e2683edbf9c500925225c96809848f91795613))
-* implement sshkey-operator ([66eed21](https://github.com/apeirora/showroom-simple-cluster/commit/66eed21e888c92f12088db7ec8d33ff1de506415))
-* use SSHKey resource for VM SSH keys via sshKeyRef ([c8e7b9a](https://github.com/apeirora/showroom-simple-cluster/commit/c8e7b9aa880ea1d242f9de61bd2840faff06b15e))
+* expose cluster nodes and IPs in SimpleCluster status and portal ([4c1b3ee](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4c1b3eef32bcb6628f6934411ea5bada5ea7a4d8))
+* implement sshkey-operator ([cdf638e](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cdf638e2e2898e68a1cbed52c9f88d8cb093ba57))
+* use SSHKey resource for VM SSH keys via sshKeyRef ([c48608f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c48608fae6928daa5f35cbcae995ea882ab6a84d))
 
 
 ### Bug Fixes
 
-* dati configuration ([39ad9b1](https://github.com/apeirora/showroom-simple-cluster/commit/39ad9b1041b31a5b4006dbc3c7318674cd38c945))
+* dati configuration ([3b4cba4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3b4cba46ebccf69e03843983dc61a5b605f78573))
 
-## [0.15.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.1...v0.15.2) (2026-06-14)
-
-
-### Bug Fixes
-
-* arsys firewall ([6e3d270](https://github.com/apeirora/showroom-simple-cluster/commit/6e3d2703d86f8a0723ad4cf1527e9bba0cfb425d))
-
-## [0.15.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.15.0...v0.15.1) (2026-06-14)
+## [0.15.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.15.1...v0.15.2) (2026-06-14)
 
 
 ### Bug Fixes
 
-* force set node name ([6068e30](https://github.com/apeirora/showroom-simple-cluster/commit/6068e30ba493cf65ba7611cff10b79ed4b99d21e))
+* arsys firewall ([41a2f16](https://github.com/apeirora/showroom-msp-simple-cluster/commit/41a2f16ff3631b1be59d8239201b87eb111d652b))
 
-## [0.15.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.14.1...v0.15.0) (2026-06-14)
+## [0.15.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.15.0...v0.15.1) (2026-06-14)
+
+
+### Bug Fixes
+
+* force set node name ([9b2b9d5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9b2b9d5c5f2f08fc7f5698be87aa4fb09c49ee6d))
+
+## [0.15.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.14.1...v0.15.0) (2026-06-14)
 
 
 ### Features
 
-* keep arsys password secret in dedicated namespace ([2ed0369](https://github.com/apeirora/showroom-simple-cluster/commit/2ed0369bae340f4da0bb42ef73c970cd9c6dd604))
-* ubuntuCluster user/password support ([4831793](https://github.com/apeirora/showroom-simple-cluster/commit/4831793b9661462893f3bd372f32e2495de2f85e))
+* keep arsys password secret in dedicated namespace ([2ffc8e5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2ffc8e508d9a71866460a182b60d60837c5381ce))
+* ubuntuCluster user/password support ([1364219](https://github.com/apeirora/showroom-msp-simple-cluster/commit/136421972f5374b019ba577f813636ff7fad2909))
 
-## [0.14.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.14.0...v0.14.1) (2026-06-13)
+## [0.14.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.14.0...v0.14.1) (2026-06-13)
 
 
 ### Bug Fixes
 
-* Chart version ([f64bb56](https://github.com/apeirora/showroom-simple-cluster/commit/f64bb56155449134ef18e5ee373f6ad02c2107a8))
-* public key ([6f4f78d](https://github.com/apeirora/showroom-simple-cluster/commit/6f4f78d93ba4ce110e94b0e4bb63c5e9a364ae92))
+* Chart version ([8300858](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8300858d4bf1401509328838d5a5f4fedb550b06))
+* public key ([78ef881](https://github.com/apeirora/showroom-msp-simple-cluster/commit/78ef8815aefe7e381fb82ef7484942318245470f))
 
-## [0.14.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.2...v0.14.0) (2026-06-13)
+## [0.14.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.13.2...v0.14.0) (2026-06-13)
 
 
 ### Features
 
-* inject SSH public key from Secret into Arsys server at order time ([ab9cc89](https://github.com/apeirora/showroom-simple-cluster/commit/ab9cc89a4d6340c34d80f27fb3c98654913d8d58))
+* inject SSH public key from Secret into Arsys server at order time ([5f2eee8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5f2eee85b6868850f77eaabc60c4424b905864ba))
 
 
 ### Bug Fixes
 
-* add leases and events RBAC to arsys-ubuntu-machine-operator ([15d4b07](https://github.com/apeirora/showroom-simple-cluster/commit/15d4b078a2bcc1bf623eb872ee9ec662c7b58ee9))
-* add leases RBAC to ubuntu-machines-operator ([4f3fb99](https://github.com/apeirora/showroom-simple-cluster/commit/4f3fb9963e7fce0ea1497c8821f083f57d51ccd7))
-* cloudferro - workers public IP ([f317562](https://github.com/apeirora/showroom-simple-cluster/commit/f3175626647378e71b8552a7b5d2ec927780034e))
-* machine name CRD ([a3b3653](https://github.com/apeirora/showroom-simple-cluster/commit/a3b3653d17204bcb52b7d24f291378cb0393cb08))
-* MACHINE printcolumn shows status.serverName ([f2be041](https://github.com/apeirora/showroom-simple-cluster/commit/f2be0413fb0292556f55f60b99cf5944782d20d6))
-* remove AUM finalizer when Arsys server is already REMOVING ([9b9959c](https://github.com/apeirora/showroom-simple-cluster/commit/9b9959c6d4b5e9dba4be47ea0f182a43e84eff27))
-* skip externalAddress for vmworker when floatingIP is false ([17cfab6](https://github.com/apeirora/showroom-simple-cluster/commit/17cfab6daf139323f886e54d149cfa57f3b9fa77))
-* UI all fields required ([debf106](https://github.com/apeirora/showroom-simple-cluster/commit/debf1060239d40acde216aab9c1a6169ff8d1fea))
+* add leases and events RBAC to arsys-ubuntu-machine-operator ([2931d7c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2931d7c51c87b76013ad1792a018f6c90213ba17))
+* add leases RBAC to ubuntu-machines-operator ([71c2f76](https://github.com/apeirora/showroom-msp-simple-cluster/commit/71c2f76510430ab1c4f242c9026f44e74cd71588))
+* cloudferro - workers public IP ([08254d4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/08254d41d8076d967cd47c092d34d436b7828075))
+* machine name CRD ([4c46ab9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4c46ab9c018042554f314948976a1e9e33b75674))
+* MACHINE printcolumn shows status.serverName ([ae9b24d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ae9b24d8d17296d6d45e420cc52ef89831b06430))
+* remove AUM finalizer when Arsys server is already REMOVING ([e885a20](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e885a20c1f010851ce343ba5c0bb085caf686079))
+* skip externalAddress for vmworker when floatingIP is false ([2cacc37](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2cacc37bb0bca1998f7873e30c19b51b34bbc1f5))
+* UI all fields required ([94746b9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/94746b9cb707fc7718cae5e35ec7b37b19cf220e))
 
-## [0.13.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.1...v0.13.2) (2026-06-13)
-
-
-### Bug Fixes
-
-* make sure that charts version X always deploy docker images in version X. ([22bccc0](https://github.com/apeirora/showroom-simple-cluster/commit/22bccc013f3864d644dd88f0ce150c5b976a92cc))
-
-## [0.13.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.13.0...v0.13.1) (2026-06-13)
+## [0.13.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.13.1...v0.13.2) (2026-06-13)
 
 
 ### Bug Fixes
 
-* name too long ([adc5b16](https://github.com/apeirora/showroom-simple-cluster/commit/adc5b16bc155ea78bfa31e5513bae9f60ffe5808))
+* make sure that charts version X always deploy docker images in version X. ([9b4d26b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9b4d26ba1ffc4c2d8fe31fd1883cd65d7882914b))
 
-## [0.13.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.12.0...v0.13.0) (2026-06-13)
+## [0.13.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.13.0...v0.13.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* name too long ([49e3983](https://github.com/apeirora/showroom-msp-simple-cluster/commit/49e39838890cb1f5b4245742b5c7dd46d4f4e5e1))
+
+## [0.13.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.12.0...v0.13.0) (2026-06-13)
 
 
 ### Features
 
-* arsys server name with prefix ([a63a4f9](https://github.com/apeirora/showroom-simple-cluster/commit/a63a4f9f2bed7f842b7aa587925469dea6d29459))
-* External IP for arsys workers ([94a026c](https://github.com/apeirora/showroom-simple-cluster/commit/94a026c78e407a745fb3e070033a318530d034c1))
+* arsys server name with prefix ([50070fd](https://github.com/apeirora/showroom-msp-simple-cluster/commit/50070fddc12f939eae581e44c782c75baa1130d7))
+* External IP for arsys workers ([0a0804d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0a0804de5fef7252aa7a1b34c6e9063919a55187))
 
-## [0.12.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.11.0...v0.12.0) (2026-06-12)
-
-
-### Features
-
-* **arsys:** API events, transient retry counter, deferred failure ([f24537d](https://github.com/apeirora/showroom-simple-cluster/commit/f24537dee8277275911d579e390d90556c6cc48a))
-* External IP for cloudferro workers ([#30](https://github.com/apeirora/showroom-simple-cluster/issues/30)) ([f6af261](https://github.com/apeirora/showroom-simple-cluster/commit/f6af26165cb6dd7ec695e51f7afc5fa8e7dc26ed))
-* **ubuntu:** pass --node-external-ip when UbuntuCluster host has ExternalAddress ([fe1a68f](https://github.com/apeirora/showroom-simple-cluster/commit/fe1a68ff962a2fe2b15dd7e7b241fcc8a2e1657c))
-
-
-### Bug Fixes
-
-* **arsys:** backward-compatible server adoption + scpc address field ([577ebbf](https://github.com/apeirora/showroom-simple-cluster/commit/577ebbffd749b22d9dbc1cfe9cafaadb5a017da2))
-
-## [0.11.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.5...v0.11.0) (2026-06-12)
+## [0.12.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.11.0...v0.12.0) (2026-06-12)
 
 
 ### Features
 
-* **controller:** register host external IPs on k3s nodes ([#26](https://github.com/apeirora/showroom-simple-cluster/issues/26)) ([271f5b1](https://github.com/apeirora/showroom-simple-cluster/commit/271f5b155d5222480a7f18a473a913f615a7e4de))
+* **arsys:** API events, transient retry counter, deferred failure ([333182e](https://github.com/apeirora/showroom-msp-simple-cluster/commit/333182e87f333e105db27e733e79bafd62dfe5ea))
+* External IP for cloudferro workers ([#30](https://github.com/apeirora/showroom-msp-simple-cluster/issues/30)) ([94898a8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/94898a8c14dbc6b3cf188a60dcc43d7028eeb1a3))
+* **ubuntu:** pass --node-external-ip when UbuntuCluster host has ExternalAddress ([6db08eb](https://github.com/apeirora/showroom-msp-simple-cluster/commit/6db08ebea44380ada53687426f132f08164ef68a))
 
 
 ### Bug Fixes
 
-* SimpleCluster: arsysubuntumachine with progress ([f21e001](https://github.com/apeirora/showroom-simple-cluster/commit/f21e001c52e1f21980c77283d1131fdc90d6ea27))
+* **arsys:** backward-compatible server adoption + scpc address field ([d8905bb](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d8905bbdb308b74b35d6f0d4e6ed3df872ed4c00))
 
-## [0.10.5](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.4...v0.10.5) (2026-06-12)
-
-
-### Bug Fixes
-
-* SimpleCluster: config version ([dd985cf](https://github.com/apeirora/showroom-simple-cluster/commit/dd985cff80975c51d84bed0134e1e849d098623f))
-* SimpleCluster: too many request should not change state to field. ([9c317e4](https://github.com/apeirora/showroom-simple-cluster/commit/9c317e4985f7bc4848d557268201f04a1979cfbf))
-
-## [0.10.4](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.3...v0.10.4) (2026-06-12)
-
-
-### Bug Fixes
-
-* SimpleCluster: dati config fix ([6cc79a6](https://github.com/apeirora/showroom-simple-cluster/commit/6cc79a64b5cbc40c28fc92f6ec31a824dc3d69f8))
-* SimpleCluster: update status ([5603178](https://github.com/apeirora/showroom-simple-cluster/commit/56031783fe46aad27b19b9e6dad692176ec89c4c))
-
-## [0.10.3](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.2...v0.10.3) (2026-06-12)
-
-
-### Bug Fixes
-
-* SimpleCluster: arsys update status from API to resource ([7bf8a9c](https://github.com/apeirora/showroom-simple-cluster/commit/7bf8a9c8e37a18be911e63fd75c0542c15d3c19b))
-
-## [0.10.2](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.1...v0.10.2) (2026-06-12)
-
-
-### Bug Fixes
-
-* SimpleCluster: arsys ([005b309](https://github.com/apeirora/showroom-simple-cluster/commit/005b309407f65d137fb4b9aa48f9ce911df342bc))
-
-## [0.10.1](https://github.com/apeirora/showroom-simple-cluster/compare/v0.10.0...v0.10.1) (2026-06-11)
-
-
-### Bug Fixes
-
-* SimpleCluster: Machines are not actually deleted when a cluster is deleted — deletion is assumed complete once the request is accepted ([#19](https://github.com/apeirora/showroom-simple-cluster/issues/19)) ([a0a0c31](https://github.com/apeirora/showroom-simple-cluster/commit/a0a0c31346b4be2538345538eb711fdcc98477f0))
-* SimpleCluster: update config chart ([f757e12](https://github.com/apeirora/showroom-simple-cluster/commit/f757e1296064073f03f4d9818e1ceee4051dcd53))
-
-## [0.10.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.9.0...v0.10.0) (2026-06-11)
+## [0.11.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.10.5...v0.11.0) (2026-06-12)
 
 
 ### Features
 
-* **operator:** label kubeconfig Secrets with apeirora.eu/kubeconfig ([#15](https://github.com/apeirora/showroom-simple-cluster/issues/15)) ([d294950](https://github.com/apeirora/showroom-simple-cluster/commit/d29495032921ff98c4ce9901a881437984709ae9))
-* UbuntuCluster with SSH key from different namespace ([3625ea0](https://github.com/apeirora/showroom-simple-cluster/commit/3625ea0c2d4a1003a9f18baff59a185835060592))
+* **controller:** register host external IPs on k3s nodes ([#26](https://github.com/apeirora/showroom-msp-simple-cluster/issues/26)) ([95953da](https://github.com/apeirora/showroom-msp-simple-cluster/commit/95953da82dc5f2e47a4b62ea04ec29fe2545632e))
 
 
 ### Bug Fixes
 
-* Claudferro config ([1177f39](https://github.com/apeirora/showroom-simple-cluster/commit/1177f390b2f60ded399b0bd0a66d671b9fb31e74))
-* external secret typo ([26fda43](https://github.com/apeirora/showroom-simple-cluster/commit/26fda43ee4ee582bcf757f980745d58e8c258a08))
-* IronCore SAP config ([6d94729](https://github.com/apeirora/showroom-simple-cluster/commit/6d94729e3005de3c540c59ff62e305e46dcf7992))
-* IronCore SAP config ([1125907](https://github.com/apeirora/showroom-simple-cluster/commit/1125907d04f907a89b8fe22efc2bc36880688ad6))
-* rbac ([e573def](https://github.com/apeirora/showroom-simple-cluster/commit/e573deffda1a5299e1df1e4e23b6100ffbcc5d54))
+* SimpleCluster: arsysubuntumachine with progress ([2b29fce](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2b29fce566111359b66d9f4d3222c384e8eddde6))
 
-## [0.9.0](https://github.com/apeirora/showroom-simple-cluster/compare/v0.8.4...v0.9.0) (2026-06-11)
+## [0.10.5](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.10.4...v0.10.5) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: config version ([e947c3f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e947c3fe5421e168d89beb2760b70c8cc4e1306c))
+* SimpleCluster: too many request should not change state to field. ([520ea02](https://github.com/apeirora/showroom-msp-simple-cluster/commit/520ea028ae98c291965628ba9981c9e6ca170083))
+
+## [0.10.4](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.10.3...v0.10.4) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: dati config fix ([50983df](https://github.com/apeirora/showroom-msp-simple-cluster/commit/50983df30cb8a342b5a36fab1ac7214ad3bae40f))
+* SimpleCluster: update status ([38c2d6a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/38c2d6a4d78edd651833643ab88592de64b7645f))
+
+## [0.10.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.10.2...v0.10.3) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: arsys update status from API to resource ([5c3e77b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5c3e77b9b52fbb6e2fb2519656a8dae20cf25ba5))
+
+## [0.10.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.10.1...v0.10.2) (2026-06-12)
+
+
+### Bug Fixes
+
+* SimpleCluster: arsys ([cd10ed9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cd10ed999866b3c7f085695de2d9d636081af32c))
+
+## [0.10.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.10.0...v0.10.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* SimpleCluster: Machines are not actually deleted when a cluster is deleted — deletion is assumed complete once the request is accepted ([#19](https://github.com/apeirora/showroom-msp-simple-cluster/issues/19)) ([5e4923b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5e4923b903496bcb3f1c4c943ac21a1851ff2c20))
+* SimpleCluster: update config chart ([32ebffe](https://github.com/apeirora/showroom-msp-simple-cluster/commit/32ebffec8ac7e5900ea7e94c4cf5fa063e26a303))
+
+## [0.10.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.9.0...v0.10.0) (2026-06-11)
 
 
 ### Features
 
-* Arsys autodetect cloud profile ([546b622](https://github.com/apeirora/showroom-simple-cluster/commit/546b6228fe576f11a71c925326b66495f0f9effb))
-* ironCore ([66f9bff](https://github.com/apeirora/showroom-simple-cluster/commit/66f9bff3416b3508d47af8390173835c321cf128))
-* IronCore ([7ace4aa](https://github.com/apeirora/showroom-simple-cluster/commit/7ace4aa80676fa316705d4f570242fadae6f5d42))
-* IronCore helm chart ([5fbdffc](https://github.com/apeirora/showroom-simple-cluster/commit/5fbdffcaa82d2e7299c8d54398e2cc3a7cbcf8d5))
-* IronCore helm chart ([d70bf27](https://github.com/apeirora/showroom-simple-cluster/commit/d70bf27a5c0c0c269fb635c48fdbdc0b1dc0d001))
+* **operator:** label kubeconfig Secrets with apeirora.eu/kubeconfig ([#15](https://github.com/apeirora/showroom-msp-simple-cluster/issues/15)) ([d76e482](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d76e4824166998135319ab647fd1420c9b252bd7))
+* UbuntuCluster with SSH key from different namespace ([41eb3be](https://github.com/apeirora/showroom-msp-simple-cluster/commit/41eb3beac7090bd460c89635564ef23d976b6ea3))
 
 
 ### Bug Fixes
 
-* build arsys image from repo root, multi-arch ([4adfe75](https://github.com/apeirora/showroom-simple-cluster/commit/4adfe757d92885306622cd765a47e4378aea66b9))
+* Claudferro config ([3762385](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3762385a87b58bf08fe9bb86e68d23dafb4855e1))
+* external secret typo ([000fc55](https://github.com/apeirora/showroom-msp-simple-cluster/commit/000fc55a23d97fe4b428dc6a028e8be7eb1a1f05))
+* IronCore SAP config ([5083ff0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5083ff02dfd13c24e1c7b25900e64f732f4a8c2c))
+* IronCore SAP config ([b0b58f6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/b0b58f6d4527e66f6c15e5fb634b118615b5e467))
+* rbac ([d6dff5e](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d6dff5ec112041c08124dd169c22eaa95883b348))
+
+## [0.9.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.8.4...v0.9.0) (2026-06-11)
+
+
+### Features
+
+* Arsys autodetect cloud profile ([47658a9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/47658a9f52687105e933e1f5b283da5aa8c2e5d5))
+* ironCore ([c21ad7a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c21ad7a85327d5e76489d11e56053d82c6e52c47))
+* IronCore ([f01b9af](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f01b9af3dab121b84c55f2e4a42f7285a185eb9c))
+* IronCore helm chart ([159c791](https://github.com/apeirora/showroom-msp-simple-cluster/commit/159c791e8633d58c8c2ba511bad2140c3c6378d1))
+* IronCore helm chart ([e678d6a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e678d6a807e2630a61a443759cfcc42c4be78e31))
+
+
+### Bug Fixes
+
+* build arsys image from repo root, multi-arch ([b1c7e28](https://github.com/apeirora/showroom-msp-simple-cluster/commit/b1c7e289ec4088fc5a4e5175db72784314a598a8))
