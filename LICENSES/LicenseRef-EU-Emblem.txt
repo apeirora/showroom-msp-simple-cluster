@@ -1,0 +1,16 @@
+European Union emblem
+=====================
+
+The European emblem is reproduced in this repository solely to acknowledge
+funding, in line with the European Commission's guidelines on the use of the
+European emblem by third parties:
+
+  https://commission.europa.eu/select-language?destination=/node/1
+
+Permitted use requires that the reproduction does not create confusion between
+the user and the European Union or the Council of Europe, and does not suggest
+that the user is endorsed by either. No trade-mark rights are acquired through
+this reproduction, and the emblem may not be appropriated or registered as a
+trade mark.
+
+The emblem is not covered by this project's Apache-2.0 licence.
