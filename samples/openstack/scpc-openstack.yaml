@@ -9,7 +9,7 @@ spec:
     namespace: default
 
   inputs:
-    - { name: network,        type: string, default: cloud_080745_1,     description: "Neutron network" }
+    - { name: network,        type: string, default: <your-neutron-network>, description: "Neutron network" }
     - { name: floatingIPPool, type: string, default: external,           description: "External network providing FIPs for control-plane VMs" }
     - { name: image,          type: string, default: "Ubuntu 24.04 LTS", description: "Glance image" }
     - { name: flavorPattern,  type: string, default: '^eo[12]a\.',       description: "Regex narrowing Nova flavor candidates" }

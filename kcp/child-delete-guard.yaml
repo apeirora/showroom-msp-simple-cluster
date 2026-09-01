@@ -31,7 +31,7 @@ spec:
         has(oldObject.metadata.labels) && 'showroom.apeirora.eu/simple-cluster' in oldObject.metadata.labels
     # kcp tears down a namespace (and collects owner-referenced objects) through its own
     # loopback identity. Refusing it leaves the namespace Terminating forever with the
-    # object still there -- measured on cc-d2, and fixed by this line.
+    # object still there -- observed on a live KCP landscape, and fixed by this line.
     - name: not-the-apiserver-itself
       expression: >-
         request.userInfo.username != 'system:apiserver'

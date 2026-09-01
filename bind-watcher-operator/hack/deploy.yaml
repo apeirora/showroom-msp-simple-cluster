@@ -49,7 +49,7 @@ spec:
       serviceAccountName: bind-watcher-operator
       containers:
         - name: bind-watcher-operator
-          image: ghcr.io/m-szalik/bind-watcher:latest
+          image: ghcr.io/apeirora/bind-watcher-operator:latest
           imagePullPolicy: Always
           env:
             - name: KCP_KUBECONFIG
