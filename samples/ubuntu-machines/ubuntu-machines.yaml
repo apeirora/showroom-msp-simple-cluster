@@ -23,7 +23,7 @@ metadata:
     pool: showroom
 spec:
   address: 192.168.168.150
-  externalAddress: 46.60.23.143
+  externalAddress: 203.0.113.20
   ssh:
     user: eouser
     privateKeySecretRef:
@@ -41,7 +41,7 @@ metadata:
     pool: showroom
 spec:
   address: 192.168.168.225
-  externalAddress: 46.60.23.242
+  externalAddress: 203.0.113.21
   ssh:
     user: eouser
     privateKeySecretRef:

@@ -8,7 +8,7 @@ metadata:
 spec:
   autoscaling: true
   target:
-    namespace: garden-pm-cc-d2
+    namespace: garden-<your-gardener-project>
     kubeconfigSecretRef:
       name: sap-gardener-kubeconfig
       namespace: default

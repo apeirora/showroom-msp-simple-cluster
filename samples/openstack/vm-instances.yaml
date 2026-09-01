@@ -15,7 +15,7 @@ spec:
   sshKeyRef:
     kind: Secret
     name: openstack-vm-instances-ssh
-  network: cloud_080745_1
+  network: <your-neutron-network>
   floatingIPPool: external
   securityGroups:
     - default
@@ -37,7 +37,7 @@ spec:
   sshKeyRef:
     kind: Secret
     name: openstack-vm-instances-ssh
-  network: cloud_080745_1
+  network: <your-neutron-network>
   floatingIPPool: external
   securityGroups:
     - default
@@ -59,7 +59,7 @@ spec:
   sshKeyRef:
     kind: Secret
     name: openstack-vm-instances-ssh
-  network: cloud_080745_1
+  network: <your-neutron-network>
   securityGroups:
     - default
   resources:
@@ -79,7 +79,7 @@ spec:
   sshKeyRef:
     kind: Secret
     name: openstack-vm-instances-ssh
-  network: cloud_080745_1
+  network: <your-neutron-network>
   securityGroups:
     - default
   resources:

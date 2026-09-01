@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # Experiment helper for bind-watcher-operator: build+push a personal image and
-# deploy it to msp03 with a plain manifest. Not for production — once proven,
+# deploy it to an MSP cluster with a plain manifest. Not for production — once proven,
 # switch to the official build/chart.
 #
 # Usage:
 #   ./experiment.sh publish   # docker build + push the :latest image
-#   ./experiment.sh deploy    # kubectl apply the manifest on msp03
+#   ./experiment.sh deploy    # kubectl apply the manifest on the MSP cluster
 #   ./experiment.sh all       # publish then deploy
 #
 # Between publish and deploy, make the ghcr package PUBLIC (the manifest has no
 # imagePullSecret).
 set -euo pipefail
 
-IMAGE="${IMAGE:-ghcr.io/m-szalik/bind-watcher}"
+IMAGE="${IMAGE:-ghcr.io/<your-user>/bind-watcher}"
 TAG="${TAG:-latest}"
 NAMESPACE="${NAMESPACE:-simple-cluster-system}"
-KUBECONFIG_MSP03="${KUBECONFIG_MSP03:-$HOME/SAP/cc-d2-msp03-kubeconfig.yaml}"
+KUBECONFIG_MSP03="${KUBECONFIG_MSP03:-$HOME/.kube/msp-cluster.yaml}"
 KCP_SECRET="${KCP_SECRET:-kcp-admin-kubeconfig}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

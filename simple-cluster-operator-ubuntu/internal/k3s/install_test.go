@@ -25,16 +25,16 @@ func TestServerArgs(t *testing.T) {
 			name: "all knobs set",
 			opts: InstallOptions{
 				ExtraArgs:      []string{"--disable=traefik"},
-				TLSSAN:         "46.60.18.73",
+				TLSSAN:         "203.0.113.30",
 				NodeIP:         "192.168.168.48",
-				NodeExternalIP: "46.60.18.73",
+				NodeExternalIP: "203.0.113.30",
 			},
 			want: []string{
 				"--disable=traefik",
-				"--tls-san=46.60.18.73",
+				"--tls-san=203.0.113.30",
 				"--node-ip=192.168.168.48",
 				"--advertise-address=192.168.168.48",
-				"--node-external-ip=46.60.18.73",
+				"--node-external-ip=203.0.113.30",
 			},
 		},
 		{
@@ -69,11 +69,11 @@ func TestAgentArgs(t *testing.T) {
 			name: "external ip set",
 			opts: InstallOptions{
 				NodeIP:         "192.168.168.91",
-				NodeExternalIP: "46.60.18.74",
+				NodeExternalIP: "203.0.113.31",
 			},
 			want: []string{
 				"--node-ip=192.168.168.91",
-				"--node-external-ip=46.60.18.74",
+				"--node-external-ip=203.0.113.31",
 			},
 		},
 		{

@@ -38,7 +38,7 @@ metadata:
     site: msp-lab
 spec:
   address: 10.128.0.10                # internal IP — required
-  externalAddress: 34.58.121.214      # public IP — optional, required for claims with externalAddressRequired=true
+  externalAddress: 203.0.113.10      # public IP — optional, required for claims with externalAddressRequired=true
   ssh:
     user: ubuntu
     privateKeySecretRef: { name: lab-key }   # Secret in same namespace, key `ssh-privatekey`
