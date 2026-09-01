@@ -191,8 +191,10 @@ jobs:
       - name: Build and push the component version
         run: |
           set -euo pipefail
+          mkdir -p dist/ctf
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
           ocm add componentversions --create --file dist/ctf \
             .ocm/component-constructor.yaml \
-            -- VERSION="${VERSION}" GITHUB_REPOSITORY_OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+            VERSION="${VERSION}" GITHUB_REPOSITORY_OWNER="${owner}"
           ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" \
             --copy-resources --overwrite

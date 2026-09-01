@@ -17,3 +17,12 @@ path = "charts/simple-cluster-sync-agent/charts/api-syncagent-0.4.2.tgz"
 precedence = "override"
 SPDX-FileCopyrightText = "The kcp Authors"
 SPDX-License-Identifier = "Apache-2.0"
+
+# The European Union emblem and the funding statement it carries. Reproduced
+# under the Commission's rules on use of the European emblem; it is neither SAP
+# copyright nor Apache-2.0 licensed.
+[[annotations]]
+path = "docs/assets/eu-funded.svg"
+precedence = "override"
+SPDX-FileCopyrightText = "European Union"
+SPDX-License-Identifier = "LicenseRef-EU-Emblem"

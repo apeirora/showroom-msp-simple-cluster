@@ -19,7 +19,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 VERSION="${1:-$(python3 -c 'import json;print(json.load(open(".release-please-manifest.json"))["."])')}"
-SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft:latest}"
+# Pinned: hack/check-sbom-current.sh fails the build on any SBOM diff, so an
+# unpinned syft would turn that gate red whenever upstream changes its output.
+SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft:v1.51.1}"
 SBOM_DIR="${SBOM_DIR:-$ROOT/sbom}"
 
 # syft can only read a Go dependency's licence from the module cache, so make sure
