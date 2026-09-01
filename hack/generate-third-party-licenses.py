@@ -3,6 +3,9 @@
 
 Run `hack/generate-sbom.sh` first, then this script. Both are re-run whenever
 dependencies change, so the audit document never drifts from the SBOM.
+
+Reads sbom/ and writes docs/third-party-licenses.md unless SBOM_DIR and
+LICENSES_OUT say otherwise.
 """
 import glob
 import json
@@ -10,6 +13,8 @@ import os
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SBOM_DIR = os.environ.get("SBOM_DIR") or os.path.join(ROOT, "sbom")
+OUT = os.environ.get("LICENSES_OUT") or os.path.join(ROOT, "docs", "third-party-licenses.md")
 
 # syft records a content hash instead of an SPDX id when a LICENSE file does not
 # match a known template verbatim. These were resolved by reading the LICENSE
@@ -45,7 +50,7 @@ def licences_of(component) -> list:
 def main():
     deps = {}                       # (name, version) -> {"lic": [...], "in": {component}}
     unmatched = set()
-    for path in sorted(glob.glob(os.path.join(ROOT, "sbom", "*.cdx.json"))):
+    for path in sorted(glob.glob(os.path.join(SBOM_DIR, "*.cdx.json"))):
         shipped = os.path.basename(path)[: -len(".cdx.json")]
         for c in json.load(open(path)).get("components", []):
             if is_self(c["name"]):
@@ -90,7 +95,7 @@ def main():
     w("## Summary")
     w("")
     w(f"- **{len(deps)}** distinct third-party dependencies across "
-      f"**{len(glob.glob(os.path.join(ROOT, 'sbom', '*.cdx.json')))}** published components.")
+      f"**{len(glob.glob(os.path.join(SBOM_DIR, '*.cdx.json')))}** published components.")
     w("- Licences in use: " + ", ".join(f"`{k}` ({len(v)})" for k, v in sorted(by_lic.items(), key=lambda kv: -len(kv[1]))) + ".")
     if copyleft:
         w("- **Copyleft licences present — review obligations:** " + ", ".join(f"`{c}`" for c in copyleft) + ".")
@@ -139,7 +144,7 @@ def main():
             w(f"| `{name}` | `{version}` | {', '.join(where)} |")
         w("")
 
-    out = os.path.join(ROOT, "docs", "third-party-licenses.md")
+    out = OUT
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as fh:
         fh.write("\n".join(lines).rstrip() + "\n")

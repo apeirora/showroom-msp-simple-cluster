@@ -43,6 +43,8 @@ Passes run:
 | F-09 | Low | Internal `TODO.md` at the repository root | **Resolved.** Removed; the items were tracked work, not user-facing documentation. |
 | F-10 | Low | Repository `.gitignore` did not exclude `.claude/`, `.notes/`, `*.env`, `*openrc*` or key files — those paths stayed untracked only because of a maintainer's personal global gitignore | **Resolved.** All added to the repository `.gitignore`. |
 | F-11 | Info | OpenStack application-credential files present in the untracked working tree (`.claude/openstack-cf/.env`, `*-openrc-app-credentials.sh`) | **Never committed** — verified with `--diff-filter=A` across all refs. Credentials to be revoked in the OpenStack project as a precaution; see *Open handoff items*. |
+| F-12 | Info | A live CloudFerro application credential (`OS_APPLICATION_CREDENTIAL_ID` / `_SECRET`) sits in a maintainer's working copy at `samples/openstack/openstack-creds-secret.yaml` | **Never committed** — the file is excluded by `samples/openstack/.gitignore`, and `--diff-filter=A` across all refs confirms it was never added. The credential is to be revoked; see *Open handoff items*. |
+| F-13 | Info | `imports/` holds real Gardener kubeconfigs with live bearer tokens in a maintainer's working copy | **Never committed** — `imports/` has been in `.gitignore` since it was created, confirmed by `--diff-filter=A` across all refs. Tokens to be rotated; see *Open handoff items*. |
 
 ## Verified clean
 
@@ -62,14 +64,17 @@ Passes run:
   `.cursorrules` or `AGENTS.md` was ever committed.
 - One e-mail address in tracked content, `ubuntu-cluster@sample.com`, synthetic.
 - No copyleft dependencies; see [third-party-licenses.md](third-party-licenses.md).
+- A final `gitleaks` pass over a clean `git archive` of the publication tree
+  reports **no findings**.
 
 ## Open handoff items
 
 These cannot be closed from inside the repository and are tracked with the
 publication ticket:
 
-1. **Revoke the OpenStack application credential** referenced in F-11, and the
-   two demo SSH keys in F-01/F-02, in the systems that issued them.
+1. **Revoke credentials** that existed outside the repository but alongside it:
+   the OpenStack application credentials in F-11 and F-12, the Gardener
+   kubeconfig tokens in F-13, and the two demo SSH keys in F-01/F-02.
 2. **Enable GitHub secret scanning and push protection** on the repository
    (available once it is public).
 3. **Make the CI gates required** — REUSE, secret scan, vulnerability scan,

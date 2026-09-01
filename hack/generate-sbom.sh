@@ -4,6 +4,8 @@
 #
 #   ./hack/generate-sbom.sh [version]
 #
+# Writes to sbom/ unless SBOM_DIR is set.
+#
 # `version` defaults to the release-please manifest version, i.e. the version the
 # release candidate is cut at. Requires Docker (uses anchore/syft).
 #
@@ -18,6 +20,7 @@ cd "$ROOT"
 
 VERSION="${1:-$(python3 -c 'import json;print(json.load(open(".release-please-manifest.json"))["."])')}"
 SYFT_IMAGE="${SYFT_IMAGE:-anchore/syft:latest}"
+SBOM_DIR="${SBOM_DIR:-$ROOT/sbom}"
 
 # syft can only read a Go dependency's licence from the module cache, so make sure
 # every module is downloaded and hand the cache to the container read-only.
@@ -40,11 +43,11 @@ for c in "${COMPONENTS[@]}"; do
   ( cd "$c" && go mod download )
 done
 
-mkdir -p sbom
+mkdir -p "$SBOM_DIR"
 for c in "${COMPONENTS[@]}"; do
   echo ">>> SBOM for ${c} @ ${VERSION}"
   docker run --rm \
-    -v "$ROOT:/src:ro" -v "$ROOT/sbom:/out" -v "$GOMODCACHE:/gomodcache:ro" \
+    -v "$ROOT:/src:ro" -v "$SBOM_DIR:/out" -v "$GOMODCACHE:/gomodcache:ro" \
     -e SYFT_GOLANG_SEARCH_LOCAL_MOD_CACHE_LICENSES=true \
     -e SYFT_GOLANG_LOCAL_MOD_CACHE_DIR=/gomodcache \
     "$SYFT_IMAGE" scan "dir:/src/${c}" \
@@ -55,10 +58,9 @@ for c in "${COMPONENTS[@]}"; do
       -o "spdx-json=/out/${c}.spdx.json"
 done
 
-# syft runs as root inside the container.
-if [ -n "${SUDO_USER:-}" ] || [ "$(id -u)" -ne 0 ]; then
-  docker run --rm -v "$ROOT/sbom:/out" --entrypoint chown "$SYFT_IMAGE" -R "$(id -u):$(id -g)" /out 2>/dev/null || true
-fi
+# syft runs as root inside the container; hand the files back.
+docker run --rm -v "$SBOM_DIR:/out" --entrypoint chown "$SYFT_IMAGE" \
+  -R "$(id -u):$(id -g)" /out >/dev/null 2>&1 || true
 
 echo
-echo "Wrote $(ls -1 sbom/*.json | wc -l) SBOM files to sbom/"
+echo "Wrote $(ls -1 "$SBOM_DIR"/*.json | wc -l) SBOM files to $SBOM_DIR"
