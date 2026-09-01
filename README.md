@@ -250,7 +250,8 @@ by Flux `HelmRelease`s in `showroom-msp-cluster-infra` under `apps/simple-cluste
 All pin `version: ">=0.2.0 <1.0.0"` against the shared `HelmRepository` and pull
 images with the `ghcr-showroom-secret`. Environment is selected by
 `apps/simple-cluster/overlays/{dev,prod}`, wired per cluster (e.g.
-`clusters/cc-d2/msp03` → dev, `clusters/cc-two/msp03` → prod).
+`clusters/<dev-landscape>/<cluster>` → dev,
+`clusters/<prod-landscape>/<cluster>` → prod).
 
 ## Configuration
 

@@ -4,7 +4,7 @@ description: >-
   Platform Mesh portal metadata
   (APIExport/ProviderMetadata/ContentConfiguration) for the
   simple-cluster-operator (SimpleCluster) provider, applied in the KCP control
-  plane (cc-d2).
+  plane.
 type: application
 version: 0.6.0
 appVersion: 0.1.0

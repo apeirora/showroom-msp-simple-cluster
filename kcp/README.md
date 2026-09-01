@@ -33,4 +33,4 @@ carries the stamp onto the KCP mirror. A human can set it by hand to break glass
 
 The `not-the-apiserver-itself` match condition is not decoration. kcp tears down namespaces
 and collects owner-referenced objects under its own loopback identity; refusing it leaves a
-namespace `Terminating` forever, measured on cc-d2.
+namespace `Terminating` forever — observed on a live KCP landscape.
