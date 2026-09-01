@@ -2,6 +2,8 @@ module github.com/apeirora/showroom-msp-simple-cluster/kind-cluster-operator
 
 go 1.25.0
 
+toolchain go1.26.7
+
 require (
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0

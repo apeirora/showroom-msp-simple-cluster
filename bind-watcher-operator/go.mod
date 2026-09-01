@@ -2,6 +2,8 @@ module github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator
 
 go 1.25.0
 
+toolchain go1.26.7
+
 require (
 	github.com/go-logr/logr v1.4.3
 	github.com/kcp-dev/kcp/sdk v0.28.1

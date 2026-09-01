@@ -2,6 +2,8 @@ module github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-o
 
 go 1.25.0
 
+toolchain go1.26.7
+
 require (
 	github.com/gophercloud/gophercloud/v2 v2.4.0
 	golang.org/x/crypto v0.52.0

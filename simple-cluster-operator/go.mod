@@ -2,6 +2,8 @@ module github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator
 
 go 1.25.0
 
+toolchain go1.26.7
+
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/onsi/ginkgo/v2 v2.22.0
