@@ -8,14 +8,18 @@ description: Umbrella chart that deploys simple-cluster-operator and its
 type: application
 version: 0.7.0
 appVersion: "0.1.0"
+# The sub-charts are vendored under charts/ and all declare 0.1.0 — the version
+# kubebuilder's helm plugin scaffolds. What actually ships is stamped at publish
+# time (`--version`/`--app-version` on the umbrella, `global.imageTag` on the
+# images), so these constraints only need to match what is vendored.
 dependencies:
   - name: simple-cluster-operator
-    version: 0.3.2
+    version: 0.1.0
   - name: kind-cluster-operator
-    version: 0.3.0
+    version: 0.1.0
   - name: simple-cluster-operator-openstack
-    version: 0.3.0
+    version: 0.1.0
   - name: simple-cluster-operator-ubuntu
-    version: 0.3.0
+    version: 0.1.0
   - name: sshkey-operator
     version: 0.1.0
