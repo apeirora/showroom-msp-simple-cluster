@@ -67,6 +67,23 @@ Passes run:
 - A final `gitleaks` pass over a clean `git archive` of the publication tree
   reports **no findings**.
 
+## Known issues found during the review
+
+Not publication blockers, but recorded so a reader of the public repository is
+not misled:
+
+- **`scripts/regen-helm-charts.sh` is destructive.** It deletes each chart
+  directory and regenerates it from kubebuilder scaffolding, discarding the
+  hand-maintained additions those charts have grown (the `addonCatalog` and
+  `ordCatalog` values and the manager arguments they render, and the
+  `global.imageTag` coalesce the umbrella relies on), and it emits a stray CRD
+  for the OpenStack operator. The script and the documentation now say so;
+  scaffolding changes must be mirrored into the charts by hand until it is fixed.
+- **Committed generated files are slightly stale.** Running `make build` in
+  `simple-cluster-operator` reorders `zz_generated.deepcopy.go` and rewraps two
+  CRD descriptions. Left unchanged here because the chart's copy of the CRD can
+  only be brought back into step through the broken regeneration script above.
+
 ## Open handoff items
 
 These cannot be closed from inside the repository and are tracked with the

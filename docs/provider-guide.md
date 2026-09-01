@@ -337,14 +337,11 @@ that hangs on delete hangs the whole `SimpleCluster` cascade.
 5. Add a sample under `samples/<name>/` — an SCPC plus a `SimpleCluster` that
    uses it.
 
-When operator scaffolding changes (CRDs, RBAC, manager), regenerate the
-kubebuilder-derived charts before committing:
-
-```sh
-./scripts/regen-helm-charts.sh
-```
-
-It is not run in CI.
+When operator scaffolding changes (CRDs, RBAC, the manager deployment), mirror
+the change into the chart under `charts/simple-cluster-system/charts/` by hand.
+CI does not do it for you, and `scripts/regen-helm-charts.sh` currently discards
+hand-maintained chart values — see
+[Local development](installation-local.md#regenerating-the-charts).
 
 ---
 

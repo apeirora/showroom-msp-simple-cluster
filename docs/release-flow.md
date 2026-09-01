@@ -52,8 +52,10 @@ Every pull request must pass:
 
 ## Before a release
 
-- **Regenerate the charts** when operator scaffolding changed:
-  `./scripts/regen-helm-charts.sh`. It is not run in CI.
+- **Mirror scaffolding changes into the charts** by hand when CRDs, RBAC or the
+  manager deployment changed. CI does not do it, and
+  `scripts/regen-helm-charts.sh` currently discards hand-maintained chart values
+  — see [Local development](installation-local.md#regenerating-the-charts).
 - **Regenerate the SBOM** when dependencies changed:
   `./hack/generate-sbom.sh && python3 hack/generate-third-party-licenses.py`.
   The `dependencies` gate fails otherwise.

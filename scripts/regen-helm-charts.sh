@@ -12,6 +12,14 @@
 #     └── sshkey-operator/
 #   charts/ubuntu-machines-operator/
 #
+# WARNING: this script is currently unsafe to run. It deletes each chart
+# directory and regenerates it from kubebuilder scaffolding, which discards the
+# hand-maintained additions those charts have since grown -- the addonCatalog and
+# ordCatalog values and the manager arguments they render, and the
+# global.imageTag coalesce the umbrella relies on to pin one tag across every
+# operator. It also emits a stray CRD for the OpenStack operator. Until it
+# reapplies those edits, mirror scaffolding changes into the charts by hand.
+#
 # Usage:
 #   scripts/regen-helm-charts.sh
 

@@ -59,12 +59,11 @@ fails otherwise:
 python3 hack/generate-third-party-licenses.py
 ```
 
-If you changed operator scaffolding (CRDs, RBAC, the manager deployment),
-regenerate the derived charts, which CI does not do for you:
-
-```sh
-./scripts/regen-helm-charts.sh
-```
+If you changed operator scaffolding (CRDs, RBAC, the manager deployment), mirror
+the change into the chart under `charts/simple-cluster-system/charts/` by hand.
+CI does not do it, and `scripts/regen-helm-charts.sh` currently discards
+hand-maintained chart values — see
+[Local development](docs/installation-local.md#regenerating-the-charts).
 
 ## Pull request titles
 

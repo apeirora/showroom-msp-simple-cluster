@@ -94,15 +94,20 @@ use.
 
 ## Regenerating the charts
 
-The operator charts under `charts/simple-cluster-system/charts/` are derived from
-each module's kubebuilder scaffolding. After changing CRDs, RBAC or the manager
-deployment:
+The operator charts under `charts/simple-cluster-system/charts/` started life as
+kubebuilder `helm/v1-alpha` output, which `scripts/regen-helm-charts.sh`
+reproduces.
 
-```sh
-./scripts/regen-helm-charts.sh
-```
+> **The script is currently unsafe to run.** It deletes each chart directory and
+> regenerates it from scaffolding, which discards the hand-maintained additions
+> those charts have since grown — the `addonCatalog` and `ordCatalog` values and
+> the manager arguments they render, and the `global.imageTag` coalesce that lets
+> the umbrella pin one tag across every operator. It also emits a stray CRD for
+> the OpenStack operator. Until it reapplies those edits, hand-edit the chart
+> instead and keep it in step with `config/` yourself.
 
-This is **not** run in CI — regenerate and commit the result yourself.
+CI does not regenerate the charts, so a CRD change must be mirrored into the
+chart's `templates/crd/` by hand.
 
 ## Regenerating the SBOM
 
