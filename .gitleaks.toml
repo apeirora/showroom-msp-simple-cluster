@@ -9,11 +9,11 @@ useDefault = true
 
 [[allowlists]]
 description = """
-SAP UI5 accessibility message-bundle keys in built front-end assets that were
-committed before the branded providers moved to their own repositories. These
-are i18n identifiers, not credentials.
+SAP UI5 accessibility message-bundle keys in built front-end assets. These are
+i18n identifiers, not credentials. They appear in the vite build output, and in
+history from before the branded providers moved to their own repositories.
 """
-paths = ['''providers/.*/ui/dist/assets/messagebundle_.*\.js''']
+paths = ['''(^|/)ui/dist/assets/messagebundle_.*\.js''']
 
 [[allowlists]]
 description = """
