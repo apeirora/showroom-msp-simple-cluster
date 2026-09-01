@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	umv1alpha1 "github.com/apeirora/showroom-simple-cluster/ubuntu-machines/api/v1alpha1"
-	"github.com/apeirora/showroom-simple-cluster/ubuntu-machines/internal/controller"
+	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/controller"
 )
 
 var (

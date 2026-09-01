@@ -1,4 +1,4 @@
-module github.com/apeirora/showroom-simple-cluster/ubuntu-machines
+module github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines
 
 go 1.24.5
 
