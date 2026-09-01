@@ -1,0 +1,120 @@
+# OCM component for the Simple Cluster stack.
+#
+# Every image and chart is referenced at the same ${VERSION} — the one the
+# publish workflow stamps into all of them — so a component version always
+# resolves to a self-consistent set of artefacts.
+#
+# Rendered by .github/workflows/publish.yml; ${VERSION} and
+# ${GITHUB_REPOSITORY_OWNER} are substituted by the OCM CLI.
+name: showroom.apeirora.eu/simple-cluster
+version: ${VERSION}
+provider:
+  name: ${GITHUB_REPOSITORY_OWNER}
+
+resources:
+  # ---------------------------------------------------------------- images
+  - name: simple-cluster-operator-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/simple-cluster-operator:${VERSION}
+
+  - name: kind-cluster-operator-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/kind-cluster-operator:${VERSION}
+
+  - name: simple-cluster-operator-openstack-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/simple-cluster-operator-openstack:${VERSION}
+
+  - name: simple-cluster-operator-ubuntu-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/simple-cluster-operator-ubuntu:${VERSION}
+
+  - name: ubuntu-machines-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/ubuntu-machines:${VERSION}
+
+  - name: sshkey-operator-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/sshkey-operator:${VERSION}
+
+  - name: bind-watcher-operator-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/bind-watcher-operator:${VERSION}
+
+  - name: simple-cluster-ui-image
+    type: ociImage
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/simple-cluster-ui:${VERSION}
+
+  # ----------------------------------------------------------- helm charts
+  - name: simple-cluster-system-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/simple-cluster-system:${VERSION}
+
+  - name: ubuntu-machines-operator-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/ubuntu-machines-operator:${VERSION}
+
+  - name: sshkey-operator-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/sshkey-operator:${VERSION}
+
+  - name: bind-watcher-operator-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/bind-watcher-operator:${VERSION}
+
+  - name: simple-cluster-pm-integration-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/simple-cluster-pm-integration:${VERSION}
+
+  - name: simple-cluster-ui-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/simple-cluster-ui:${VERSION}
+
+  - name: simple-cluster-sync-agent-chart
+    type: helmChart
+    version: "${VERSION}"
+    access:
+      type: ociArtifact
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/simple-cluster-sync-agent:${VERSION}

@@ -12,6 +12,10 @@ fmt:
 vet:
 	go vet ./...
 
+.PHONY: test
+test:
+	go test ./... -coverprofile cover.out
+
 .PHONY: docker-build
 docker-build:
 	docker build -t ${IMG} .
