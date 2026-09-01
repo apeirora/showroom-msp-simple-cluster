@@ -180,13 +180,15 @@ spec:
                       templates that predate the range form. Mutually exclusive with Nodes.
                     properties:
                       max:
-                        description: Max is the maximum worker count. Surfaced as .SC.workers.max.
+                        description: Max is the maximum worker count. Surfaced as
+                          .SC.workers.max.
                         format: int32
                         maximum: 100
                         minimum: 1
                         type: integer
                       min:
-                        description: Min is the minimum worker count. Surfaced as .SC.workers.min.
+                        description: Min is the minimum worker count. Surfaced as
+                          .SC.workers.min.
                         format: int32
                         maximum: 100
                         minimum: 1

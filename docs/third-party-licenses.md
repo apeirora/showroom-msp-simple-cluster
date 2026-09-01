@@ -17,8 +17,8 @@ build-time tooling and are not part of any shipped artefact.
 
 ## Summary
 
-- **182** distinct third-party dependencies across **8** published components.
-- Licences in use: `Apache-2.0` (62), `MIT` (49), `BSD-3-Clause` (47), `Apache-2.0 AND BSD-3-Clause` (13), `Apache-2.0 AND MIT` (5), `ISC` (2), `Apache-2.0 AND BSD-3-Clause AND MIT` (2), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
+- **164** distinct third-party dependencies across **8** published components.
+- Licences in use: `Apache-2.0` (58), `MIT` (50), `BSD-3-Clause` (32), `Apache-2.0 AND BSD-3-Clause` (13), `Apache-2.0 AND MIT` (5), `ISC` (2), `Apache-2.0 AND BSD-3-Clause AND MIT` (2), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
 - **No copyleft dependencies.** Every licence above is permissive (Apache-2.0, BSD, MIT, ISC), so redistribution under Apache-2.0 carries no source-disclosure obligation.
 
 ## Obligations
@@ -56,7 +56,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 
 ## Full inventory
 
-### Apache-2.0 (62)
+### Apache-2.0 (58)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -72,10 +72,9 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `@ui5/webcomponents-react` | `2.22.2` | ui |
 | `@ui5/webcomponents-react-base` | `2.22.2` | ui |
 | `@ui5/webcomponents-theming` | `2.22.0` | ui |
-| `cel.dev/expr` | `v0.25.1` | simple-cluster-operator, sshkey-operator |
+| `cel.dev/expr` | `v0.25.1` | bind-watcher-operator, simple-cluster-operator, sshkey-operator |
 | `github.com/Masterminds/goutils` | `v1.1.1` | simple-cluster-operator |
-| `github.com/go-logr/logr` | `v1.4.2` | simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
-| `github.com/go-logr/logr` | `v1.4.3` | bind-watcher-operator, simple-cluster-operator, sshkey-operator |
+| `github.com/go-logr/logr` | `v1.4.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/go-logr/stdr` | `v1.2.2` | simple-cluster-operator, sshkey-operator |
 | `github.com/go-logr/zapr` | `v1.3.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/go-openapi/jsonpointer` | `v0.21.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -103,12 +102,9 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc` | `v1.34.0` | simple-cluster-operator, sshkey-operator |
 | `go.opentelemetry.io/proto/otlp` | `v1.5.0` | simple-cluster-operator, sshkey-operator |
 | `gomodules.xyz/jsonpatch/v2` | `v2.4.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `google.golang.org/genproto/googleapis/api` | `v0.0.0-20251202230838-ff82c1b0f217` | simple-cluster-operator |
-| `google.golang.org/genproto/googleapis/api` | `v0.0.0-20260414002931-afd174a4e478` | sshkey-operator |
-| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20251202230838-ff82c1b0f217` | simple-cluster-operator |
-| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20260414002931-afd174a4e478` | sshkey-operator |
-| `google.golang.org/grpc` | `v1.79.3` | simple-cluster-operator |
-| `google.golang.org/grpc` | `v1.82.1` | sshkey-operator |
+| `google.golang.org/genproto/googleapis/api` | `v0.0.0-20260414002931-afd174a4e478` | bind-watcher-operator, simple-cluster-operator, sshkey-operator |
+| `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20260414002931-afd174a4e478` | bind-watcher-operator, simple-cluster-operator, sshkey-operator |
+| `google.golang.org/grpc` | `v1.82.1` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/api` | `v0.34.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/api` | `v0.34.1` | bind-watcher-operator |
 | `k8s.io/apiextensions-apiserver` | `v0.34.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -123,7 +119,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `sigs.k8s.io/randfill` | `v1.0.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `sigs.k8s.io/structured-merge-diff/v6` | `v6.3.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 
-### MIT (49)
+### MIT (50)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -165,6 +161,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `github.com/shopspring/decimal` | `v1.4.0` | simple-cluster-operator |
 | `github.com/spf13/cast` | `v1.7.0` | simple-cluster-operator |
 | `github.com/stoewer/go-strcase` | `v1.3.0` | simple-cluster-operator, sshkey-operator |
+| `github.com/stretchr/testify` | `v1.11.1` | bind-watcher-operator |
 | `github.com/x448/float16` | `v0.8.4` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.uber.org/multierr` | `v1.11.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.uber.org/zap` | `v1.27.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -177,7 +174,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `scheduler` | `0.23.2` | ui |
 | `ts-custom-error` | `3.3.1` | ui |
 
-### BSD-3-Clause (47)
+### BSD-3-Clause (32)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -194,37 +191,22 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `github.com/pmezard/go-difflib` | `v1.0.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/pmezard/go-difflib` | `v1.0.1-0.20181226105442-5d4384ee4fb2` | bind-watcher-operator |
 | `github.com/spf13/pflag` | `v1.0.6` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `golang.org/x/crypto` | `v0.38.0` | ubuntu-machines |
-| `golang.org/x/crypto` | `v0.51.0` | simple-cluster-operator, simple-cluster-operator-ubuntu |
-| `golang.org/x/crypto` | `v0.52.0` | simple-cluster-operator-openstack |
-| `golang.org/x/crypto` | `v0.53.0` | sshkey-operator |
+| `golang.org/x/crypto` | `v0.52.0` | simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
+| `golang.org/x/crypto` | `v0.53.0` | simple-cluster-operator, sshkey-operator |
 | `golang.org/x/exp` | `v0.0.0-20240719175910-8a7402abbf56` | simple-cluster-operator, sshkey-operator |
-| `golang.org/x/net` | `v0.38.0` | ubuntu-machines |
-| `golang.org/x/net` | `v0.54.0` | simple-cluster-operator-openstack |
-| `golang.org/x/net` | `v0.55.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-ubuntu, sshkey-operator |
-| `golang.org/x/oauth2` | `v0.27.0` | simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
-| `golang.org/x/oauth2` | `v0.29.0` | bind-watcher-operator |
-| `golang.org/x/oauth2` | `v0.34.0` | simple-cluster-operator |
-| `golang.org/x/oauth2` | `v0.36.0` | sshkey-operator |
-| `golang.org/x/sync` | `v0.14.0` | ubuntu-machines |
-| `golang.org/x/sync` | `v0.20.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu |
-| `golang.org/x/sync` | `v0.21.0` | sshkey-operator |
-| `golang.org/x/sys` | `v0.33.0` | ubuntu-machines |
-| `golang.org/x/sys` | `v0.45.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu |
-| `golang.org/x/sys` | `v0.46.0` | sshkey-operator |
-| `golang.org/x/term` | `v0.32.0` | ubuntu-machines |
-| `golang.org/x/term` | `v0.43.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu |
-| `golang.org/x/term` | `v0.44.0` | sshkey-operator |
-| `golang.org/x/text` | `v0.25.0` | ubuntu-machines |
-| `golang.org/x/text` | `v0.37.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu |
-| `golang.org/x/text` | `v0.38.0` | sshkey-operator |
+| `golang.org/x/net` | `v0.55.0` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
+| `golang.org/x/net` | `v0.56.0` | simple-cluster-operator, sshkey-operator |
+| `golang.org/x/oauth2` | `v0.36.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `golang.org/x/sync` | `v0.21.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `golang.org/x/sys` | `v0.45.0` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
+| `golang.org/x/sys` | `v0.46.0` | simple-cluster-operator, sshkey-operator |
+| `golang.org/x/term` | `v0.43.0` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
+| `golang.org/x/term` | `v0.44.0` | simple-cluster-operator, sshkey-operator |
+| `golang.org/x/text` | `v0.39.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `golang.org/x/time` | `v0.11.0` | bind-watcher-operator |
 | `golang.org/x/time` | `v0.9.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `golang.org/x/tools` | `v0.44.0` | simple-cluster-operator |
-| `golang.org/x/tools` | `v0.45.0` | sshkey-operator |
-| `google.golang.org/protobuf` | `v1.36.10` | simple-cluster-operator |
-| `google.golang.org/protobuf` | `v1.36.11` | sshkey-operator |
-| `google.golang.org/protobuf` | `v1.36.5` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, ubuntu-machines |
+| `golang.org/x/tools` | `v0.47.0` | simple-cluster-operator, sshkey-operator |
+| `google.golang.org/protobuf` | `v1.36.11` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `gopkg.in/evanphx/json-patch.v4` | `v4.12.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `gopkg.in/inf.v0` | `v0.9.1` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `lit-html` | `2.8.0` | ui |
@@ -239,7 +221,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.opentelemetry.io/otel` | `v1.43.0` | simple-cluster-operator, sshkey-operator |
 | `go.opentelemetry.io/otel/metric` | `v1.43.0` | simple-cluster-operator, sshkey-operator |
 | `go.opentelemetry.io/otel/sdk` | `v1.43.0` | simple-cluster-operator, sshkey-operator |
-| `go.opentelemetry.io/otel/trace` | `v1.43.0` | simple-cluster-operator, sshkey-operator |
+| `go.opentelemetry.io/otel/trace` | `v1.43.0` | bind-watcher-operator, simple-cluster-operator, sshkey-operator |
 | `k8s.io/apimachinery` | `v0.34.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/apimachinery` | `v0.34.1` | bind-watcher-operator |
 | `k8s.io/client-go` | `v0.34.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
