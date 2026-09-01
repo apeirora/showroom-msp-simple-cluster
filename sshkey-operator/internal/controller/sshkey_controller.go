@@ -299,7 +299,7 @@ func rotationDue(key *sshkeysv1alpha1.SSHKey) bool {
 	if time.Now().After(till.Time) {
 		return true
 	}
-	return key.Spec.AutoRotate && time.Now().After(till.Time.Add(-rotateBefore))
+	return key.Spec.AutoRotate && time.Now().After(till.Add(-rotateBefore))
 }
 
 // requeueAfter schedules the next reconcile at the rotation/expiration boundary.

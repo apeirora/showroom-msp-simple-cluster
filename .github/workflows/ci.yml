@@ -58,9 +58,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Modules carrying a golangci-lint configuration.
         module:
           - simple-cluster-operator
+          - sshkey-operator
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
       - name: Run linter
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4.0
+          version: v2.13.2
           working-directory: ${{ matrix.module }}
 
   # ------------------------------------------------------------------------ UI
