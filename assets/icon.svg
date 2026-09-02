@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Simple Cluster">
+  <title>Simple Cluster</title>
+  <!-- One request in, a cluster out: a single control node joined to three workers.
+       Stroke and fill are set per element rather than inherited from a group, so
+       the mark survives the simpler SVG renderers some Markdown viewers use. -->
+  <rect width="96" height="96" rx="20" fill="#1f3a5f"/>
+  <line x1="48" y1="40" x2="27" y2="66" stroke="#7fb2f0" stroke-width="3" stroke-linecap="round"/>
+  <line x1="48" y1="40" x2="48" y2="70" stroke="#7fb2f0" stroke-width="3" stroke-linecap="round"/>
+  <line x1="48" y1="40" x2="69" y2="66" stroke="#7fb2f0" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="25" cy="70" r="8" fill="#7fb2f0"/>
+  <circle cx="48" cy="74" r="8" fill="#7fb2f0"/>
+  <circle cx="71" cy="70" r="8" fill="#7fb2f0"/>
+  <circle cx="48" cy="36" r="13" fill="#f2f6fb"/>
+  <circle cx="48" cy="36" r="5.5" fill="#1f3a5f"/>
+</svg>

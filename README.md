@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.svg" alt="Simple Cluster" width="96" />
+</p>
+
 <h1 align="center">Simple Cluster</h1>
 
 <p align="center">
@@ -189,8 +193,10 @@ Monorepo of seven Go modules, each with its own `go.mod` and `Makefile`. There i
 ├── samples/                          # provider configs and example requests
 ├── docs/                             # documentation
 ├── sbom/                             # CycloneDX + SPDX SBOM per component
+├── assets/                           # project icon
 ├── hack/, scripts/                   # tooling
-└── .ocm/                             # OCM component descriptor
+├── .ocm/                             # OCM component descriptor
+└── ocm/                              # OCM bootstrap manifests
 ```
 
 ## Contributing
