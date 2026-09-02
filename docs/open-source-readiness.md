@@ -46,7 +46,8 @@ Passes run:
 | F-12 | Info | A live CloudFerro application credential (`OS_APPLICATION_CREDENTIAL_ID` / `_SECRET`) sits in a maintainer's working copy at `samples/openstack/openstack-creds-secret.yaml` | **Never committed** — the file is excluded by `samples/openstack/.gitignore`, and `--diff-filter=A` across all refs confirms it was never added. The credential is to be revoked; see *Open handoff items*. |
 | F-13 | Info | `imports/` holds real Gardener kubeconfigs with live bearer tokens in a maintainer's working copy | **Never committed** — `imports/` has been in `.gitignore` since it was created, confirmed by `--diff-filter=A` across all refs. Tokens to be rotated; see *Open handoff items*. |
 | F-14 | Info | `govulncheck` reported known CVEs in every Go module (`GO-2026-5970`, `-5026`, `-5019`, `-5020`, `-6061`) | **Resolved.** `golang.org/x/text`, `x/net`, `x/crypto` and `google.golang.org/grpc` bumped to their fixed versions across all seven modules; `govulncheck` is now clean everywhere. |
-| F-15 | Accepted | The history rewrite changes every commit SHA, so all `commit/<sha>` and `compare/<sha>...<sha>` links in `CHANGELOG.md` become dead | **Accepted.** Repairing them means rewriting a generated changelog against the SHA translation map. The map (`filter-repo/commit-map` from the rewrite) is preserved with the publication ticket, so the links can be repaired later if anyone asks. The changelog text itself stays accurate. |
+| F-15 | Medium | The history rewrite changes every commit SHA, so every `commit/<sha>` and `compare/<sha>...<sha>` link in the changelogs would break | **Resolved.** All 141 links in `CHANGELOG.md` and `simple-cluster-operator/CHANGELOG.md` were rewritten against the rewrite's SHA translation map, which is committed at [`hack/history-rewrite/commit-map.txt`](../hack/history-rewrite/commit-map.txt). Every SHA the rewrite touched resolves again. |
+| F-16 | Low | Four commit links in `simple-cluster-operator/CHANGELOG.md` point at SHAs that never existed in this repository | **Pre-existing, not caused by the rewrite** — verified with `git cat-file` against the history as it stood before. Left as is: the changelog text is accurate and the entries are reachable by their release tag. |
 
 ## Verified clean
 
@@ -117,9 +118,10 @@ Tracked in publication ticket: `<TICKET>` *(fill in before starting)*.
    for the duration of the push and restored immediately afterwards. Every clone
    must be re-cloned afterwards.
 
-   **Preserve `/tmp/rewrite.git/filter-repo/commit-map`** — the old-to-new SHA
-   translation, and the only way to repair the `CHANGELOG.md` links that the
-   rewrite breaks (F-15). Attach it to the ticket.
+   The old-to-new SHA translation the rewrite produces is committed at
+   [`hack/history-rewrite/commit-map.txt`](../hack/history-rewrite/commit-map.txt);
+   the changelog links were already repaired against it (F-15). Re-running the
+   rewrite regenerates the map, so refresh that file if the branch has moved on.
 
    Confirm afterwards that release-please still resolves the latest release and
    that the 77 tags were re-created.

@@ -25,8 +25,12 @@ the full scan report and the publication runbook.
 
 ## Consequence
 
-Every commit SHA changed. The `commit/<sha>` and `compare/<sha>...<sha>` links in
-`CHANGELOG.md` therefore point at commits that no longer exist. The old-to-new
-SHA translation produced by the rewrite (`filter-repo/commit-map` in the
-rewritten mirror) is the only way to repair them, and is preserved with the
-publication ticket.
+Every commit SHA changed, so every `commit/<sha>` and `compare/<sha>...<sha>`
+link in the changelogs pointed at a commit that no longer existed. All 141 of
+them were rewritten against [`commit-map.txt`](commit-map.txt), the old-to-new
+translation the rewrite produces, which is committed here for exactly that
+reason. Re-running the rewrite regenerates it — refresh the file if you do.
+
+Four links in `simple-cluster-operator/CHANGELOG.md` still point at SHAs that
+never existed in this repository. That predates the rewrite and is left alone;
+those entries are reachable by their release tag.

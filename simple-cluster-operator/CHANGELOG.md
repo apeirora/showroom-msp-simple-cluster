@@ -5,77 +5,77 @@
 
 ### Miscellaneous Chores
 
-* release 0.8.4 ([0190685](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0190685302b6f49037f58156281c588b17ba19e8))
+* release 0.8.4 ([9ed16a5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9ed16a58bee7648e8a64a5dfc5b02ff2347fb663))
 
 ## [0.8.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.8.0...v0.8.3) (2026-06-08)
 
 
 ### Miscellaneous Chores
 
-* release 0.8.3 ([40f86ad](https://github.com/apeirora/showroom-msp-simple-cluster/commit/40f86adcf99c3ade002cf1a962474c65be057d97))
+* release 0.8.3 ([7a77da9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7a77da9911dbe25de7779cd69da8440ae2cd0818))
 
 ## [0.8.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.7.5...v0.8.0) (2026-06-05)
 
 
 ### Features
 
-* CloudProfile - select machineType from cloudProfiles defined in SCPC. ([8366e66](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8366e66d90f2f3e3f2a6f6e06cffe98105fa98cf))
-* **operator:** render SCPC target/resource namespace as a template ([5ed53a5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ed53a5999fb8245d6e3d17e44fc586f86e29055))
-* SimpleCluster spec.resources — post-creation manifests on the new cluster ([876e87f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/876e87fcde26b44e6f00d079797e4b9b7e36496a))
-* unify fields on the list ([c9f4ff4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c9f4ff4569544bf4b334f3612b54ddf1962ad235))
+* CloudProfile - select machineType from cloudProfiles defined in SCPC. ([e49f7ea](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e49f7ea35851c21301803ea30434f9034f5f7f0c))
+* **operator:** render SCPC target/resource namespace as a template ([edb271c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/edb271c4fa1794a56722a65f22ad50a988397d24))
+* SimpleCluster spec.resources — post-creation manifests on the new cluster ([cea18d5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cea18d5e3c472ad43643ced7c5e06080887085cd))
+* unify fields on the list ([27ea8bf](https://github.com/apeirora/showroom-msp-simple-cluster/commit/27ea8bfb78240bec47fac4b0aeaf2ffc971fdab3))
 
 
 ### Bug Fixes
 
-* go linter ([2adbed1](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2adbed1fac4eae8eb31a2e97e964d2f5525f0c2d))
-* missing permissions ([da80263](https://github.com/apeirora/showroom-msp-simple-cluster/commit/da802630ef0cd0bf9b642597c9d7633b106025b9))
-* SC sets Phase=Deleting on deletion ([1c5d924](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1c5d9242fad56b5854376c9353da145a31e55da2))
-* selecting profile ([3453434](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3453434a4f1db460a3d335ac1ab5120775a1070c))
+* go linter ([7b38d74](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7b38d74431b1a9fa8d03d911638f12b3373e8ebf))
+* missing permissions ([13e37f3](https://github.com/apeirora/showroom-msp-simple-cluster/commit/13e37f3e17b2f1c3ab6d21bfffb7e61dbd898cd9))
+* SC sets Phase=Deleting on deletion ([4b65bfc](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4b65bfc3132b4bb389c9724c86cbb4daec95a9e8))
+* selecting profile ([7e00eb0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7e00eb057a65789ba51fb5714c52768975c969c1))
 
 ## [0.5.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.5.1...v0.5.2) (2026-06-05)
 
 
 ### Bug Fixes
 
-* SC sets Phase=Deleting on deletion ([1c5d924](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1c5d9242fad56b5854376c9353da145a31e55da2))
+* SC sets Phase=Deleting on deletion ([4b65bfc](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4b65bfc3132b4bb389c9724c86cbb4daec95a9e8))
 
 ## [0.5.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.5.0...v0.5.1) (2026-06-05)
 
 
 ### Bug Fixes
 
-* selecting profile ([3453434](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3453434a4f1db460a3d335ac1ab5120775a1070c))
+* selecting profile ([7e00eb0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7e00eb057a65789ba51fb5714c52768975c969c1))
 
 ## [0.5.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.4.0...v0.5.0) (2026-06-04)
 
 
 ### Features
 
-* CloudProfile - select machineType from cloudProfiles defined in SCPC. ([8366e66](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8366e66d90f2f3e3f2a6f6e06cffe98105fa98cf))
-* **operator:** render SCPC target/resource namespace as a template ([5ed53a5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ed53a5999fb8245d6e3d17e44fc586f86e29055))
-* SimpleCluster spec.resources — post-creation manifests on the new cluster ([876e87f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/876e87fcde26b44e6f00d079797e4b9b7e36496a))
-* unify fields on the list ([c9f4ff4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c9f4ff4569544bf4b334f3612b54ddf1962ad235))
+* CloudProfile - select machineType from cloudProfiles defined in SCPC. ([e49f7ea](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e49f7ea35851c21301803ea30434f9034f5f7f0c))
+* **operator:** render SCPC target/resource namespace as a template ([edb271c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/edb271c4fa1794a56722a65f22ad50a988397d24))
+* SimpleCluster spec.resources — post-creation manifests on the new cluster ([cea18d5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cea18d5e3c472ad43643ced7c5e06080887085cd))
+* unify fields on the list ([27ea8bf](https://github.com/apeirora/showroom-msp-simple-cluster/commit/27ea8bfb78240bec47fac4b0aeaf2ffc971fdab3))
 
 
 ### Bug Fixes
 
-* go linter ([2adbed1](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2adbed1fac4eae8eb31a2e97e964d2f5525f0c2d))
-* missing permissions ([da80263](https://github.com/apeirora/showroom-msp-simple-cluster/commit/da802630ef0cd0bf9b642597c9d7633b106025b9))
+* go linter ([7b38d74](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7b38d74431b1a9fa8d03d911638f12b3373e8ebf))
+* missing permissions ([13e37f3](https://github.com/apeirora/showroom-msp-simple-cluster/commit/13e37f3e17b2f1c3ab6d21bfffb7e61dbd898cd9))
 
 ## [0.4.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.3.0...v0.4.0) (2026-06-03)
 
 
 ### Features
 
-* **operator:** render SCPC target/resource namespace as a template ([2ec91ad](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2ec91ad123cc96aa53a0bf3e9348783808a01e6f))
-* SimpleCluster spec.resources — post-creation manifests on the new cluster ([2ed6457](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2ed6457307edb08018327e4c22e1de5bc532e45a))
-* unify fields on the list ([ffa2166](https://github.com/apeirora/showroom-msp-simple-cluster/commit/ffa21662dce4ced443d7591beae359ee203a17b0))
+* **operator:** render SCPC target/resource namespace as a template ([44525e8](https://github.com/apeirora/showroom-msp-simple-cluster/commit/44525e836aff99cfb1dc27f5723c67d6e98853f5))
+* SimpleCluster spec.resources — post-creation manifests on the new cluster ([0b2d9fa](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0b2d9fa676eabbf53142c87fe9433e4175d4c41e))
+* unify fields on the list ([b6f9996](https://github.com/apeirora/showroom-msp-simple-cluster/commit/b6f999679e4a4fe2be98bec51b1b057d807c208d))
 
 
 ### Bug Fixes
 
-* go linter ([5b5af07](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5b5af077c9b22cc1f18025642b8de5747c7800c8))
-* missing permissions ([f0294e0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f0294e04f12c3b47138637c1ff246ee905d5ff41))
+* go linter ([dcced1a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/dcced1a925ed0b385e40b852307861b1163429a0))
+* missing permissions ([7fbd71c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/7fbd71cbd2cc211d37329e0e24f0ef6f4188081e))
 
 ## [0.3.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.2.0...v0.3.0) (2026-06-02)
 

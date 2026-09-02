@@ -28,3 +28,6 @@ DESIGN.md
 *.pfx
 id_rsa*
 id_ed25519*
+
+# Downloaded by hack/history-rewrite/apply-history-rewrite.sh; not vendored.
+hack/history-rewrite/git-filter-repo
