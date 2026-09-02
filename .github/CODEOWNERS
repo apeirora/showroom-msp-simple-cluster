@@ -1,0 +1,20 @@
+# Repository ownership. These accounts are requested for review on every pull
+# request and are the contacts for security reports (see SECURITY.md).
+#
+# Derived from the commit history. At least one review from an owner other than
+# the author is required, so this list must always hold more than one active
+# maintainer.
+*                       @m-szalik @ifdotpy @dweidenfeld
+
+# Platform Mesh / KCP integration
+/kcp/                                    @m-szalik @ifdotpy
+/charts/simple-cluster-pm-integration/   @m-szalik @ifdotpy
+/charts/simple-cluster-sync-agent/       @m-szalik @ifdotpy
+
+# Release, compliance and supply-chain tooling
+/.github/workflows/     @m-szalik @dweidenfeld
+/.ocm/                  @m-szalik @dweidenfeld
+/hack/                  @m-szalik @dweidenfeld
+/sbom/                  @m-szalik @dweidenfeld
+/REUSE.toml             @m-szalik @dweidenfeld
+/LICENSES/              @m-szalik @dweidenfeld
