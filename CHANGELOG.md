@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.38.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.37.1...v0.38.0) (2026-09-02)
+
+
+### Features
+
+* **ci:** build and test every module and add the compliance gates ([3934078](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3934078d8d39931693d291d0afb28aa8347c1d90))
+
+
+### Bug Fixes
+
+* **ci:** grant contents write to the called publish workflow ([4e62330](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4e62330579c051bd565b2b9812e28a55132ae52e))
+* **deps:** update dependencies and pin the Go toolchain ([5ee80f6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ee80f6daf8b02044123f3d499e1e1f526245393))
+
 ## [0.37.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.37.0...v0.37.1) (2026-08-31)
 
 
