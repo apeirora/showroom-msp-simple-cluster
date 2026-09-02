@@ -153,7 +153,7 @@ kubectl -n "$OPERATOR_NS" wait --for=condition=Available --timeout=180s "deploym
 # ----------------------------------------------------------------------
 # 4. kind-cluster-operator (DooD via mounted /var/run/docker.sock)
 # ----------------------------------------------------------------------
-KIND_OP_DIR="$SCRIPT_DIR/kind-cluster-operator"
+KIND_OP_DIR="$SCRIPT_DIR/simple-cluster-operator-kind"
 KIND_OP_IMG=kind-cluster-operator:dev
 KIND_OP_NS=kind-cluster-operator-system
 KIND_OP_DEPLOY=kind-cluster-operator-controller-manager
@@ -189,9 +189,9 @@ cat <<EOF
 ▶ ready.
     kubectl get kubevirt -A
     kubectl get scpc,simc,kindclusters -A
-    kubectl apply -k $SCRIPT_DIR/samples                # all SCPCs (gardener / kind / kubevirt)
+    kubectl apply -k $SCRIPT_DIR/samples                # every provider's samples
     kubectl apply -k $SCRIPT_DIR/samples/kind           # just the kind-on-host pair
-    kubectl apply -k $SCRIPT_DIR/samples/kubevirt       # just the k3s-on-kubevirt pair
+
 
   tear down:
     kind delete cluster --name $CLUSTER_NAME
