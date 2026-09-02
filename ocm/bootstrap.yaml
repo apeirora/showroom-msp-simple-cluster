@@ -1,0 +1,65 @@
+# Deploy the Simple Cluster stack from its OCM component with the OCM controller
+# and Flux, instead of pulling the Helm charts directly.
+#
+#   export GH_OWNER=apeirora VERSION=0.37.1
+#   envsubst < ocm/bootstrap.yaml | kubectl apply -f -
+#
+# Expects the OCM controller and Flux in the cluster, and a `ghcr-credentials`
+# image-pull Secret in ocm-system with read access to ghcr.io/$GH_OWNER.
+#
+# Only the umbrella chart is deployed here. The portal-facing pieces
+# (simple-cluster-ui, simple-cluster-pm-integration, simple-cluster-sync-agent)
+# are separate resources in the same component; add a Resource and a FluxDeployer
+# per chart, following the pattern below, on a landscape that runs the portal.
+apiVersion: delivery.ocm.software/v1alpha1
+kind: ComponentVersion
+metadata:
+  name: simple-cluster
+  namespace: ocm-system
+spec:
+  component: showroom.apeirora.eu/simple-cluster
+  version:
+    semver: "${VERSION}"
+  repository:
+    url: ghcr.io/${GH_OWNER}/ocm
+    secretRef:
+      name: ghcr-credentials
+  interval: 1m
+---
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Resource
+metadata:
+  name: simple-cluster-system-chart
+  namespace: ocm-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: ComponentVersion
+    name: simple-cluster
+    namespace: ocm-system
+    resourceRef:
+      # Matches the resource name in .ocm/component-constructor.yaml.
+      name: simple-cluster-system-chart
+---
+apiVersion: delivery.ocm.software/v1alpha1
+kind: FluxDeployer
+metadata:
+  name: simple-cluster
+  namespace: ocm-system
+spec:
+  interval: 1m
+  sourceRef:
+    kind: Resource
+    name: simple-cluster-system-chart
+    namespace: ocm-system
+  helmReleaseTemplate:
+    releaseName: simple-cluster-system
+    targetNamespace: simple-cluster-system
+    values:
+      # Empty means the chart's appVersion. The publish workflow stamps the
+      # release version into every image, so leaving this unset keeps the whole
+      # stack on one version.
+      global:
+        imageTag: ""
+      imagePullSecrets:
+        - name: ghcr-credentials
