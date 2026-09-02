@@ -250,3 +250,48 @@ jobs:
 
       - name: Check the SBOM and licence audit are current
         run: bash hack/check-sbom-current.sh
+
+  # ------------------------------------------------------- Required-check hub
+  # A branch ruleset can only require a status check by its exact context name,
+  # which for a matrix job means one context per leg — brittle whenever a module
+  # or chart is added. This job depends on every other one and fails unless they
+  # all succeeded, so the ruleset needs exactly one required check:
+  #
+  #     Required checks
+  #
+  # Adding a module or a chart then extends coverage automatically, with no
+  # ruleset change and no chance of a mistyped context silently never reporting.
+  required:
+    name: Required checks
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - go
+      - lint
+      - ui
+      - helm
+      - charts-ord
+      - reuse
+      - secrets
+      - vulnerabilities
+      - vulnerabilities-ui
+      - dependencies
+    steps:
+      - name: Report the result of every required job
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          # Never pass on an empty result set: a gate that fails open is worse
+          # than no gate, because the ruleset reports it green.
+          if [ -z "${RESULTS// /}" ]; then
+            echo "::error::no job results were reported"
+            exit 1
+          fi
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::a required job did not succeed ($r)"
+              exit 1
+            fi
+          done
+          echo "all required jobs succeeded"
