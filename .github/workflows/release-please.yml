@@ -48,6 +48,9 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs.version }}
     permissions:
-      contents: read
+      # publish-sbom attaches the SBOM set to the GitHub release, which needs
+      # write access to repository contents. A called workflow can never request
+      # more than the caller grants, so it has to be granted here.
+      contents: write
       packages: write
     secrets: inherit
