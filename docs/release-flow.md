@@ -49,6 +49,12 @@ Every pull request must pass:
 | `vulnerabilities` (matrix) | `govulncheck` per Go module |
 | `vulnerabilities-ui` | `npm audit --omit=dev --audit-level=high` |
 | `dependencies` | the committed SBOM and licence audit still match the declared dependencies |
+| `Required checks` | depends on every job above and fails unless all of them succeeded |
+
+`Required checks` exists so the branch ruleset has a single context to require.
+A ruleset can only name a status check exactly, and a matrix job produces one
+context per leg, so listing them individually breaks the moment a module or a
+chart is added. Requiring this one job instead keeps coverage automatic.
 
 ## Before a release
 

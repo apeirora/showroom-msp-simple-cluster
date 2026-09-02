@@ -29,6 +29,22 @@ ocm get componentversion \
   ghcr.io/apeirora/ocm//showroom.apeirora.eu/simple-cluster:<X.Y.Z> -o yaml
 ```
 
+## Deploying from the component
+
+With the OCM controller and Flux in the cluster, `ocm/bootstrap.yaml` wires the
+component to a `HelmRelease` so the stack is deployed from the component rather
+than from the chart registry directly:
+
+```sh
+export GH_OWNER=apeirora VERSION=<X.Y.Z>
+envsubst < ocm/bootstrap.yaml | kubectl apply -f -
+```
+
+It expects a `ghcr-credentials` image-pull Secret in `ocm-system` with read
+access to `ghcr.io/$GH_OWNER`, and deploys the umbrella chart only. The
+portal-facing charts are separate resources in the same component; add a
+`Resource` and a `FluxDeployer` per chart on a landscape that runs the portal.
+
 ## Transporting into another registry
 
 ```sh
