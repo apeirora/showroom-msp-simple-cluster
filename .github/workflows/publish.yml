@@ -109,7 +109,10 @@ jobs:
               --source-name "${IMAGE}" --source-version "${VERSION}" \
               -o "cyclonedx-json=/out/${IMAGE}.image.cdx.json" \
               -o "spdx-json=/out/${IMAGE}.image.spdx.json"
-          sudo chown -R "$(id -u):$(id -g)" sbom-image
+          # syft runs as root inside the container; hand the files back.
+          docker run --rm -v "$PWD/sbom-image:/out" \
+            --entrypoint chown "anchore/syft:${SYFT_VERSION}" \
+            -R "$(id -u):$(id -g)" /out
 
       - name: Upload the image SBOM
         uses: actions/upload-artifact@v4

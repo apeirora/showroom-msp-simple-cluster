@@ -86,8 +86,10 @@ Common causes:
 ## The kubeconfig never appears
 
 The kubeconfig is fetched only after the resource named by
-`kubeconfigSource.resourceName` reports Ready. If that resource is Ready and the
-Secret still does not appear:
+`kubeconfigSource.resourceName` reports Ready — so `Phase=Ready` on the
+SimpleCluster is not itself a guarantee that the Secret exists. `KubeconfigValid`
+is the condition that answers this; when it is `False` its reason and message say
+why. If the source resource is Ready and the Secret still does not appear:
 
 - **`secretRef`** — the templated name or namespace does not match reality.
   Both are templates with the live resource in scope; render them mentally
