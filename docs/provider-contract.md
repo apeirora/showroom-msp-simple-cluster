@@ -23,7 +23,8 @@ This is the whole contract for a config-only provider. It must declare:
   build on a remote cluster.
 - **`spec.resources[]`** — at least one resource, each with `apiVersion`, `kind`
   and a `template`. The resource type does not need to be known to the core
-  operator: it is applied with a dynamic client.
+  operator: it is applied with a dynamic client. It does, however, need to be
+  *permitted* — see [RBAC for a new API group](#rbac-for-a-new-api-group).
 - **`spec.kubeconfigSource`** — how to obtain the finished cluster's kubeconfig.
   This is the deliverable; a provider that cannot produce a kubeconfig is not a
   provider.
@@ -37,6 +38,37 @@ and should declare:
 - **`spec.autoscaling`** — `true` only if the templates honour
   `.SC.workers.{min,max}` *and* the platform actually scales the pool. Claiming
   it falsely means users get a fixed pool while the status says otherwise.
+
+#### RBAC for a new API group
+
+The dynamic client still goes through the API server, so the manager's
+ServiceAccount must be allowed to act on the resource type. The manager
+`ClusterRole` enumerates the API groups of the in-repo providers; a resource in
+any other group is rejected with `Forbidden`, and the SimpleCluster parks in
+`Phase=Failed` with a `CreateError`.
+
+A provider grants itself that access without an operator release, by shipping a
+`ClusterRole` carrying the aggregation label:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: simple-cluster-provider-example
+  labels:
+    showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
+rules:
+- apiGroups: ["example.com"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+```
+
+Kubernetes folds it into `simple-cluster-operator-provider-resources`, which is
+already bound to the manager. Nothing else is needed.
+
+This applies to resources created on the management cluster. When the SCPC points
+at a remote cluster via `spec.target.kubeconfigSecretRef`, the permissions that
+matter are the ones carried by that kubeconfig.
 
 ### 2. Readiness that the operator can read
 

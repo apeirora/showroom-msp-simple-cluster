@@ -19,8 +19,14 @@ From a checkout, to install the working tree instead:
 
 ```sh
 helm upgrade --install simple-cluster-system charts/simple-cluster-system \
-  --namespace simple-cluster-system --create-namespace
+  --namespace simple-cluster-system --create-namespace \
+  --set global.imageTag=<X.Y.Z>
 ```
+
+`global.imageTag` is empty in the checked-in values — the publish workflow stamps
+the release version in when it packages the chart. Installing straight from a
+checkout skips that step, so pass the tag yourself or every operator lands on
+`:latest`.
 
 ## The other charts
 

@@ -25,8 +25,11 @@ and all Helm charts.
    seven charts at `--version` and `--app-version X.Y.Z` to
    `oci://ghcr.io/apeirora/charts`. A chart at `X.Y.Z` therefore always pulls
    images at `X.Y.Z`. `simple-cluster-scpc-config` is not published.
-6. **`publish-sbom`** regenerates the SBOM set at the release version and attaches
-   it to the GitHub release.
+6. **`publish-sbom`** regenerates the source SBOM set at the release version and
+   attaches it to the GitHub release, together with the per-image SBOMs that
+   `publish-images` produced from the pushed images. The committed `sbom/` set
+   describes the declared dependency graph; the `*.image.*` files add the runtime
+   layers of the images that actually ship.
 7. **`publish-ocm`** publishes the OCM component version naming every image and
    chart of that release — see [OCM delivery](installation-ocm.md).
 

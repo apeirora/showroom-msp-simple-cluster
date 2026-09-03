@@ -44,4 +44,6 @@ Every pull request runs a secret scan (gitleaks), a vulnerability scan
 (`govulncheck` for each Go module, `npm audit` for the UI), a REUSE licence check
 and a dependency-licence gate. The dependency inventory is committed under
 [`sbom/`](sbom) and audited in
-[`docs/third-party-licenses.md`](docs/third-party-licenses.md).
+[`docs/third-party-licenses.md`](docs/third-party-licenses.md). That set covers
+the declared source dependencies; an SBOM of each published container image,
+including its base layers, is attached to every GitHub release.

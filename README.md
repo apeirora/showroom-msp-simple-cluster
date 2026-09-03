@@ -103,7 +103,8 @@ A complete local stack on KinD — operator, KinD provider, KubeVirt, samples:
 
 ```sh
 ./quick-start-kind.sh
-kubectl apply -k samples/kind
+kubectl apply -k samples/kind                     # the KinD provider config
+kubectl apply -f samples/kind/simplecluster.yaml  # a cluster that uses it
 kubectl get simc -w
 ```
 
@@ -118,9 +119,10 @@ helm upgrade --install simple-cluster-system \
 Then fetch a cluster's kubeconfig:
 
 ```sh
-SECRET=$(kubectl get simc demo -o jsonpath='{.status.kubeconfigSecretRef.name}')
-kubectl get secret "$SECRET" -o jsonpath='{.data.kubeconfig}' | base64 -d > demo.kubeconfig
-kubectl --kubeconfig demo.kubeconfig get nodes
+kubectl wait --for=condition=KubeconfigValid simc/kind-simple --timeout=15m
+SECRET=$(kubectl get simc kind-simple -o jsonpath='{.status.kubeconfigSecretRef.name}')
+kubectl get secret "$SECRET" -o jsonpath='{.data.kubeconfig}' | base64 -d > kind-simple.kubeconfig
+kubectl --kubeconfig kind-simple.kubeconfig get nodes
 ```
 
 ## Documentation

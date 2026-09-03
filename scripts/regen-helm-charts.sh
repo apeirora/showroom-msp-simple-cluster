@@ -17,8 +17,10 @@
 # hand-maintained additions those charts have since grown -- the addonCatalog and
 # ordCatalog values and the manager arguments they render, and the
 # global.imageTag coalesce the umbrella relies on to pin one tag across every
-# operator. It also emits a stray CRD for the OpenStack operator. Until it
-# reapplies those edits, mirror scaffolding changes into the charts by hand.
+# operator, and the aggregated provider-resources ClusterRole
+# (rbac/provider_resources_role.yaml). It also emits a stray CRD for the
+# OpenStack operator. Until it reapplies those edits, mirror scaffolding changes
+# into the charts by hand.
 #
 # Usage:
 #   scripts/regen-helm-charts.sh

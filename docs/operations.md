@@ -56,7 +56,13 @@ progress text shows up here without anyone touching Gardener.
 
 ## Handing out a kubeconfig
 
-Once a cluster is Ready:
+`Ready` covers the provisioning DAG only; the kubeconfig is fetched afterwards.
+Wait for `KubeconfigValid` — or for `status.kubeconfigSecretRef` to appear —
+rather than for `Ready`:
+
+```sh
+kubectl wait --for=condition=KubeconfigValid simc/demo -n team-a --timeout=15m
+```
 
 ```sh
 SECRET=$(kubectl get simc demo -n team-a -o jsonpath='{.status.kubeconfigSecretRef.name}')

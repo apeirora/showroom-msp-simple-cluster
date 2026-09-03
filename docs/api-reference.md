@@ -109,7 +109,7 @@ request is not rejected.
 |---|---|
 | `Pending` | Nothing created yet. |
 | `Provisioning` | At least one resource is not Ready. |
-| `Ready` | Every resource is Ready and the kubeconfig has been synced. |
+| `Ready` | Every resource in the DAG is Ready. The kubeconfig sync runs after this and is reported separately — see `KubeconfigValid`. |
 | `Failed` | At least one resource reports a terminal failure. |
 | `Deleting` | The SimpleCluster has a deletion timestamp; the cascade is in flight. |
 | `NoHardware` | A `from: profile` input has no override and no SCPC profile is large enough for the request. Nothing is created until a fitting profile appears or the request shrinks. |
@@ -118,10 +118,10 @@ request is not rejected.
 
 | Type | Meaning |
 |---|---|
-| `Ready` | The cluster is provisioned and its kubeconfig is available. |
+| `Ready` | Every resource in the DAG is Ready, i.e. `Phase=Ready`. It does **not** imply that the kubeconfig has been synced yet. |
 | `Progressing` | Work is in flight. |
 | `Error` | A reconcile-level error, e.g. `UnknownInput`, `BadInput`. |
-| `KubeconfigValid` | The synced kubeconfig is present and unexpired. |
+| `KubeconfigValid` | The synced kubeconfig is present and unexpired. This, together with `status.kubeconfigSecretRef`, is what to wait on before using the cluster. |
 | `AutoscalingSupported` | Set only when the request asked for autoscaling: `True` when the chosen SCPC declares support, `False` when the pool stays fixed at `workers.min`. |
 | `Resource-<name>` | Outcome of applying one `spec.resources[]` manifest into the provisioned cluster. |
 

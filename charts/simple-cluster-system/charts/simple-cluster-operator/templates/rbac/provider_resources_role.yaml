@@ -1,0 +1,39 @@
+{{- if .Values.rbac.enable }}
+# The manager ClusterRole enumerates the API groups of the resource types the
+# in-repo providers create. A provider that ships nothing but a
+# SimpleClusterProviderConfig, and whose resource R lives in some other group,
+# would otherwise need an operator release to be allowed to create it.
+#
+# This role aggregates instead: a provider grants itself access by shipping a
+# ClusterRole labelled
+#
+#   showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
+#
+# See docs/provider-contract.md.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: simple-cluster-operator-provider-resources
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: simple-cluster-operator-provider-resources
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: simple-cluster-operator-provider-resources
+subjects:
+- kind: ServiceAccount
+  name: {{ .Values.controllerManager.serviceAccountName }}
+  namespace: {{ .Release.Namespace }}
+{{- end -}}

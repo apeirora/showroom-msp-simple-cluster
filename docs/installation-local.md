@@ -36,7 +36,8 @@ When it finishes:
 
 ```sh
 kubectl get scpc,simc,kindclusters -A
-kubectl apply -k samples/kind          # a KinD SCPC plus a SimpleCluster using it
+kubectl apply -k samples/kind                     # the KinD SCPC
+kubectl apply -f samples/kind/simplecluster.yaml  # a SimpleCluster using it
 kubectl get simc -w
 ```
 
