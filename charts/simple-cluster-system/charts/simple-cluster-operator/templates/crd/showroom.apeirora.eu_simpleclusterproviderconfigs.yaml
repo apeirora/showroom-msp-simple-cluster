@@ -180,7 +180,11 @@ spec:
                       namespace (typical for Cluster API / Gardener seed Secrets). Name/
                       Namespace are Go templates evaluated against the same context as the
                       named resource's Template, with the live R bound at
-                      .Resources.<resourceName>.
+                      .Resources.<resourceName>. Metadata validation uses a strict
+                      meta.k8s.io/v1 PartialObjectMetadata request with verified response
+                      TypeMeta and without a full-object fallback. The target API server must
+                      honor that negotiation and return canonical application/json carrying
+                      meta.k8s.io/v1 PartialObjectMetadata.
                     properties:
                       dataKey:
                         description: DataKey is the key in the Secret holding the
@@ -193,6 +197,28 @@ spec:
                         description: Namespace of the Secret; Go template; defaults
                           to R.namespace.
                         type: string
+                      requiredAnnotations:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          RequiredAnnotations is the annotation counterpart of RequiredLabels. Values are
+                          Go templates evaluated with the same context as Name and require the same external
+                          writer-integrity guarantee. Kubernetes cannot server-filter a Secret list by
+                          annotation; without at least one RequiredLabels entry, annotation checks and the
+                          UID/resourceVersion guard prevent credential use but not a raced full-data transfer.
+                        type: object
+                      requiredLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          RequiredLabels is an optional exact metadata requirement for the referenced Secret.
+                          Values are Go templates evaluated with the same context as Name. When at least one
+                          label is configured, the data request is a server-filtered list constrained by
+                          namespace, metadata.name and every rendered label. This prevents a raced replacement
+                          without those labels from returning its data. Metadata equality is not issuer
+                          authentication: providers must protect these keys with admission/RBAC or a stronger
+                          claim relation.
+                        type: object
                     required:
                     - name
                     type: object
@@ -268,6 +294,15 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              provisioningEnabled:
+                default: true
+                description: |-
+                  ProvisioningEnabled controls whether this provider config may create new
+                  target resources. It defaults to true so existing SCPCs keep their current
+                  behaviour. Setting it to false retires the provider for new provisioning
+                  while preserving the target and resource contract needed to observe and
+                  delete resources that already exist.
+                type: boolean
               resources:
                 description: |-
                   Resources is the ordered DAG of resources to render and create.
@@ -287,6 +322,8 @@ spec:
                         DeletionAnnotations are applied to R before the operator deletes it.
                         Required by some controllers as a "double opt-in"
                         (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
+                        SimpleCluster ownership annotations and the core allow-delete marker are
+                        reserved and rejected at reconcile time.
                       type: object
                     dependsOn:
                       description: |-
@@ -344,6 +381,71 @@ spec:
                         "Ready" as Ready, "Failed"/"Error" as Failed, empty/missing as
                         Pending, and any other value as Provisioning.
                       properties:
+                        conditions:
+                          description: |-
+                            Conditions selects Kubernetes-style status conditions by type and
+                            status. It is mutually exclusive with the legacy PhasePath mapping.
+                          properties:
+                            failures:
+                              description: |-
+                                Failures identify condition values that mean the resource is Failed.
+                                When several match simultaneously, all matching messages are surfaced.
+                              items:
+                                description: |-
+                                  ConditionMatch identifies one Kubernetes-style status condition by its
+                                  exact type and status.
+                                properties:
+                                  status:
+                                    description: Status is the condition status to
+                                      match.
+                                    enum:
+                                    - "True"
+                                    - "False"
+                                    - Unknown
+                                    type: string
+                                  type:
+                                    description: Type is the condition type (for example
+                                      Ready or Synced).
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - status
+                                - type
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - type
+                              x-kubernetes-list-type: map
+                            matchObservedGeneration:
+                              description: |-
+                                MatchObservedGeneration ignores a condition whose non-zero
+                                observedGeneration differs from the target object's generation. Keep
+                                this disabled for APIs synced across clusters whose source and target
+                                generations belong to different domains.
+                              type: boolean
+                            ready:
+                              description: Ready identifies the condition value that
+                                means the resource is Ready.
+                              properties:
+                                status:
+                                  description: Status is the condition status to match.
+                                  enum:
+                                  - "True"
+                                  - "False"
+                                  - Unknown
+                                  type: string
+                                type:
+                                  description: Type is the condition type (for example
+                                    Ready or Synced).
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - status
+                              - type
+                              type: object
+                          required:
+                          - ready
+                          type: object
                         lastErrorPath:
                           description: LastErrorPath optionally provides a human-readable
                             error string.
@@ -368,9 +470,6 @@ spec:
                             PhaseReadyValue is the value at PhasePath that indicates Ready
                             (e.g. Succeeded).
                           type: string
-                      required:
-                      - phasePath
-                      - phaseReadyValue
                       type: object
                     repeat:
                       description: |-
@@ -382,7 +481,10 @@ spec:
                         iteration and .Prev is the list of objects rendered so far for this
                         ResourceSpec. From sibling ResourceSpecs' Templates, .Resources.<name>
                         is exposed as a list (rather than a single object) when <name> had
-                        Repeat set.
+                        Repeat set. Crash cleanup can reconstruct repeat counts derived from
+                        .SC and .Inputs. Deletion cannot rebuild predecessor context for a
+                        count derived from .Resources; it deletes recorded owned instances and
+                        retains the SimpleCluster finalizer for verified manual cleanup.
                       type: string
                     template:
                       description: |-

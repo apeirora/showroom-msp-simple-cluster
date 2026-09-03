@@ -403,10 +403,14 @@ spec:
                 - Deleting
                 - NoHardware
                 type: string
+              providerConfigNamespace:
+                description: ProviderConfigNamespace is the namespace of ProviderConfigRef.
+                type: string
               providerConfigRef:
                 description: |-
-                  ProviderConfigRef is locked at first reconcile so SCPC changes do not
-                  migrate resources mid-flight.
+                  ProviderConfigRef is locked before target work. ProviderConfigNamespace
+                  and ProviderConfigUID complete its immutable identity; name-only values
+                  written by older releases are backfilled only when unambiguous.
                 properties:
                   name:
                     default: ""
@@ -419,6 +423,10 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              providerConfigUID:
+                description: ProviderConfigUID rejects a same-name replacement of
+                  ProviderConfigRef.
+                type: string
               resources:
                 description: |-
                   Resources is per-ResourceSpec status, keyed by Name. Populated as the

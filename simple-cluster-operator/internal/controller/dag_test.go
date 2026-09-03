@@ -14,7 +14,10 @@ import (
 	"strings"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
+	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
 
 func scpcWith(resources []showroomv1alpha1.ResourceSpec, kcResourceName string) *showroomv1alpha1.SimpleClusterProviderConfig {
@@ -37,6 +40,12 @@ func res(name string, deps ...string) showroomv1alpha1.ResourceSpec {
 		Template:   "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: x}\n",
 		DependsOn:  deps,
 	}
+}
+
+func resWithReadiness(check *showroomv1alpha1.ReadinessCheck) showroomv1alpha1.ResourceSpec {
+	r := res("a")
+	r.Readiness = check
+	return r
 }
 
 func TestValidateAndTopoSort_HappyPaths(t *testing.T) {
@@ -64,6 +73,26 @@ func TestValidateAndTopoSort_HappyPaths(t *testing.T) {
 			name:      "multi-root single leaf",
 			resources: []showroomv1alpha1.ResourceSpec{res("a"), res("b"), res("c", "a", "b")},
 			want:      []string{"a", "b", "c"},
+		},
+		{
+			name: "legacy scalar readiness",
+			resources: []showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				PhasePath:       "status.phase",
+				PhaseReadyValue: "Ready",
+			})},
+			want: []string{"a"},
+		},
+		{
+			name: "typed condition readiness",
+			resources: []showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				Conditions: &showroomv1alpha1.ConditionReadinessCheck{
+					Ready: showroomv1alpha1.ConditionMatch{Type: "Ready", Status: metav1.ConditionTrue},
+					Failures: []showroomv1alpha1.ConditionMatch{
+						{Type: "Synced", Status: metav1.ConditionFalse},
+					},
+				},
+			})},
+			want: []string{"a"},
 		},
 	}
 	for _, tt := range tests {
@@ -159,6 +188,82 @@ func TestValidateAndTopoSort_Errors(t *testing.T) {
 			}}, "a"),
 			errSubstr: "kind is required",
 		},
+		{
+			name: "reserved lifecycle deletion annotation",
+			scpc: func() *showroomv1alpha1.SimpleClusterProviderConfig {
+				resource := res("a")
+				resource.DeletionAnnotations = map[string]string{
+					"showroom.apeirora.eu/simple-cluster-uid": "overridden",
+				}
+				return scpcWith([]showroomv1alpha1.ResourceSpec{resource}, "a")
+			}(),
+			errSubstr: "is reserved by the SimpleCluster lifecycle",
+		},
+		{
+			name:      "empty readiness mode",
+			scpc:      scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{})}, "a"),
+			errSubstr: "phasePath and phaseReadyValue are required",
+		},
+		{
+			name: "scalar readiness missing ready value",
+			scpc: scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				PhasePath: "status.phase",
+			})}, "a"),
+			errSubstr: "phasePath and phaseReadyValue are required",
+		},
+		{
+			name: "mixed scalar and condition readiness",
+			scpc: scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				PhasePath: "status.phase",
+				Conditions: &showroomv1alpha1.ConditionReadinessCheck{
+					Ready: showroomv1alpha1.ConditionMatch{Type: "Ready", Status: metav1.ConditionTrue},
+				},
+			})}, "a"),
+			errSubstr: "conditions cannot be combined with scalar readiness fields",
+		},
+		{
+			name: "condition readiness missing ready type",
+			scpc: scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				Conditions: &showroomv1alpha1.ConditionReadinessCheck{
+					Ready: showroomv1alpha1.ConditionMatch{Status: metav1.ConditionTrue},
+				},
+			})}, "a"),
+			errSubstr: "conditions.ready.type is required",
+		},
+		{
+			name: "condition readiness has invalid status",
+			scpc: scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				Conditions: &showroomv1alpha1.ConditionReadinessCheck{
+					Ready: showroomv1alpha1.ConditionMatch{Type: "Ready", Status: "yes"},
+				},
+			})}, "a"),
+			errSubstr: "must be True, False, or Unknown",
+		},
+		{
+			name: "duplicate failure condition type",
+			scpc: scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				Conditions: &showroomv1alpha1.ConditionReadinessCheck{
+					Ready: showroomv1alpha1.ConditionMatch{Type: "Ready", Status: metav1.ConditionTrue},
+					Failures: []showroomv1alpha1.ConditionMatch{
+						{Type: "Synced", Status: metav1.ConditionFalse},
+						{Type: "Synced", Status: metav1.ConditionUnknown},
+					},
+				},
+			})}, "a"),
+			errSubstr: "duplicate failure condition type",
+		},
+		{
+			name: "ready matcher repeated as failure",
+			scpc: scpcWith([]showroomv1alpha1.ResourceSpec{resWithReadiness(&showroomv1alpha1.ReadinessCheck{
+				Conditions: &showroomv1alpha1.ConditionReadinessCheck{
+					Ready: showroomv1alpha1.ConditionMatch{Type: "Ready", Status: metav1.ConditionTrue},
+					Failures: []showroomv1alpha1.ConditionMatch{
+						{Type: "Ready", Status: metav1.ConditionTrue},
+					},
+				},
+			})}, "a"),
+			errSubstr: "ready matcher must not also be a failure matcher",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,5 +275,26 @@ func TestValidateAndTopoSort_Errors(t *testing.T) {
 				t.Errorf("error %q does not contain %q", err.Error(), tt.errSubstr)
 			}
 		})
+	}
+}
+
+func TestValidateDeletionAnnotationsRejectsEveryLifecycleKey(t *testing.T) {
+	reserved := []string{
+		rendertpl.AnnoSimpleCluster,
+		rendertpl.AnnoSimpleClusterProvider,
+		rendertpl.AnnoSimpleClusterUID,
+		rendertpl.AnnoSimpleClusterProviderNamespace,
+		rendertpl.AnnoSimpleClusterProviderUID,
+		rendertpl.AnnoAllowDelete,
+	}
+	for _, key := range reserved {
+		t.Run(key, func(t *testing.T) {
+			if err := validateDeletionAnnotations(map[string]string{key: "overridden"}); err == nil {
+				t.Fatalf("reserved annotation %q was accepted", key)
+			}
+		})
+	}
+	if err := validateDeletionAnnotations(map[string]string{"provider.example/confirm": "true"}); err != nil {
+		t.Fatalf("provider deletion annotation was rejected: %v", err)
 	}
 }

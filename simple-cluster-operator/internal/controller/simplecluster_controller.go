@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -58,6 +59,14 @@ const (
 	forceCleanupGrace = 30 * time.Second
 )
 
+var (
+	errSCPCNotFound            = errors.New("provider config not found")
+	errSCPCAmbiguous           = errors.New("provider config reference is ambiguous")
+	errSCPCIdentityChanged     = errors.New("provider config identity changed")
+	errSCPCReferenceInvalid    = errors.New("provider config reference is invalid")
+	errTargetOwnershipConflict = errors.New("target ownership does not match")
+)
+
 // SimpleClusterReconciler walks the SCPC's DAG of ResourceSpecs and
 // mirrors per-resource state into SC.Status.Resources. See DESIGN.md §5.
 type SimpleClusterReconciler struct {
@@ -65,8 +74,10 @@ type SimpleClusterReconciler struct {
 	Scheme     *runtime.Scheme
 	RESTConfig *rest.Config
 	// APIReader reads straight from the API server, bypassing the cache. It
-	// backs the pre-create deletion re-check so an in-flight pass cannot order
-	// new infrastructure for a SimpleCluster whose deletion has just begun.
+	// backs provider identity resolution and the final pre-create re-read of
+	// both the SimpleCluster and SCPC so replacement, relevant metadata or spec
+	// changes, deletion, or provider retirement visible at the API server block
+	// new infrastructure.
 	APIReader client.Reader
 	// FallbackSCPCNamespace is consulted when an SCPC is not found in the
 	// SimpleCluster's own namespace. Transitional: it lets chart-managed
@@ -118,24 +129,24 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	scpcRef := sc.Status.ProviderConfigRef
-	if scpcRef == nil {
-		chosen := selectProvider(sc.Spec.ProviderConfigRefs)
-		if chosen == "" {
-			return r.failSC(ctx, &sc, "InvalidSpec", "providerConfigRefs must list at least one SCPC name")
-		}
-		scpcRef = &corev1.LocalObjectReference{Name: chosen}
-	}
-
-	scpcFound, err := r.getSCPC(ctx, &sc, scpcRef.Name)
+	scpcFound, lockRequired, err := r.resolveSCPC(ctx, &sc, true)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return r.failSC(ctx, &sc, "SCPCNotFound",
-				fmt.Sprintf("SimpleClusterProviderConfig %q not found in namespace %q or fallback", scpcRef.Name, sc.Namespace))
+		reason := providerConfigErrorReason(err)
+		if reason == "" {
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
+		if sc.Status.ProviderConfigRef != nil ||
+			sc.Status.ProviderConfigNamespace != "" || sc.Status.ProviderConfigUID != "" {
+			return r.failLockedSCPC(ctx, &sc, reason, err.Error())
+		}
+		return r.failSC(ctx, &sc, reason, err.Error())
 	}
 	scpc := *scpcFound
+	if lockRequired {
+		if err := r.lockSCPC(ctx, &sc, &scpc); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	order, err := validateAndTopoSort(&scpc)
 	if err != nil {
@@ -146,7 +157,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// parks the SC in Phase=NoHardware before any resource R is created.
 	if _, err := rendertpl.ResolveInputs(&scpc, &sc); err != nil {
 		if errors.Is(err, rendertpl.ErrNoProfile) {
-			return r.noHardwareSC(ctx, &sc, scpc.Name, err.Error())
+			return r.noHardwareSC(ctx, &sc, err.Error())
 		}
 		return r.failSC(ctx, &sc, "InputError", err.Error())
 	}
@@ -210,6 +221,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 		instances := make([]showroomv1alpha1.InstanceStatus, 0, len(rendered))
 		instanceLive := make([]*unstructured.Unstructured, 0, len(rendered))
+		missingIndices := make([]int, 0)
 		var gvkStr string
 
 		for idx, desired := range rendered {
@@ -225,16 +237,25 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			existing, gerr := ri.Get(ctx, desired.GetName(), metav1.GetOptions{})
 			switch {
 			case apierrors.IsNotFound(gerr):
-				// Re-check deletion straight from the API server right before
-				// creating: a target Create can order real infrastructure, so a
-				// pass that started before the user deleted the SC must not
-				// create anything. The delete event drives reconcileDelete.
-				allowed, aerr := r.creationAllowed(ctx, &sc)
+				if !scpc.Spec.AllowsProvisioning() {
+					// Keep scanning: a prior pass may have created a later
+					// instance and crashed before status was persisted. Every
+					// extant identity must be observed for eventual cleanup.
+					missingIndices = append(missingIndices, idx)
+					continue
+				}
+				// Re-check deletion straight from the API server immediately before
+				// creating: a target Create can order real infrastructure. This is
+				// the last available guard before crossing into the target system.
+				allowed, aerr := r.creationAllowed(ctx, &sc, &scpc)
 				if aerr != nil {
 					return ctrl.Result{}, aerr
 				}
 				if !allowed {
-					return ctrl.Result{}, nil
+					// Requeue so a raced SCPC retirement is surfaced as
+					// ProvisioningDisabled (or a raced SC deletion enters the
+					// delete path) after the informer cache catches up.
+					return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
 				}
 				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
 				if cerr != nil {
@@ -247,6 +268,21 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			case gerr != nil:
 				return r.failSC(ctx, &sc, "GetTargetError",
 					fmt.Sprintf("resource %q[%d]: %v", name, idx, gerr))
+			}
+			migrated, ownershipErr := r.ensureTargetOwnership(
+				ctx, ri, existing, &sc, &scpc, name, desired.GetNamespace(),
+			)
+			if ownershipErr != nil {
+				if errors.Is(ownershipErr, errTargetOwnershipConflict) {
+					return r.failSC(ctx, &sc, "TargetOwnershipConflict",
+						fmt.Sprintf("resource %q[%d]: %v", name, idx, ownershipErr))
+				}
+				return ctrl.Result{}, ownershipErr
+			}
+			if migrated {
+				// Re-read the target after the atomic legacy migration before
+				// trusting it for readiness, predecessor context, or credentials.
+				return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
 			}
 			// v0.x: do not patch existing R. Drift requires user to delete R.
 
@@ -261,6 +297,19 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			})
 			instanceLive = append(instanceLive, existing)
 		}
+		if len(missingIndices) > 0 {
+			msg := fmt.Sprintf(
+				"SimpleClusterProviderConfig %q is retired for new provisioning; resource %q instances %v are absent",
+				scpc.Name, name, missingIndices)
+			return r.failSCUnavailable(ctx, &sc, "ProvisioningDisabled", msg, unavailableTarget{
+				resourceName:      name,
+				observedResources: completedResourceStatuses(order, statuses),
+				observedInstances: instances,
+				missingIndices:    missingIndices,
+				gvk:               gvkStr,
+				repeated:          repeated,
+			})
+		}
 
 		statuses[name] = aggregateResource(name, gvkStr, repeated, instances)
 		live[name] = instanceLive
@@ -269,9 +318,6 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	aggregate := aggregatePhase(order, statuses)
 
 	patch := client.MergeFrom(sc.DeepCopy())
-	if sc.Status.ProviderConfigRef == nil {
-		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
-	}
 	sc.Status.TargetCluster = "local"
 	if scpc.Spec.Target.KubeconfigSecretRef != nil {
 		sc.Status.TargetCluster = scpc.Name
@@ -327,12 +373,18 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{RequeueAfter: requeue}, nil
 }
 
-// creationAllowed re-reads the SimpleCluster uncached (via APIReader) and
-// reports whether a target resource may still be created. It returns false
-// once deletion has begun — or the SC is already gone — so an in-flight pass
-// never orders new infrastructure for a SimpleCluster the user is deleting.
-// The read is cheap because it only runs when a create is about to happen.
-func (r *SimpleClusterReconciler) creationAllowed(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) (bool, error) {
+// creationAllowed re-reads both the SimpleCluster and its resolved SCPC
+// uncached (via APIReader) immediately before a target Create. It returns
+// false once deletion has begun, either object is gone or replaced, either
+// spec changed, or provisioning has been disabled. This narrows the race
+// between a provider unbind or spec edit and an in-flight reconcile that
+// already rendered a billable target; the management and target APIs cannot
+// provide one atomic transaction across both systems.
+func (r *SimpleClusterReconciler) creationAllowed(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) (bool, error) {
 	reader := r.APIReader
 	if reader == nil {
 		reader = r.Client
@@ -344,7 +396,42 @@ func (r *SimpleClusterReconciler) creationAllowed(ctx context.Context, sc *showr
 		}
 		return false, err
 	}
-	return fresh.DeletionTimestamp.IsZero(), nil
+	if fresh.UID != sc.UID || fresh.Generation != sc.Generation ||
+		!maps.Equal(fresh.Labels, sc.Labels) ||
+		!sameProviderConfigIdentity(&fresh, sc) {
+		return false, nil
+	}
+	if !fresh.DeletionTimestamp.IsZero() ||
+		!controllerutil.ContainsFinalizer(&fresh, showroomv1alpha1.FinalizerName) {
+		return false, nil
+	}
+
+	var freshSCPC showroomv1alpha1.SimpleClusterProviderConfig
+	if err := reader.Get(ctx, client.ObjectKeyFromObject(scpc), &freshSCPC); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if freshSCPC.UID != scpc.UID || freshSCPC.Generation != scpc.Generation {
+		return false, nil
+	}
+	if !freshSCPC.DeletionTimestamp.IsZero() {
+		return false, nil
+	}
+	return freshSCPC.Spec.AllowsProvisioning(), nil
+}
+
+func sameProviderConfigIdentity(a, b *showroomv1alpha1.SimpleCluster) bool {
+	if (a.Status.ProviderConfigRef == nil) != (b.Status.ProviderConfigRef == nil) {
+		return false
+	}
+	if a.Status.ProviderConfigRef != nil &&
+		a.Status.ProviderConfigRef.Name != b.Status.ProviderConfigRef.Name {
+		return false
+	}
+	return a.Status.ProviderConfigNamespace == b.Status.ProviderConfigNamespace &&
+		a.Status.ProviderConfigUID == b.Status.ProviderConfigUID
 }
 
 // syncKubeconfig fetches the kubeconfig from the source resource, writes
@@ -588,28 +675,35 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 		return ctrl.Result{}, nil
 	}
 
-	scpcRef := sc.Status.ProviderConfigRef
-	if scpcRef == nil {
-		if name := selectProvider(sc.Spec.ProviderConfigRefs); name != "" {
-			scpcRef = &corev1.LocalObjectReference{Name: name}
+	scpc, lockRequired, err := r.resolveSCPC(ctx, sc, false)
+	if err != nil {
+		reason := providerConfigErrorReason(err)
+		if reason == "" {
+			log.Error(err, "resolve provider config for delete failed; will retry")
+			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+		}
+		return r.failSC(ctx, sc, reason, err.Error())
+	}
+	if lockRequired {
+		if err := r.lockSCPC(ctx, sc, scpc); err != nil {
+			log.Error(err, "lock provider config identity for delete failed; will retry")
+			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
 		}
 	}
 
-	if scpcRef != nil && scpcRef.Name != "" {
-		done, err := r.deleteTargetResources(ctx, sc, scpcRef.Name)
-		if err != nil {
-			log.Error(err, "delete target resources failed; will retry")
-			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
-		}
-		if !done {
-			// At least one resource at the current reverse-topo level is
-			// still terminating. Requeue without removing the finalizer so
-			// downstream operators have time to finish their teardown
-			// before we delete the predecessors they depend on
-			// (e.g. UbuntuCluster's k3s uninstall must complete before
-			// the OpenStackVMs it SSHes into are torn down).
-			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
-		}
+	done, err := r.deleteTargetResources(ctx, sc, scpc)
+	if err != nil {
+		log.Error(err, "delete target resources failed; will retry")
+		return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+	}
+	if !done {
+		// At least one resource at the current reverse-topo level is
+		// still terminating. Requeue without removing the finalizer so
+		// downstream operators have time to finish their teardown
+		// before we delete the predecessors they depend on
+		// (e.g. UbuntuCluster's k3s uninstall must complete before
+		// the OpenStackVMs it SSHes into are torn down).
+		return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
 	}
 
 	patch := client.MergeFrom(sc.DeepCopy())
@@ -629,20 +723,14 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 // finish their own cleanup (e.g. UbuntuCluster SSHing into a VM to
 // uninstall k3s) BEFORE the resources they depend on disappear.
 // Returns (true, nil) once all levels are clear.
-func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName string) (bool, error) {
+func (r *SimpleClusterReconciler) deleteTargetResources(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) (bool, error) {
 	log := logf.FromContext(ctx)
 
-	scpcFound, err := r.getSCPC(ctx, sc, scpcName)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("SCPC no longer present; skipping remote delete", "scpc", scpcName)
-			return true, nil
-		}
-		return false, fmt.Errorf("get SCPC %s: %w", scpcName, err)
-	}
-	scpc := *scpcFound
-
-	order, err := validateAndTopoSort(&scpc)
+	order, err := validateAndTopoSort(scpc)
 	if err != nil {
 		// SCPC has gone invalid since creation; best-effort delete by status.
 		log.Error(err, "SCPC invalid during delete; falling back to status-tracked order")
@@ -681,44 +769,26 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
-		defaultNs, nerr := rendertpl.ResolveNamespace(&scpc, sc, rs)
+		defaultNs, nerr := rendertpl.ResolveNamespace(scpc, sc, rs)
 		if nerr != nil {
 			return false, fmt.Errorf("resource %q: resolve namespace: %w", name, nerr)
 		}
 
-		// Enumerate the (name, namespace) pairs to delete. For repeated
-		// specs, Instances carries one entry per index. For non-repeated,
-		// the top-level TargetName is the single name. Fall back to the
-		// computed base name when status is missing entirely.
-		type nsName struct{ name, namespace string }
-		var targets []nsName
-		s := statusByName[name]
-		switch {
-		case s != nil && len(s.Instances) > 0:
-			for _, inst := range s.Instances {
-				ns := inst.TargetNamespace
-				if ns == "" {
-					ns = defaultNs
-				}
-				targets = append(targets, nsName{inst.TargetName, ns})
-			}
-		case s != nil && s.TargetName != "":
-			ns := s.TargetNamespace
-			if ns == "" {
-				ns = defaultNs
-			}
-			targets = []nsName{{s.TargetName, ns}}
-		default:
-			targets = []nsName{{
-				rendertpl.SanitiseTargetName(rs.NamePrefix, sc.Name+"-"+name),
-				defaultNs,
-			}}
+		targets, fallbackErr, terr := deletionTargets(scpc, sc, rs, statusByName[name], defaultNs)
+		if terr != nil {
+			return false, fmt.Errorf("resource %q: %w", name, terr)
+		}
+		if fallbackErr != nil {
+			log.Info("target identities cannot be fully reconstructed during delete; using recorded identities",
+				"resource", name, "error", fallbackErr.Error())
 		}
 
 		levelDone := true
 		for _, t := range targets {
 			ri := tc.ResourceFor(mapping, t.namespace)
-			exists, derr := r.deleteOneTarget(ctx, ri, rs, gvk, name, t.name)
+			exists, derr := r.deleteOneTarget(
+				ctx, ri, rs, gvk, name, t.name, t.namespace, sc, scpc,
+			)
 			if derr != nil {
 				return false, derr
 			}
@@ -731,8 +801,81 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 				"resource", name)
 			return false, nil
 		}
+		if fallbackErr != nil {
+			return false, fmt.Errorf(
+				"resource %q: cleanup cannot prove that recorded identities are complete: %w",
+				name, fallbackErr)
+		}
 	}
 	return true, nil
+}
+
+type namespacedTarget struct {
+	name      string
+	namespace string
+}
+
+// deletionTargets returns the union of status-recorded and reconstructible
+// target identities. Every candidate must prove ownership before deletion;
+// status is an identity journal, not authority to delete an unrelated object.
+// If reconstruction fails but status contains identities, fallbackErr explains
+// why only those recorded identities can be used.
+func deletionTargets(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	rs *showroomv1alpha1.ResourceSpec,
+	status *showroomv1alpha1.ResourceStatus,
+	defaultNamespace string,
+) (targets []namespacedTarget, fallbackErr, err error) {
+	seenTargets := make(map[namespacedTarget]struct{})
+	add := func(candidate namespacedTarget) {
+		if candidate.name == "" {
+			return
+		}
+		if _, seen := seenTargets[candidate]; seen {
+			return
+		}
+		seenTargets[candidate] = struct{}{}
+		targets = append(targets, candidate)
+	}
+
+	if status != nil && len(status.Instances) > 0 {
+		for _, instance := range status.Instances {
+			namespace := instance.TargetNamespace
+			if namespace == "" {
+				namespace = defaultNamespace
+			}
+			add(namespacedTarget{name: instance.TargetName, namespace: namespace})
+		}
+	} else if status != nil && status.TargetName != "" {
+		namespace := status.TargetNamespace
+		if namespace == "" {
+			namespace = defaultNamespace
+		}
+		add(namespacedTarget{name: status.TargetName, namespace: namespace})
+	}
+
+	count := 1
+	if rs.Repeat != "" {
+		count, fallbackErr = rendertpl.EvaluateRepeat(scpc, sc, rs, nil)
+		if fallbackErr != nil {
+			if len(targets) == 0 {
+				return nil, nil, fmt.Errorf("resolve repeat for delete fallback: %w", fallbackErr)
+			}
+			return targets, fallbackErr, nil
+		}
+	}
+	for index := 0; index < count; index++ {
+		name, namespace, resolveErr := rendertpl.ResolveTarget(scpc, sc, rs, index)
+		if resolveErr != nil {
+			if len(targets) == 0 {
+				return nil, nil, fmt.Errorf("resolve target for delete fallback: %w", resolveErr)
+			}
+			return targets, resolveErr, nil
+		}
+		add(namespacedTarget{name: name, namespace: namespace})
+	}
+	return targets, nil, nil
 }
 
 // deleteOneTarget issues (or progresses) the deletion of a single target
@@ -744,7 +887,9 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	ri dynamic.ResourceInterface,
 	rs *showroomv1alpha1.ResourceSpec,
 	gvk schema.GroupVersionKind,
-	resourceName, targetName string,
+	resourceName, targetName, targetNamespace string,
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 ) (bool, error) {
 	log := logf.FromContext(ctx)
 
@@ -755,6 +900,17 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	if err != nil {
 		return false, fmt.Errorf("resource %q: get %s: %w", resourceName, targetName, err)
 	}
+	migrated, ownershipErr := r.ensureTargetOwnership(
+		ctx, ri, existing, sc, scpc, resourceName, targetNamespace,
+	)
+	if ownershipErr != nil {
+		return true, fmt.Errorf("resource %q: %w", resourceName, ownershipErr)
+	}
+	if migrated {
+		// Do not combine legacy adoption and deletion in one API observation.
+		// The next pass must re-read and verify the immutable identity stamps.
+		return true, nil
+	}
 
 	// First time we see this target after SC was marked for deletion: announce that this
 	// child may go (the admission guard refuses deletes of labelled children otherwise, and
@@ -763,20 +919,22 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	// reconciles skip the work — a non-zero deletionTimestamp means our prior
 	// Delete already landed.
 	if existing.GetDeletionTimestamp().IsZero() {
-		annotations := map[string]any{rendertpl.AnnoAllowDelete: "true"}
+		annotations := map[string]string{rendertpl.AnnoAllowDelete: "true"}
 		for k, v := range rs.DeletionAnnotations {
 			annotations[k] = v
 		}
-		patchBytes, perr := json.Marshal(map[string]any{
-			"metadata": map[string]any{"annotations": annotations},
-		})
+		patched, perr := guardedAnnotationPatch(ctx, ri, existing, annotations)
 		if perr != nil {
-			return true, fmt.Errorf("resource %q: marshal deletion annotations: %w", resourceName, perr)
-		}
-		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
 			return true, fmt.Errorf("resource %q: patch deletion annotations: %w", resourceName, perr)
 		}
-		if derr := ri.Delete(ctx, targetName, metav1.DeleteOptions{}); derr != nil && !apierrors.IsNotFound(derr) {
+		uid := patched.GetUID()
+		if uid == "" {
+			return true, fmt.Errorf("resource %q: patched target %s/%s has no UID",
+				resourceName, patched.GetNamespace(), patched.GetName())
+		}
+		if derr := ri.Delete(ctx, targetName, metav1.DeleteOptions{
+			Preconditions: &metav1.Preconditions{UID: &uid},
+		}); derr != nil && !apierrors.IsNotFound(derr) {
 			return true, fmt.Errorf("resource %q: delete %s: %w", resourceName, targetName, derr)
 		}
 		log.Info("target resource delete requested",
@@ -791,13 +949,7 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	// removes R immediately.
 	if rs.ForceCleanupOnCascade && len(existing.GetFinalizers()) > 0 &&
 		time.Since(existing.GetDeletionTimestamp().Time) >= forceCleanupGrace {
-		patchBytes, perr := json.Marshal(map[string]any{
-			"metadata": map[string]any{"finalizers": []string{}},
-		})
-		if perr != nil {
-			return true, fmt.Errorf("resource %q: marshal finalizer strip: %w", resourceName, perr)
-		}
-		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
+		if _, perr := guardedFinalizerPatch(ctx, ri, existing, nil); perr != nil {
 			return true, fmt.Errorf("resource %q: force-strip finalizers: %w", resourceName, perr)
 		}
 		log.Info("force-stripped finalizers after grace window",
@@ -808,24 +960,414 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	return true, nil
 }
 
-// getSCPC resolves an SCPC name for the given SimpleCluster: the SC's own
-// namespace wins, then FallbackSCPCNamespace. The returned error is the
-// fallback lookup's NotFound when the name exists in neither namespace.
-func (r *SimpleClusterReconciler) getSCPC(
-	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, name string,
+type targetOwnershipState uint8
+
+const (
+	targetOwnershipMismatch targetOwnershipState = iota
+	targetOwnershipLegacy
+	targetOwnershipExact
+)
+
+type jsonPatchOperation struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value any    `json:"value"`
+}
+
+// ensureTargetOwnership accepts only the exact SimpleCluster and SCPC
+// incarnations stamped at create time. Targets made by an older release carry
+// only the two name annotations. Such a target is migrated atomically only
+// when the controller-owned SimpleCluster status already records its exact
+// resource/GVK/name/namespace identity; reconstruction alone is not adoption
+// authority. Callers must requeue after a successful migration.
+func (r *SimpleClusterReconciler) ensureTargetOwnership(
+	ctx context.Context,
+	ri dynamic.ResourceInterface,
+	object *unstructured.Unstructured,
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	resourceName, targetNamespace string,
+) (bool, error) {
+	switch classifyTargetOwnership(object, sc, scpc) {
+	case targetOwnershipExact:
+		return false, nil
+	case targetOwnershipMismatch:
+		return false, fmt.Errorf(
+			"%w: target %s/%s lacks the exact SimpleCluster and provider identity",
+			errTargetOwnershipConflict, object.GetNamespace(), object.GetName())
+	case targetOwnershipLegacy:
+		if !statusRecordsTarget(
+			sc, resourceName, object.GroupVersionKind().String(), object.GetName(), targetNamespace,
+		) {
+			return false, fmt.Errorf(
+				"%w: legacy target %s/%s is not recorded in SimpleCluster status; verify it manually",
+				errTargetOwnershipConflict, object.GetNamespace(), object.GetName())
+		}
+		patched, err := guardedAnnotationPatch(ctx, ri, object, immutableOwnershipAnnotations(sc, scpc))
+		if err != nil {
+			return false, fmt.Errorf("migrate legacy target %s/%s ownership: %w",
+				object.GetNamespace(), object.GetName(), err)
+		}
+		if classifyTargetOwnership(patched, sc, scpc) != targetOwnershipExact {
+			return false, fmt.Errorf("migrate legacy target %s/%s ownership: patched object did not retain exact identity",
+				object.GetNamespace(), object.GetName())
+		}
+		return true, nil
+	default:
+		return false, fmt.Errorf("%w: target %s/%s has unknown ownership state",
+			errTargetOwnershipConflict, object.GetNamespace(), object.GetName())
+	}
+}
+
+func classifyTargetOwnership(
+	object *unstructured.Unstructured,
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) targetOwnershipState {
+	annotations := object.GetAnnotations()
+	if annotations[rendertpl.AnnoSimpleCluster] != sc.Namespace+"/"+sc.Name ||
+		annotations[rendertpl.AnnoSimpleClusterProvider] != scpc.Name {
+		return targetOwnershipMismatch
+	}
+
+	expected := immutableOwnershipAnnotations(sc, scpc)
+	present := 0
+	for key, value := range expected {
+		actual, ok := annotations[key]
+		if !ok {
+			continue
+		}
+		present++
+		if actual != value {
+			return targetOwnershipMismatch
+		}
+	}
+	if present == 0 {
+		return targetOwnershipLegacy
+	}
+	if present != len(expected) {
+		return targetOwnershipMismatch
+	}
+	if sc.UID == "" || scpc.Namespace == "" || scpc.UID == "" {
+		return targetOwnershipMismatch
+	}
+	return targetOwnershipExact
+}
+
+func immutableOwnershipAnnotations(
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) map[string]string {
+	return map[string]string{
+		rendertpl.AnnoSimpleClusterUID:               string(sc.UID),
+		rendertpl.AnnoSimpleClusterProviderNamespace: scpc.Namespace,
+		rendertpl.AnnoSimpleClusterProviderUID:       string(scpc.UID),
+	}
+}
+
+func statusRecordsTarget(
+	sc *showroomv1alpha1.SimpleCluster,
+	resourceName, targetGVK, targetName, targetNamespace string,
+) bool {
+	if targetGVK == "" {
+		return false
+	}
+	match := func(name, namespace string) bool {
+		if namespace == "" {
+			namespace = targetNamespace
+		}
+		return name == targetName && namespace == targetNamespace
+	}
+	for i := range sc.Status.Resources {
+		status := &sc.Status.Resources[i]
+		if status.Name != resourceName || status.GVK == "" || status.GVK != targetGVK {
+			continue
+		}
+		if match(status.TargetName, status.TargetNamespace) {
+			return true
+		}
+		for _, instance := range status.Instances {
+			if match(instance.TargetName, instance.TargetNamespace) {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+func guardedAnnotationPatch(
+	ctx context.Context,
+	ri dynamic.ResourceInterface,
+	object *unstructured.Unstructured,
+	annotations map[string]string,
+) (*unstructured.Unstructured, error) {
+	operations, err := metadataIdentityTests(object)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(annotations))
+	for key := range annotations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		operations = append(operations, jsonPatchOperation{
+			Op:    "add",
+			Path:  "/metadata/annotations/" + escapeJSONPointerToken(key),
+			Value: annotations[key],
+		})
+	}
+	return guardedJSONPatch(ctx, ri, object, operations)
+}
+
+func guardedFinalizerPatch(
+	ctx context.Context,
+	ri dynamic.ResourceInterface,
+	object *unstructured.Unstructured,
+	finalizers []string,
+) (*unstructured.Unstructured, error) {
+	operations, err := metadataIdentityTests(object)
+	if err != nil {
+		return nil, err
+	}
+	operations = append(operations, jsonPatchOperation{
+		Op: "replace", Path: "/metadata/finalizers", Value: finalizers,
+	})
+	return guardedJSONPatch(ctx, ri, object, operations)
+}
+
+func metadataIdentityTests(object *unstructured.Unstructured) ([]jsonPatchOperation, error) {
+	if object.GetUID() == "" || object.GetResourceVersion() == "" {
+		return nil, fmt.Errorf("target %s/%s has no UID or resourceVersion",
+			object.GetNamespace(), object.GetName())
+	}
+	return []jsonPatchOperation{
+		{Op: "test", Path: "/metadata/uid", Value: string(object.GetUID())},
+		{Op: "test", Path: "/metadata/resourceVersion", Value: object.GetResourceVersion()},
+	}, nil
+}
+
+func guardedJSONPatch(
+	ctx context.Context,
+	ri dynamic.ResourceInterface,
+	object *unstructured.Unstructured,
+	operations []jsonPatchOperation,
+) (*unstructured.Unstructured, error) {
+	patchBytes, err := json.Marshal(operations)
+	if err != nil {
+		return nil, fmt.Errorf("marshal guarded JSON patch: %w", err)
+	}
+	patched, err := ri.Patch(ctx, object.GetName(), types.JSONPatchType, patchBytes, metav1.PatchOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if patched.GetUID() != object.GetUID() || patched.GetResourceVersion() == "" {
+		return nil, fmt.Errorf("guarded JSON patch returned a different or unversioned target")
+	}
+	return patched, nil
+}
+
+func escapeJSONPointerToken(value string) string {
+	value = strings.ReplaceAll(value, "~", "~0")
+	return strings.ReplaceAll(value, "/", "~1")
+}
+
+// resolveSCPC returns the exact provider config selected for this
+// SimpleCluster and whether its identity still needs to be persisted. New
+// active reconciles preserve tenant-first selection. Existing incomplete
+// status, including deletion from an older release, is backfilled only when a
+// single candidate can be proven.
+func (r *SimpleClusterReconciler) resolveSCPC(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	allowNewSelection bool,
+) (*showroomv1alpha1.SimpleClusterProviderConfig, bool, error) {
+	ref := sc.Status.ProviderConfigRef
+	if ref == nil {
+		if sc.Status.ProviderConfigNamespace != "" || sc.Status.ProviderConfigUID != "" {
+			return nil, false, fmt.Errorf(
+				"%w: provider config namespace or UID is set without status.providerConfigRef",
+				errSCPCReferenceInvalid)
+		}
+		name := selectProvider(sc.Spec.ProviderConfigRefs)
+		if name == "" {
+			return nil, false, fmt.Errorf("%w: providerConfigRefs must list at least one SCPC name", errSCPCReferenceInvalid)
+		}
+		if allowNewSelection {
+			scpc, err := r.getPreferredSCPC(ctx, sc, name)
+			return scpc, err == nil, err
+		}
+		ref = &corev1.LocalObjectReference{Name: name}
+	}
+	if ref.Name == "" {
+		return nil, false, fmt.Errorf("%w: status.providerConfigRef.name is empty", errSCPCReferenceInvalid)
+	}
+
+	if sc.Status.ProviderConfigNamespace != "" {
+		scpc, err := r.getExactSCPC(ctx, ref.Name, sc.Status.ProviderConfigNamespace)
+		if err != nil {
+			return nil, false, err
+		}
+		if sc.Status.ProviderConfigUID != "" && sc.Status.ProviderConfigUID != scpc.UID {
+			return nil, false, fmt.Errorf(
+				"%w: locked SimpleClusterProviderConfig %s/%s has UID %q, current object has UID %q",
+				errSCPCIdentityChanged, scpc.Namespace, scpc.Name, sc.Status.ProviderConfigUID, scpc.UID)
+		}
+		return scpc, sc.Status.ProviderConfigUID == "", nil
+	}
+
+	candidates, err := r.findSCPCandidates(ctx, sc, ref.Name)
+	if err != nil {
+		return nil, false, err
+	}
+	if sc.Status.ProviderConfigUID != "" {
+		for _, candidate := range candidates {
+			if candidate.UID == sc.Status.ProviderConfigUID {
+				return candidate, true, nil
+			}
+		}
+		if len(candidates) == 0 {
+			return nil, false, fmt.Errorf(
+				"%w: locked SimpleClusterProviderConfig %q with UID %q is absent",
+				errSCPCNotFound, ref.Name, sc.Status.ProviderConfigUID)
+		}
+		return nil, false, fmt.Errorf(
+			"%w: no SimpleClusterProviderConfig named %q has locked UID %q",
+			errSCPCIdentityChanged, ref.Name, sc.Status.ProviderConfigUID)
+	}
+
+	switch len(candidates) {
+	case 0:
+		return nil, false, fmt.Errorf(
+			"%w: SimpleClusterProviderConfig %q is absent from namespace %q and fallback namespace %q",
+			errSCPCNotFound, ref.Name, sc.Namespace, r.FallbackSCPCNamespace)
+	case 1:
+		return candidates[0], true, nil
+	default:
+		return nil, false, fmt.Errorf(
+			"%w: legacy name-only SimpleClusterProviderConfig %q exists in both %q and %q",
+			errSCPCAmbiguous, ref.Name, candidates[0].Namespace, candidates[1].Namespace)
+	}
+}
+
+// getPreferredSCPC implements the selection contract for a new
+// SimpleCluster: its own namespace wins, then FallbackSCPCNamespace.
+func (r *SimpleClusterReconciler) getPreferredSCPC(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	name string,
 ) (*showroomv1alpha1.SimpleClusterProviderConfig, error) {
+	reader := r.providerConfigReader()
 	var scpc showroomv1alpha1.SimpleClusterProviderConfig
-	err := r.Get(ctx, types.NamespacedName{Namespace: sc.Namespace, Name: name}, &scpc)
+	err := reader.Get(ctx, types.NamespacedName{Namespace: sc.Namespace, Name: name}, &scpc)
 	if err == nil {
 		return &scpc, nil
 	}
-	if !apierrors.IsNotFound(err) || r.FallbackSCPCNamespace == "" || r.FallbackSCPCNamespace == sc.Namespace {
+	if !apierrors.IsNotFound(err) {
 		return nil, err
 	}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: r.FallbackSCPCNamespace, Name: name}, &scpc); err != nil {
+	if r.FallbackSCPCNamespace == "" || r.FallbackSCPCNamespace == sc.Namespace {
+		return nil, fmt.Errorf(
+			"%w: SimpleClusterProviderConfig %q is absent from namespace %q and fallback namespace %q",
+			errSCPCNotFound, name, sc.Namespace, r.FallbackSCPCNamespace)
+	}
+	err = reader.Get(ctx, types.NamespacedName{Namespace: r.FallbackSCPCNamespace, Name: name}, &scpc)
+	if apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf(
+			"%w: SimpleClusterProviderConfig %q is absent from namespace %q and fallback namespace %q",
+			errSCPCNotFound, name, sc.Namespace, r.FallbackSCPCNamespace)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &scpc, nil
+}
+
+func (r *SimpleClusterReconciler) getExactSCPC(
+	ctx context.Context,
+	name, namespace string,
+) (*showroomv1alpha1.SimpleClusterProviderConfig, error) {
+	reader := r.providerConfigReader()
+	var scpc showroomv1alpha1.SimpleClusterProviderConfig
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &scpc); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf(
+				"%w: locked SimpleClusterProviderConfig %s/%s is absent",
+				errSCPCNotFound, namespace, name)
+		}
+		return nil, err
+	}
+	return &scpc, nil
+}
+
+func (r *SimpleClusterReconciler) findSCPCandidates(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	name string,
+) ([]*showroomv1alpha1.SimpleClusterProviderConfig, error) {
+	reader := r.providerConfigReader()
+	namespaces := []string{sc.Namespace}
+	if r.FallbackSCPCNamespace != "" && r.FallbackSCPCNamespace != sc.Namespace {
+		namespaces = append(namespaces, r.FallbackSCPCNamespace)
+	}
+	candidates := make([]*showroomv1alpha1.SimpleClusterProviderConfig, 0, len(namespaces))
+	for _, namespace := range namespaces {
+		var scpc showroomv1alpha1.SimpleClusterProviderConfig
+		err := reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &scpc)
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, &scpc)
+	}
+	return candidates, nil
+}
+
+func (r *SimpleClusterReconciler) providerConfigReader() client.Reader {
+	if r.APIReader != nil {
+		return r.APIReader
+	}
+	return r.Client
+}
+
+// lockSCPC persists the name, namespace and UID together before any target
+// client is constructed. This is the cleanup authority after a later crash.
+func (r *SimpleClusterReconciler) lockSCPC(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) error {
+	if scpc.Name == "" || scpc.Namespace == "" || scpc.UID == "" {
+		return fmt.Errorf(
+			"%w: selected SimpleClusterProviderConfig must have name, namespace and UID",
+			errSCPCReferenceInvalid)
+	}
+	patch := client.MergeFrom(sc.DeepCopy())
+	sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
+	sc.Status.ProviderConfigNamespace = scpc.Namespace
+	sc.Status.ProviderConfigUID = scpc.UID
+	if err := r.Status().Patch(ctx, sc, patch); err != nil {
+		return fmt.Errorf("persist provider config identity: %w", err)
+	}
+	return nil
+}
+
+func providerConfigErrorReason(err error) string {
+	switch {
+	case errors.Is(err, errSCPCNotFound):
+		return "SCPCNotFound"
+	case errors.Is(err, errSCPCAmbiguous):
+		return "SCPCReferenceAmbiguous"
+	case errors.Is(err, errSCPCIdentityChanged):
+		return "SCPCIdentityMismatch"
+	case errors.Is(err, errSCPCReferenceInvalid):
+		return "InvalidSpec"
+	default:
+		return ""
+	}
 }
 
 // selectProvider picks an SCPC name from the SC's candidate list. v0.x
@@ -872,17 +1414,171 @@ func (r *SimpleClusterReconciler) failSC(
 	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
 }
 
+// failLockedSCPC clears stale readiness when the exact provider identity can
+// no longer be resolved. No target is observed, created or deleted in this
+// state; the lock remains unchanged for recovery or verified manual cleanup.
+func (r *SimpleClusterReconciler) failLockedSCPC(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	reason, msg string,
+) (ctrl.Result, error) {
+	patch := client.MergeFrom(sc.DeepCopy())
+	sc.Status.Phase = showroomv1alpha1.PhaseFailed
+	sc.Status.ObservedGeneration = sc.Generation
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:    showroomv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  reason,
+		Message: msg,
+	})
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:    showroomv1alpha1.ConditionError,
+		Status:  metav1.ConditionTrue,
+		Reason:  reason,
+		Message: msg,
+	})
+	setRoleCounts(sc)
+	if err := r.Status().Patch(ctx, sc, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+}
+
+// failSCUnavailable records a failure that proves the provisioned cluster is
+// not currently available. Unlike failSC, which preserves the last observed
+// phase for transient reconciliation errors, this clears a stale Ready report:
+// a missing target that cannot be recreated while its SCPC is retired is not a
+// healthy cluster.
+type unavailableTarget struct {
+	resourceName      string
+	observedResources []showroomv1alpha1.ResourceStatus
+	observedInstances []showroomv1alpha1.InstanceStatus
+	missingIndices    []int
+	gvk               string
+	repeated          bool
+}
+
+func (r *SimpleClusterReconciler) failSCUnavailable(
+	ctx context.Context,
+	sc *showroomv1alpha1.SimpleCluster,
+	reason, msg string,
+	unavailable unavailableTarget,
+) (ctrl.Result, error) {
+	patch := client.MergeFrom(sc.DeepCopy())
+	mergeObservedResourceStatuses(sc, unavailable.observedResources)
+	markResourceUnavailable(sc, unavailable, msg)
+	sc.Status.Phase = showroomv1alpha1.PhaseFailed
+	sc.Status.ObservedGeneration = sc.Generation
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:    showroomv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  reason,
+		Message: msg,
+	})
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:    showroomv1alpha1.ConditionError,
+		Status:  metav1.ConditionTrue,
+		Reason:  reason,
+		Message: msg,
+	})
+	setRoleCounts(sc)
+	if err := r.Status().Patch(ctx, sc, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+}
+
+// mergeObservedResourceStatuses persists resources that were authoritatively
+// observed earlier in the same pass before a later retired resource proved
+// unavailable. Preserve untouched rows from prior passes: they may be the only
+// cleanup identity for resources the current pass did not reach.
+func mergeObservedResourceStatuses(
+	sc *showroomv1alpha1.SimpleCluster,
+	observed []showroomv1alpha1.ResourceStatus,
+) {
+	indices := make(map[string]int, len(sc.Status.Resources))
+	for i := range sc.Status.Resources {
+		indices[sc.Status.Resources[i].Name] = i
+	}
+	for _, status := range observed {
+		if index, ok := indices[status.Name]; ok {
+			sc.Status.Resources[index] = status
+			continue
+		}
+		indices[status.Name] = len(sc.Status.Resources)
+		sc.Status.Resources = append(sc.Status.Resources, status)
+	}
+}
+
+// markResourceUnavailable replaces a stale per-resource Ready report when a
+// target is authoritatively absent and policy forbids recreating it. Keep the
+// observed target identities in status so cleanup can find everything that
+// existed before the failure. Unobserved rendered identities deliberately do
+// not become adopted status entries.
+func markResourceUnavailable(
+	sc *showroomv1alpha1.SimpleCluster,
+	unavailable unavailableTarget,
+	msg string,
+) {
+	var status *showroomv1alpha1.ResourceStatus
+	for i := range sc.Status.Resources {
+		if sc.Status.Resources[i].Name == unavailable.resourceName {
+			status = &sc.Status.Resources[i]
+			break
+		}
+	}
+	if status == nil {
+		sc.Status.Resources = append(sc.Status.Resources, showroomv1alpha1.ResourceStatus{Name: unavailable.resourceName})
+		status = &sc.Status.Resources[len(sc.Status.Resources)-1]
+	}
+
+	status.GVK = unavailable.gvk
+	status.Phase = showroomv1alpha1.PhaseFailed
+	status.Reason = showroomv1alpha1.ReasonFailed
+	status.Message = msg
+	status.LastError = msg
+	if !unavailable.repeated {
+		return
+	}
+	status.TargetName = ""
+	status.TargetNamespace = ""
+
+	// The reconcile loop scans past missing instances while the SCPC is retired,
+	// so this union includes later objects left by an interrupted active pass.
+	known := make(map[int32]showroomv1alpha1.InstanceStatus, len(status.Instances)+len(unavailable.observedInstances))
+	for _, instance := range status.Instances {
+		known[instance.Index] = instance
+	}
+	for _, instance := range unavailable.observedInstances {
+		known[instance.Index] = instance
+	}
+	for _, index := range unavailable.missingIndices {
+		if instance, observedBefore := known[int32(index)]; observedBefore {
+			instance.Phase = showroomv1alpha1.PhaseFailed
+			instance.LastError = msg
+			known[int32(index)] = instance
+		}
+	}
+	indices := make([]int, 0, len(known))
+	for index := range known {
+		indices = append(indices, int(index))
+	}
+	sort.Ints(indices)
+	instances := make([]showroomv1alpha1.InstanceStatus, 0, len(indices))
+	for _, index := range indices {
+		instances = append(instances, known[int32(index)])
+	}
+	status.Instances = instances
+}
+
 // noHardwareSC parks the SC in Phase=NoHardware: a from=profile input could
 // not be satisfied by any SCPC profile. No resource R is created. The SC is
 // re-queued so it recovers automatically once a large-enough profile is added
 // or the request shrinks.
 func (r *SimpleClusterReconciler) noHardwareSC(
-	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName, msg string,
+	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, msg string,
 ) (ctrl.Result, error) {
 	patch := client.MergeFrom(sc.DeepCopy())
-	if sc.Status.ProviderConfigRef == nil {
-		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpcName}
-	}
 	sc.Status.Phase = showroomv1alpha1.PhaseNoHardware
 	sc.Status.ObservedGeneration = sc.Generation
 	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
@@ -972,6 +1668,12 @@ func validateAndTopoSort(scpc *showroomv1alpha1.SimpleClusterProviderConfig) ([]
 		if rs.Kind == "" {
 			return nil, fmt.Errorf("resource %q: kind is required", rs.Name)
 		}
+		if err := validateReadiness(rs.Readiness); err != nil {
+			return nil, fmt.Errorf("resource %q: invalid readiness: %w", rs.Name, err)
+		}
+		if err := validateDeletionAnnotations(rs.DeletionAnnotations); err != nil {
+			return nil, fmt.Errorf("resource %q: invalid deletionAnnotations: %w", rs.Name, err)
+		}
 	}
 
 	if scpc.Spec.KubeconfigSource.ResourceName == "" {
@@ -1033,6 +1735,72 @@ func validateAndTopoSort(scpc *showroomv1alpha1.SimpleClusterProviderConfig) ([]
 		return nil, fmt.Errorf("cycle detected in resource dependsOn")
 	}
 	return order, nil
+}
+
+func validateDeletionAnnotations(annotations map[string]string) error {
+	reserved := map[string]struct{}{
+		rendertpl.AnnoSimpleCluster:                  {},
+		rendertpl.AnnoSimpleClusterProvider:          {},
+		rendertpl.AnnoSimpleClusterUID:               {},
+		rendertpl.AnnoSimpleClusterProviderNamespace: {},
+		rendertpl.AnnoSimpleClusterProviderUID:       {},
+		rendertpl.AnnoAllowDelete:                    {},
+	}
+	for key := range annotations {
+		if _, found := reserved[key]; found {
+			return fmt.Errorf("annotation %q is reserved by the SimpleCluster lifecycle", key)
+		}
+	}
+	return nil
+}
+
+func validateReadiness(check *showroomv1alpha1.ReadinessCheck) error {
+	if check == nil {
+		return nil
+	}
+
+	if check.Conditions == nil {
+		if check.PhasePath == "" || check.PhaseReadyValue == "" {
+			return fmt.Errorf("phasePath and phaseReadyValue are required for scalar readiness")
+		}
+		return nil
+	}
+
+	if check.PhasePath != "" || check.PhaseReadyValue != "" || len(check.PhaseFailedValues) > 0 ||
+		check.LastOperationPath != "" || check.LastErrorPath != "" {
+		return fmt.Errorf("conditions cannot be combined with scalar readiness fields")
+	}
+
+	conditions := check.Conditions
+	if err := validateConditionMatch("ready", conditions.Ready); err != nil {
+		return err
+	}
+	seen := make(map[string]struct{}, len(conditions.Failures))
+	for i, failure := range conditions.Failures {
+		if err := validateConditionMatch(fmt.Sprintf("failures[%d]", i), failure); err != nil {
+			return err
+		}
+		if _, duplicate := seen[failure.Type]; duplicate {
+			return fmt.Errorf("duplicate failure condition type %q", failure.Type)
+		}
+		seen[failure.Type] = struct{}{}
+		if failure == conditions.Ready {
+			return fmt.Errorf("ready matcher must not also be a failure matcher")
+		}
+	}
+	return nil
+}
+
+func validateConditionMatch(field string, match showroomv1alpha1.ConditionMatch) error {
+	if strings.TrimSpace(match.Type) == "" {
+		return fmt.Errorf("conditions.%s.type is required", field)
+	}
+	switch match.Status {
+	case metav1.ConditionTrue, metav1.ConditionFalse, metav1.ConditionUnknown:
+		return nil
+	default:
+		return fmt.Errorf("conditions.%s.status %q must be True, False, or Unknown", field, match.Status)
+	}
 }
 
 // aggregateResource folds N InstanceStatus entries into one ResourceStatus.
@@ -1177,10 +1945,26 @@ func orderedStatuses(order []string, statuses map[string]*showroomv1alpha1.Resou
 	return out
 }
 
+// completedResourceStatuses returns only rows computed in the current pass, in
+// DAG order. Unlike orderedStatuses it does not invent Pending rows for
+// resources the pass has not reached.
+func completedResourceStatuses(order []string, statuses map[string]*showroomv1alpha1.ResourceStatus) []showroomv1alpha1.ResourceStatus {
+	out := make([]showroomv1alpha1.ResourceStatus, 0, len(statuses))
+	for _, name := range order {
+		if status := statuses[name]; status != nil {
+			out = append(out, *status)
+		}
+	}
+	return out
+}
+
 // extractPhase maps R's status into the universal Phase enum, either via
-// the resource's ReadinessCheck or the default Ready-condition walker.
-// See DESIGN.md §5.
+// the resource's ReadinessCheck or the default status.phase mapping.
 func extractPhase(rc *showroomv1alpha1.ReadinessCheck, obj *unstructured.Unstructured) (showroomv1alpha1.Phase, string, string) {
+	if rc != nil && rc.Conditions != nil {
+		return extractConditionPhase(rc.Conditions, obj)
+	}
+
 	if rc != nil && rc.PhasePath != "" {
 		state, _ := pathwalk.Walk(obj.Object, rc.PhasePath)
 		s := pathwalk.ToString(state)
@@ -1207,6 +1991,105 @@ func extractPhase(rc *showroomv1alpha1.ReadinessCheck, obj *unstructured.Unstruc
 		return showroomv1alpha1.PhaseFailed, msg, msg
 	}
 	return showroomv1alpha1.PhaseProvisioning, msg, ""
+}
+
+// extractConditionPhase selects Kubernetes-style conditions by their exact
+// type instead of relying on the order of status.conditions. Current failure
+// conditions take precedence over readiness so an inconsistent Ready=True,
+// Synced=False object cannot be reported as healthy.
+func extractConditionPhase(rc *showroomv1alpha1.ConditionReadinessCheck, obj *unstructured.Unstructured) (showroomv1alpha1.Phase, string, string) {
+	conditions := currentConditions(obj, rc.MatchObservedGeneration)
+	ready, readyFound := conditions[rc.Ready.Type]
+	lastOp := ""
+	if readyFound {
+		lastOp = conditionDetail(ready)
+	}
+
+	type matchedFailure struct {
+		conditionType string
+		detail        string
+	}
+	matched := make([]matchedFailure, 0, len(rc.Failures))
+	for _, matcher := range rc.Failures {
+		condition, found := conditions[matcher.Type]
+		if !found || condition.Status != matcher.Status {
+			continue
+		}
+		matched = append(matched, matchedFailure{
+			conditionType: condition.Type,
+			detail:        conditionDetail(condition),
+		})
+	}
+	if len(matched) > 0 {
+		// Failures is an associative list in the CRD, so do not attach message
+		// priority to its serialized order. Sort by type for stable status.
+		sort.Slice(matched, func(i, j int) bool {
+			return matched[i].conditionType < matched[j].conditionType
+		})
+		details := make([]string, 0, len(matched))
+		for _, failure := range matched {
+			details = append(details, failure.detail)
+		}
+		return showroomv1alpha1.PhaseFailed, lastOp, strings.Join(details, "; ")
+	}
+
+	if !readyFound {
+		return showroomv1alpha1.PhasePending, "", ""
+	}
+	if ready.Status == rc.Ready.Status {
+		return showroomv1alpha1.PhaseReady, lastOp, ""
+	}
+	return showroomv1alpha1.PhaseProvisioning, lastOp, ""
+}
+
+// currentConditions converts a target's status.conditions into a map keyed by
+// condition type. When generation matching is explicitly enabled, a non-zero
+// observedGeneration must match the target's generation; zero remains
+// compatible with controllers that omit it. The default deliberately ignores
+// generation because cross-cluster sync copies provider conditions into a
+// different metadata.generation domain. Duplicate current condition types are
+// ambiguous and are omitted rather than making readiness depend on list order.
+func currentConditions(obj *unstructured.Unstructured, matchObservedGeneration bool) map[string]metav1.Condition {
+	raw, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil || !found {
+		return nil
+	}
+
+	conditions := make(map[string]metav1.Condition, len(raw))
+	ambiguous := make(map[string]struct{})
+	for _, entry := range raw {
+		fields, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		var condition metav1.Condition
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(fields, &condition); err != nil {
+			continue
+		}
+		if condition.Type == "" || (matchObservedGeneration && condition.ObservedGeneration != 0 && condition.ObservedGeneration != obj.GetGeneration()) {
+			continue
+		}
+		if _, duplicate := conditions[condition.Type]; duplicate {
+			delete(conditions, condition.Type)
+			ambiguous[condition.Type] = struct{}{}
+			continue
+		}
+		if _, duplicate := ambiguous[condition.Type]; duplicate {
+			continue
+		}
+		conditions[condition.Type] = condition
+	}
+	return conditions
+}
+
+func conditionDetail(condition metav1.Condition) string {
+	if condition.Message != "" {
+		return condition.Message
+	}
+	if condition.Reason != "" {
+		return condition.Reason
+	}
+	return fmt.Sprintf("%s=%s", condition.Type, condition.Status)
 }
 
 func stringIn(s string, list []string) bool {
