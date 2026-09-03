@@ -64,5 +64,37 @@ done
 docker run --rm -v "$SBOM_DIR:/out" --entrypoint chown "$SYFT_IMAGE" \
   -R "$(id -u):$(id -g)" /out >/dev/null 2>&1 || true
 
+# syft reads a Go dependency's licence from the module cache. When that cache is
+# not readable -- never populated, or mounted somewhere the container cannot see
+# -- syft still lists the dependency, just with no licence, and the output looks
+# perfectly plausible. Refuse it: a licence-less Go module means a broken run,
+# not a dependency without a licence.
+python3 - "$SBOM_DIR" <<'LICENCE_GUARD'
+import glob, json, os, sys
+
+missing = []
+for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.cdx.json"))):
+    component = os.path.basename(path)[: -len(".cdx.json")]
+    for c in json.load(open(path)).get("components", []):
+        if not (c.get("purl") or "").startswith("pkg:golang/"):
+            continue
+        if not any(
+            (e.get("license") or {}).get("id")
+            or (e.get("license") or {}).get("name")
+            or e.get("expression")
+            for e in (c.get("licenses") or [])
+        ):
+            missing.append(f"{component}  {c['name']} {c.get('version', '')}")
+
+if missing:
+    print("Go dependencies came back with no licence:", file=sys.stderr)
+    for m in missing:
+        print("  " + m, file=sys.stderr)
+    print("", file=sys.stderr)
+    print("The module cache was not readable. Check that GOMODCACHE is "
+          "populated and that Docker can bind-mount it.", file=sys.stderr)
+    sys.exit(1)
+LICENCE_GUARD
+
 echo
 echo "Wrote $(ls -1 "$SBOM_DIR"/*.json | wc -l) SBOM files to $SBOM_DIR"
