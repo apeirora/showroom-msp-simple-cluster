@@ -74,3 +74,8 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
+
+# The chart is published as `ubuntu-machines-operator`, but the workload it
+# deploys is `ubuntu-machines`. app.kubernetes.io/name is part of the Deployment's
+# immutable selector, so it stays on the workload name.
+nameOverride: ubuntu-machines

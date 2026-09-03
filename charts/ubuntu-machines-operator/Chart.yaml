@@ -1,7 +1,7 @@
 apiVersion: v2
-name: ubuntu-machines
+name: ubuntu-machines-operator
 description: A Helm chart to distribute the project ubuntu-machines
 type: application
 version: 0.2.0
 appVersion: "0.2.0"
-icon: "https://example.com/icon.png"
+icon: "https://raw.githubusercontent.com/apeirora/showroom-msp-simple-cluster/main/assets/icon.svg"

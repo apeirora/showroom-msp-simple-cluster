@@ -4,4 +4,4 @@ description: A Helm chart with SCPC
 type: application
 version: 0.14.0
 appVersion: "0.14.0"
-icon: "https://example.com/icon.png"
+icon: "https://raw.githubusercontent.com/apeirora/showroom-msp-simple-cluster/main/assets/icon.svg"

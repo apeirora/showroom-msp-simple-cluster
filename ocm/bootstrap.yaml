@@ -56,10 +56,10 @@ spec:
     releaseName: simple-cluster-system
     targetNamespace: simple-cluster-system
     values:
-      # Empty means the chart's appVersion. The publish workflow stamps the
-      # release version into every image, so leaving this unset keeps the whole
-      # stack on one version.
+      # Pin every image to the component version. Left empty, the sub-charts'
+      # own `controllerManager.container.image.tag` wins and the whole stack
+      # lands on :latest.
       global:
-        imageTag: ""
+        imageTag: "${VERSION}"
       imagePullSecrets:
         - name: ghcr-credentials

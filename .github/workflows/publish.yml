@@ -31,6 +31,12 @@ jobs:
   publish-images:
     name: Publish image (${{ matrix.image }})
     runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ matrix.image }}
+      VERSION: ${{ inputs.version }}
+      # Pinned for the same reason hack/generate-sbom.sh pins it: syft's output
+      # changes between releases, and the SBOM has to be reproducible.
+      SYFT_VERSION: v1.51.1
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +90,33 @@ jobs:
             ghcr.io/apeirora/${{ matrix.image }}:${{ inputs.version }}
             ghcr.io/apeirora/${{ matrix.image }}:latest
 
+      # hack/generate-sbom.sh describes the source tree (go.mod / package-lock).
+      # This one describes the runtime image, so the base layer's OS packages are
+      # covered too. Both sets are attached to the release.
+      - name: Generate the SBOM for the published image
+        env:
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
+          SYFT_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom-image
+          docker run --rm -v "$PWD/sbom-image:/out" \
+            -e SYFT_REGISTRY_AUTH_AUTHORITY -e SYFT_REGISTRY_AUTH_USERNAME \
+            -e SYFT_REGISTRY_AUTH_PASSWORD \
+            "anchore/syft:${SYFT_VERSION}" \
+            scan "registry:ghcr.io/apeirora/${IMAGE}:${VERSION}" \
+              --source-name "${IMAGE}" --source-version "${VERSION}" \
+              -o "cyclonedx-json=/out/${IMAGE}.image.cdx.json" \
+              -o "spdx-json=/out/${IMAGE}.image.spdx.json"
+          sudo chown -R "$(id -u):$(id -g)" sbom-image
+
+      - name: Upload the image SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-image-${{ matrix.image }}-${{ inputs.version }}
+          path: sbom-image/*.json
+
   publish-charts:
     name: Package and publish Helm charts
     needs: publish-images
@@ -127,7 +160,7 @@ jobs:
           for c in "${CHARTS[@]}"; do
             echo ">>> $c @ $V"
             # Resolve external deps (api-syncagent); umbrella sub-charts are vendored.
-            helm dependency build "$c" || true
+            helm dependency build "$c"
             helm package "$c" --version "$V" --app-version "$V" --destination .cr-release-packages
           done
           for pkg in .cr-release-packages/*.tgz; do
@@ -155,6 +188,13 @@ jobs:
       - name: Generate the SBOM set at the release version
         run: ./hack/generate-sbom.sh "${VERSION}"
 
+      - name: Collect the per-image SBOMs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-image-*
+          merge-multiple: true
+          path: sbom
+
       - name: Upload the SBOM set as a build artefact
         uses: actions/upload-artifact@v4
         with:
@@ -162,10 +202,22 @@ jobs:
           path: sbom/*.json
 
       - name: Attach the SBOM set to the GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "v${VERSION}" sbom/*.json --clobber
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" sbom/*.json --clobber
+          elif [ "$EVENT" = "workflow_dispatch" ]; then
+            # Re-publishing an arbitrary version by hand: there may be no
+            # release to attach to. The build artefact above still carries it.
+            echo "::warning::no release $tag; the SBOM set is available as a build artefact only"
+          else
+            echo "::error::release $tag does not exist, cannot attach the SBOM set"
+            exit 1
+          fi
 
   publish-ocm:
     name: Publish the OCM component
