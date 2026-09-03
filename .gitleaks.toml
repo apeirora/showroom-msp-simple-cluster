@@ -29,3 +29,14 @@ throwaway keypair.
 regexes = [
   '''<PASTE YOUR OPENSSH (PRIVATE|PUBLIC) KEY HERE>''',
 ]
+
+# The default rule set keys off well-known credential formats (AWS, GitHub,
+# Slack, ...). Provider API tokens in the sample manifests are opaque strings
+# that match none of them, so nothing stops a real one from being committed
+# alongside an example. This rule covers that gap: under samples/, a
+# credential-shaped key must carry a `<...>` placeholder, never a literal value.
+[[rules]]
+id = "sample-manifest-credential"
+description = "Literal credential value in a sample manifest"
+regex = '''(?im)^\s*(?:api[_-]?token|token|password|passwd|secret|access[_-]?key|secret[_-]?key|client[_-]?secret)\s*:\s*["']?[A-Za-z0-9._\-/+=]{12,}["']?\s*$'''
+path = '''(^|/)samples/'''
