@@ -11,7 +11,7 @@ locally and side-loaded — nothing is pushed to a registry.
 | [KinD](https://kind.sigs.k8s.io/) | creates the management cluster |
 | `kubectl` | |
 | Docker | images are built locally and loaded into KinD |
-| Go | each module declares `go 1.25.0` with `toolchain go1.26.7`; the toolchain line is what CI and the container images install |
+| Go | modules declare `go 1.25.0` or `go 1.26.0` according to their dependency floor; every module pins `toolchain go1.26.7`, which CI and the container images install |
 | Helm | only for the chart-based install |
 
 ## One command
@@ -88,11 +88,13 @@ npm run build
 
 ## Toolchain versions
 
-Every module declares `go 1.25.0` as its language floor and pins
-`toolchain go1.26.7`. The toolchain line is deliberate, not incidental: it is
-what `actions/setup-go` installs in CI and what the builder images use, so the
-shipped binaries are linked against a Go standard library with no open
-advisories. Bumping it is how a Go stdlib CVE gets fixed here.
+Most modules declare `go 1.25.0` as their language floor. The OpenStack and
+Ubuntu machine components declare `go 1.26.0`, which is required by their
+`golang.org/x/crypto` dependency. Every module pins `toolchain go1.26.7`; the
+toolchain line is deliberate, not incidental. It is what `actions/setup-go`
+installs in CI and what the builder images use, so the shipped binaries are
+linked against a Go standard library with no open advisories. Bumping it is how
+a Go stdlib CVE gets fixed here.
 
 controller-gen `v0.19.0`, kustomize `v5.7.1` and golangci-lint `v2.4.0` are
 auto-installed into each module's `bin/` on first use.
