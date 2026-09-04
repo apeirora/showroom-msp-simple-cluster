@@ -10,7 +10,7 @@ func TestCleanupResolvesSCOnlyIdentityWithInvalidInputs(t *testing.T) {
 	scpc := minimalSCPC([]showroomv1alpha1.InputDeclaration{{Name: "region", Type: showroomv1alpha1.InputTypeEnum, Default: "mdb", Values: []showroomv1alpha1.InputEnumValue{{Key: "mdb"}}}})
 	scpc.Spec.Target.Namespace = "{{ .SC.namespace }}"
 	sc := minimalSC(2, map[string]string{"region": "unsupported"})
-	r := &showroomv1alpha1.ResourceSpec{Name: "claim", NameTemplate: `{{ printf "%s/%s" .SC.namespace .SC.name | sha256sum | trunc 20 | printf "sc-%s" }}`, Repeat: "{{ .SC.workers.nodes }}"}
+	r := &showroomv1alpha1.ResourceSpec{Name: "claim", NameTemplate: `{{ printf "%s/%s" .SC.namespace .SC.name | sha256sum | trunc 20 | printf "sc-%s" }}`, Repeat: "2"}
 	if _, err := ResolveInputs(scpc, sc); err == nil {
 		t.Fatal("create input validation must remain strict")
 	}
@@ -49,10 +49,48 @@ func TestCleanupRejectsOpaqueOrInputDependentIdentity(t *testing.T) {
 			}
 		})
 	}
-	for _, body := range []string{"literal", "{{ .SC.namespace }}", "{{ $.SC.name }}", `{{ if eq .SC.name "x" }}x{{ else }}y{{ end }}`} {
+	for _, body := range []string{"literal", "{{ .SC.namespace }}", "{{ $.SC.name }}", "{{ .SC.uid }}", "{{ $.SC.uid }}", `{{ if eq .SC.name "x" }}x{{ else }}y{{ end }}`} {
 		if !scOnlyTemplate(body) {
 			t.Fatalf("SC-only identity rejected: %s", body)
 		}
+	}
+}
+
+func TestCleanupRejectsMutableSCFields(t *testing.T) {
+	scpc := minimalSCPC([]showroomv1alpha1.InputDeclaration{{Name: "region", Type: showroomv1alpha1.InputTypeEnum, Default: "mdb", Values: []showroomv1alpha1.InputEnumValue{{Key: "mdb"}}}})
+	scpc.Spec.Target.Namespace = "{{ .SC.namespace }}"
+	sc := minimalSC(2, map[string]string{"region": "unsupported"})
+	for _, body := range []string{
+		`{{ .SC }}`, `{{ $.SC }}`, `{{ printf "%v" .SC }}`,
+		`{{ .SC.workers.nodes }}`, `{{ $.SC.workers.nodes }}`,
+		`{{ .SC.workers.requested.cpu }}`, `{{ .SC.controlPlane.nodes }}`,
+		`{{ .SC.labels.pool }}`, `{{ $.SC.labels.pool }}`,
+		`{{ .SC.name.extra }}`, `{{ $.SC.uid.extra }}`,
+		`{{ if eq .SC.workers.nodes 1 }}one{{ else }}two{{ end }}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			if scOnlyTemplate(body) {
+				t.Fatal("mutable or whole SC context accepted as an immutable identity")
+			}
+			r := &showroomv1alpha1.ResourceSpec{Name: "claim", NameTemplate: body}
+			if _, _, err := ResolveTargetForCleanup(scpc, sc, r, 0); err == nil {
+				t.Fatal("mutable cleanup target name accepted")
+			}
+			r.NameTemplate, r.Namespace = "{{ .SC.name }}", body
+			if _, err := ResolveNamespaceForCleanup(scpc, sc, r); err == nil {
+				t.Fatal("mutable cleanup target namespace accepted")
+			}
+			r.Namespace, r.Repeat = "", body
+			if _, err := EvaluateRepeatForCleanup(scpc, sc, r); err == nil {
+				t.Fatal("mutable cleanup repeat accepted")
+			}
+		})
+	}
+	valid := sc.DeepCopy()
+	valid.Spec.Inputs["region"] = "mdb"
+	r := &showroomv1alpha1.ResourceSpec{Name: "claim", Repeat: "{{ .SC.workers.nodes }}"}
+	if count, err := EvaluateRepeatForCleanup(scpc, valid, r); err != nil || count != 2 {
+		t.Fatalf("normal valid-input repeat changed: count=%d err=%v", count, err)
 	}
 }
 

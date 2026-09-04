@@ -12,7 +12,8 @@ import (
 
 // Cleanup identity resolution preserves normal rendering whenever inputs are
 // valid. Invalid provisioning inputs must not block identities that depend only
-// on .SC, but must never be substituted with defaults or invalid raw values.
+// on immutable SC identity fields, but must never be substituted with defaults
+// or invalid raw values.
 func cleanupInputs(scpc *showroomv1alpha1.SimpleClusterProviderConfig, sc *showroomv1alpha1.SimpleCluster, bodies ...string) (map[string]any, error) {
 	inputs, err := buildInputs(scpc, sc)
 	if err == nil {
@@ -33,7 +34,7 @@ func targetNamespaceTemplate(scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 	return scpc.Spec.Target.Namespace
 }
 
-// ResolveNamespaceForCleanup permits an SC-only namespace despite unrelated
+// ResolveNamespaceForCleanup permits an immutable SC namespace despite unrelated
 // invalid provisioning inputs. Input-dependent identities remain fail-closed.
 func ResolveNamespaceForCleanup(scpc *showroomv1alpha1.SimpleClusterProviderConfig, sc *showroomv1alpha1.SimpleCluster, resource *showroomv1alpha1.ResourceSpec) (string, error) {
 	raw := targetNamespaceTemplate(scpc, resource)
@@ -55,7 +56,7 @@ func ResolveTargetForCleanup(scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 }
 
 // EvaluateRepeatForCleanup preserves full create semantics with valid inputs;
-// on input failure it only accepts an SC-only count expression.
+// on input failure it only accepts an immutable SC identity/count expression.
 func EvaluateRepeatForCleanup(scpc *showroomv1alpha1.SimpleClusterProviderConfig, sc *showroomv1alpha1.SimpleCluster, resource *showroomv1alpha1.ResourceSpec) (int, error) {
 	if _, err := buildInputs(scpc, sc); err == nil {
 		return EvaluateRepeat(scpc, sc, resource, nil)
@@ -74,7 +75,9 @@ func EvaluateRepeatForCleanup(scpc *showroomv1alpha1.SimpleClusterProviderConfig
 	return n, nil
 }
 
-// scOnlyTemplate conservatively proves independence from unavailable inputs.
+// scOnlyTemplate conservatively proves dependence only on immutable SC identity
+// fields, not mutable spec/labels or unavailable inputs. Current worker counts
+// cannot reconstruct historical identities or repeat counts after a spec edit.
 // Merely rendering with an empty Inputs map is unsafe: index/get/default or
 // serializing the whole context could silently manufacture another identity.
 // Local variables, whole-dot/root access, named templates and unproven functions
@@ -118,9 +121,9 @@ func scOnlyNode(node parse.Node) bool {
 			}
 		}
 	case *parse.FieldNode:
-		return len(n.Ident) > 0 && n.Ident[0] == "SC"
+		return immutableSCIdentityField(n.Ident)
 	case *parse.VariableNode:
-		return len(n.Ident) >= 2 && n.Ident[0] == "$" && n.Ident[1] == "SC"
+		return len(n.Ident) > 0 && n.Ident[0] == "$" && immutableSCIdentityField(n.Ident[1:])
 	case *parse.IfNode:
 		return scOnlyNode(n.Pipe) && scOnlyNode(n.List) && scOnlyNode(n.ElseList)
 	case *parse.IdentifierNode:
@@ -131,6 +134,18 @@ func scOnlyNode(node parse.Node) bool {
 		return false
 	}
 	return true
+}
+
+func immutableSCIdentityField(path []string) bool {
+	if len(path) != 2 || path[0] != "SC" {
+		return false
+	}
+	switch path[1] {
+	case ctxKeyName, ctxKeyNamespace, "uid":
+		return true
+	default:
+		return false
+	}
 }
 
 // Keep this exceptional-path allowlist small and explicit. In particular, the

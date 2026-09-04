@@ -117,10 +117,12 @@ it cannot prove that no unrecorded instance exists. Providers using such a count
 must provide verified manual crash cleanup before that finalizer is removed.
 
 Invalid provisioning inputs do not prevent cleanup of identities derived only
-from `.SC` (for example a hashed cluster name in `.SC.namespace`). Creation still
+from immutable `.SC.name`, `.SC.namespace` and `.SC.uid` fields (for example a
+hashed cluster name in `.SC.namespace`). Creation still
 requires the full valid input set. On input-resolution failure, cleanup accepts
-only a conservatively checked SC-only identity expression; `.Inputs`, whole/root
-context access, opaque aliases and named templates are not evaluated with missing
+only a conservatively checked immutable identity expression; `.Inputs`, mutable
+SC spec/labels, whole SC/root context access, opaque aliases and named templates
+are not evaluated with missing
 or substituted values. This exceptional path allows only `printf`, `sha256sum`,
 `trunc`, `len`, boolean operators and comparisons; other functions (including
 randomness, clock reads and external lookups) fail closed. Normal rendering with
@@ -128,6 +130,15 @@ valid inputs is unchanged. Explicitly recorded owned targets can still be delete
 when reconstruction fails, but the finalizer remains with `Error=CleanupBlocked`
 until the missing identities are resolved or independently verified. Empty
 resource status is never treated as proof that no target was created.
+
+This exceptional path rejects worker-based repeat counts as well as mutable
+name/namespace expressions: the current SC cannot recover values from before an
+edit. Recorded targets still clean up, but uncertain reconstruction holds the
+finalizer. Reconstruction also assumes that the provider's identity contract has
+not changed: an SCPC UID lock does not freeze its template/spec. Arbitrary
+historical SCPC changes or mutable identities on the normal valid-input path
+remain a separate identity-journaling limitation; they are not proven safe by
+this input-error fallback.
 
 ## Templating
 

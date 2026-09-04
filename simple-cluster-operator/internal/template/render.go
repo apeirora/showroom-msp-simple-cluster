@@ -69,6 +69,8 @@ type Predecessor struct {
 // docs/architecture.md has exactly one definition in code.
 const (
 	ctxKeyInputs    = "Inputs"
+	ctxKeyName      = "name"
+	ctxKeyNamespace = "namespace"
 	ctxKeyNodes     = "nodes"
 	ctxKeyRequested = "requested"
 )
@@ -264,9 +266,9 @@ func buildContext(
 		"SC":         scCtx,
 		ctxKeyInputs: inputs,
 		"Target": map[string]any{
-			"name":      targetName,
-			"namespace": targetNamespace,
-			"kind":      resource.Kind,
+			ctxKeyName:      targetName,
+			ctxKeyNamespace: targetNamespace,
+			"kind":          resource.Kind,
 		},
 		"Resources": resourcesCtx,
 		"Index":     index,
@@ -321,9 +323,9 @@ func resolveTarget(
 // the standalone namespace resolution.
 func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 	scCtx := map[string]any{
-		"name":      sc.Name,
-		"namespace": sc.Namespace,
-		"uid":       string(sc.UID),
+		ctxKeyName:      sc.Name,
+		ctxKeyNamespace: sc.Namespace,
+		"uid":           string(sc.UID),
 		"workers": map[string]any{
 			ctxKeyNodes:     sc.Spec.Workers.MinNodes(),
 			"min":           sc.Spec.Workers.MinNodes(),
