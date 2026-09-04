@@ -64,6 +64,7 @@ remain the annotation is removed.
 |----------------------------|----------|----------------------------------------------|--------------------------------------------------------------|
 | `KCP_KUBECONFIG`           | yes      | —                                            | Kubeconfig for KCP (auth; host rewritten per workspace)      |
 | `KCP_WORKSPACES`           | no       | *(kubeconfig's own)*                         | Comma-separated workspace paths to scan for endpoint slices  |
+| `KCP_EXCLUDED_ENDPOINTS`   | no       | *(none)*                                    | Comma-separated exact `workspace|slice` keys deliberately outside this watcher's scope |
 | `KCP_DISCOVERY_INTERVAL`   | no       | `1m`                                         | How often to re-list `APIExportEndpointSlice`s               |
 | `CLUSTER_LABEL_KEY`        | no       | `kubernetes.io/metadata.name`                | Namespace label whose value is the logical cluster name      |
 | `EXPORTS_ANNOTATION_KEY`   | no       | `bind.simple-cluster.apeirora.eu/exports`    | Annotation written with the bound-export list                |
@@ -73,6 +74,18 @@ remain the annotation is removed.
 
 The MSP (in-cluster) API server is used for namespace access via the standard
 controller-runtime config resolution.
+
+An unrelated, permanently unready slice may be excluded explicitly, for example
+`KCP_EXCLUDED_ENDPOINTS=root:providers:telekom|crossplane.internal.t-systems.com`.
+The workspace must be in `KCP_WORKSPACES`, and slice names must be valid DNS
+subdomains; wildcard, malformed and duplicate keys are rejected. With the default
+kubeconfig workspace, use `|slice-name`. Chart wiring is `KCP.excludedEndpoints`.
+All other slices still require successful discovery and synchronized caches;
+an exclusion does not hide workspace LIST errors. Excluded slices are neither
+modified nor deleted. Do not exclude a serving endpoint until dependent resources
+are drained: removing an observed export can remove its namespace annotation and
+cause provider operators to delete their SCPCs. This is explicit controller scope,
+not an authorization boundary.
 
 ## Access requirements
 

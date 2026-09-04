@@ -12,10 +12,12 @@ import (
 
 	"github.com/go-logr/logr"
 	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
+	"github.com/kcp-dev/logicalcluster/v3"
 	"github.com/kcp-dev/multicluster-provider/apiexport"
 	"github.com/pkg/errors"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -42,6 +44,7 @@ type Discovery struct {
 	clients     map[string]client.Client
 	active      map[string]*endpoint // "workspace|slice" -> current provider generation
 	lastListErr map[string]string    // workspace -> last logged list error (dedup)
+	excluded    map[string]struct{}  // exact "workspace|slice" keys explicitly out of scope
 	ready       bool
 	generation  uint64
 	// Sync publishes an aggregate inventory after discovery, including when no
@@ -61,7 +64,11 @@ type endpoint struct {
 // New builds a Discovery. If workspaces is empty the kubeconfig's own workspace
 // is scanned; otherwise each listed workspace path is scanned (same auth, host
 // rewritten to that workspace).
-func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, workspaces []string, interval time.Duration) (*Discovery, error) {
+func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, workspaces []string, interval time.Duration, excludedKeys []string) (*Discovery, error) {
+	excluded, err := excludedEndpoints(workspaces, excludedKeys)
+	if err != nil {
+		return nil, err
+	}
 	clients := map[string]client.Client{}
 	if len(workspaces) == 0 {
 		c, err := client.New(baseCfg, client.Options{Scheme: scheme})
@@ -90,6 +97,7 @@ func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, works
 		clients:     clients,
 		active:      map[string]*endpoint{},
 		lastListErr: map[string]string{},
+		excluded:    excluded,
 	}, nil
 }
 
@@ -132,8 +140,12 @@ func (d *Discovery) reconcile(ctx context.Context) {
 		}
 		delete(d.lastListErr, ws)
 		for i := range slices.Items {
+			key := ws + "|" + slices.Items[i].Name
+			if _, excluded := d.excluded[key]; excluded {
+				continue
+			}
 			if url := firstURL(&slices.Items[i]); url != "" {
-				desired[ws+"|"+slices.Items[i].Name] = url
+				desired[key] = url
 			} else {
 				complete = false
 			}
@@ -175,6 +187,33 @@ func (d *Discovery) reconcile(ctx context.Context) {
 		d.log.Info("stopped watching export endpoint", "endpoint", key)
 	}
 	d.ready = complete
+}
+
+// excludedEndpoints validates exact operator-selected endpoint keys. Exclusions
+// do not relax discovery errors or the initial cache barrier for anything else.
+func excludedEndpoints(workspaces, keys []string) (map[string]struct{}, error) {
+	configured := map[string]struct{}{}
+	if len(workspaces) == 0 {
+		configured[""] = struct{}{}
+	}
+	for _, workspace := range workspaces {
+		configured[workspace] = struct{}{}
+	}
+	excluded := map[string]struct{}{}
+	for _, key := range keys {
+		workspace, slice, ok := strings.Cut(key, "|")
+		if !ok || len(validation.IsDNS1123Subdomain(slice)) != 0 || workspace == "*" || (workspace != "" && !logicalcluster.NewPath(workspace).IsValid()) {
+			return nil, errors.Errorf("invalid excluded endpoint %q: expected an exact workspace|slice key", key)
+		}
+		if _, ok := configured[workspace]; !ok {
+			return nil, errors.Errorf("excluded endpoint %q uses an unconfigured discovery workspace", key)
+		}
+		if _, duplicate := excluded[key]; duplicate {
+			return nil, errors.Errorf("duplicate excluded endpoint %q", key)
+		}
+		excluded[key] = struct{}{}
+	}
+	return excluded, nil
 }
 
 func (d *Discovery) add(ctx context.Context, key, url string) (*endpoint, error) {
