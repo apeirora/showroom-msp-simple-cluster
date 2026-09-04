@@ -694,7 +694,7 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 	done, err := r.deleteTargetResources(ctx, sc, scpc)
 	if err != nil {
 		log.Error(err, "delete target resources failed; will retry")
-		return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+		return r.failSC(ctx, sc, "CleanupBlocked", err.Error())
 	}
 	if !done {
 		// At least one resource at the current reverse-topo level is
@@ -769,12 +769,9 @@ func (r *SimpleClusterReconciler) deleteTargetResources(
 			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
-		defaultNs, nerr := rendertpl.ResolveNamespace(scpc, sc, rs)
-		if nerr != nil {
-			return false, fmt.Errorf("resource %q: resolve namespace: %w", name, nerr)
-		}
+		defaultNs, nerr := rendertpl.ResolveNamespaceForCleanup(scpc, sc, rs)
 
-		targets, fallbackErr, terr := deletionTargets(scpc, sc, rs, statusByName[name], defaultNs)
+		targets, fallbackErr, terr := deletionTargets(scpc, sc, rs, statusByName[name], defaultNs, nerr)
 		if terr != nil {
 			return false, fmt.Errorf("resource %q: %w", name, terr)
 		}
@@ -826,6 +823,7 @@ func deletionTargets(
 	rs *showroomv1alpha1.ResourceSpec,
 	status *showroomv1alpha1.ResourceStatus,
 	defaultNamespace string,
+	namespaceErr error,
 ) (targets []namespacedTarget, fallbackErr, err error) {
 	seenTargets := make(map[namespacedTarget]struct{})
 	add := func(candidate namespacedTarget) {
@@ -843,6 +841,10 @@ func deletionTargets(
 		for _, instance := range status.Instances {
 			namespace := instance.TargetNamespace
 			if namespace == "" {
+				if namespaceErr != nil {
+					fallbackErr = namespaceErr
+					continue
+				}
 				namespace = defaultNamespace
 			}
 			add(namespacedTarget{name: instance.TargetName, namespace: namespace})
@@ -850,6 +852,9 @@ func deletionTargets(
 	} else if status != nil && status.TargetName != "" {
 		namespace := status.TargetNamespace
 		if namespace == "" {
+			if namespaceErr != nil {
+				return nil, nil, fmt.Errorf("recorded target has no namespace and cleanup cannot resolve one: %w", namespaceErr)
+			}
 			namespace = defaultNamespace
 		}
 		add(namespacedTarget{name: status.TargetName, namespace: namespace})
@@ -857,16 +862,17 @@ func deletionTargets(
 
 	count := 1
 	if rs.Repeat != "" {
-		count, fallbackErr = rendertpl.EvaluateRepeat(scpc, sc, rs, nil)
-		if fallbackErr != nil {
+		var repeatErr error
+		count, repeatErr = rendertpl.EvaluateRepeatForCleanup(scpc, sc, rs)
+		if repeatErr != nil {
 			if len(targets) == 0 {
-				return nil, nil, fmt.Errorf("resolve repeat for delete fallback: %w", fallbackErr)
+				return nil, nil, fmt.Errorf("resolve repeat for delete fallback: %w", repeatErr)
 			}
-			return targets, fallbackErr, nil
+			return targets, repeatErr, nil
 		}
 	}
 	for index := 0; index < count; index++ {
-		name, namespace, resolveErr := rendertpl.ResolveTarget(scpc, sc, rs, index)
+		name, namespace, resolveErr := rendertpl.ResolveTargetForCleanup(scpc, sc, rs, index)
 		if resolveErr != nil {
 			if len(targets) == 0 {
 				return nil, nil, fmt.Errorf("resolve target for delete fallback: %w", resolveErr)
@@ -875,7 +881,7 @@ func deletionTargets(
 		}
 		add(namespacedTarget{name: name, namespace: namespace})
 	}
-	return targets, nil, nil
+	return targets, fallbackErr, nil
 }
 
 // deleteOneTarget issues (or progresses) the deletion of a single target

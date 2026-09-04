@@ -116,6 +116,19 @@ deletes recorded owned instances, then retains the SimpleCluster finalizer becau
 it cannot prove that no unrecorded instance exists. Providers using such a count
 must provide verified manual crash cleanup before that finalizer is removed.
 
+Invalid provisioning inputs do not prevent cleanup of identities derived only
+from `.SC` (for example a hashed cluster name in `.SC.namespace`). Creation still
+requires the full valid input set. On input-resolution failure, cleanup accepts
+only a conservatively checked SC-only identity expression; `.Inputs`, whole/root
+context access, opaque aliases and named templates are not evaluated with missing
+or substituted values. This exceptional path allows only `printf`, `sha256sum`,
+`trunc`, `len`, boolean operators and comparisons; other functions (including
+randomness, clock reads and external lookups) fail closed. Normal rendering with
+valid inputs is unchanged. Explicitly recorded owned targets can still be deleted
+when reconstruction fails, but the finalizer remains with `Error=CleanupBlocked`
+until the missing identities are resolved or independently verified. Empty
+resource status is never treated as proof that no target was created.
+
 ## Templating
 
 Templates are Go `text/template` plus sprig, rendered with `missingkey=error` so

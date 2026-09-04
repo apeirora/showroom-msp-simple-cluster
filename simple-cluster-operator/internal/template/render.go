@@ -407,13 +407,9 @@ func nodeResourcesContext(r showroomv1alpha1.NodeResources) map[string]any {
 // context using the same sprig-flavoured engine as Render (with `env` and
 // `expandenv` removed).
 func RenderString(name, body string, ctx map[string]any) (string, error) {
-	funcs := sprig.TxtFuncMap()
-	delete(funcs, "env")
-	delete(funcs, "expandenv")
-
 	tmpl, err := template.New(name).
 		Option("missingkey=error").
-		Funcs(funcs).
+		Funcs(renderFuncs()).
 		Parse(body)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
@@ -423,6 +419,13 @@ func RenderString(name, body string, ctx map[string]any) (string, error) {
 		return "", fmt.Errorf("execute template: %w", err)
 	}
 	return buf.String(), nil
+}
+
+func renderFuncs() template.FuncMap {
+	funcs := sprig.TxtFuncMap()
+	delete(funcs, "env")
+	delete(funcs, "expandenv")
+	return funcs
 }
 
 // ResolveInputs computes the closed input set for an SC against its SCPC:
