@@ -2,12 +2,15 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator/internal/index"
 	"github.com/go-logr/logr"
 	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
+	"github.com/kcp-dev/logicalcluster/v3"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -60,6 +63,12 @@ type Config struct {
 // multicluster.Aware runnable so it can clear that annotation when a workspace
 // disengages (unbinds).
 type BindingController struct {
+	mu sync.Mutex
+	// Inventory must be configured before starting the controller. Individual
+	// events are triggers, never a complete inventory or proof of an unbind.
+	Inventory interface {
+		WithSnapshot(context.Context, func([]apisv1alpha1.APIBinding) error) error
+	}
 	root  context.Context
 	mgr   mcmanager.Manager
 	msp   client.Client
@@ -82,38 +91,69 @@ func New(root context.Context, mgr mcmanager.Manager, msp client.Client, idx *in
 	}
 }
 
-// Reconcile updates the in-memory export index for the changed APIBinding and
-// re-renders the exports annotation on the owning MSP namespace.
-func (c *BindingController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
-	mcCluster := req.ClusterName
-	realCluster := c.realCluster(mcCluster)
-
-	cl, err := c.mgr.GetCluster(ctx, mcCluster)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	binding := &apisv1alpha1.APIBinding{}
-	err = cl.GetClient().Get(ctx, req.Request.NamespacedName, binding)
-	switch {
-	case apierrors.IsNotFound(err):
-		c.index.Remove(realCluster, mcCluster, req.Name)
-	case err != nil:
-		return ctrl.Result{}, err
-	case !binding.DeletionTimestamp.IsZero():
-		c.index.Remove(realCluster, mcCluster, binding.Name)
-	default:
-		c.index.SetPath(realCluster, binding.Annotations["kcp.io/path"])
-		c.index.Set(realCluster, mcCluster, binding.Name, exportName(binding))
-	}
-
-	return ctrl.Result{}, c.syncNamespaceAnnotation(ctx, realCluster)
+// Reconcile treats an event only as a trigger to publish a complete snapshot.
+func (c *BindingController) Reconcile(ctx context.Context, _ mcreconcile.Request) (ctrl.Result, error) {
+	return ctrl.Result{}, c.SyncAll(ctx)
 }
 
-// Engage is called when a workspace joins the fleet. It arms a cleanup that runs
-// when the per-cluster context is cancelled, i.e. on unbind/disengage.
+// SyncAll serializes complete snapshots and annotation writes. Initial informer
+// event order cannot publish a partial index. Listing annotated namespaces also
+// reconciles unbinds that happened while the operator was stopped.
+func (c *BindingController) SyncAll(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.Inventory == nil {
+		return fmt.Errorf("binding inventory is not configured")
+	}
+	return c.Inventory.WithSnapshot(ctx, func(bindings []apisv1alpha1.APIBinding) error {
+		idx := index.New()
+		clusters := map[string]struct{}{}
+		seen := map[string]string{}
+		for i := range bindings {
+			b := &bindings[i]
+			realCluster := logicalcluster.From(b).String()
+			if realCluster == "" {
+				return fmt.Errorf("binding %s is missing its logical cluster identity", b.Name)
+			}
+			if !b.DeletionTimestamp.IsZero() {
+				continue
+			}
+			key := realCluster + "/" + b.Name
+			if previous, ok := seen[key]; ok && previous != exportName(b) {
+				return fmt.Errorf("binding %s has conflicting export identities across caches", key)
+			}
+			seen[key] = exportName(b)
+			clusters[realCluster] = struct{}{}
+			idx.SetPath(realCluster, b.Annotations["kcp.io/path"])
+			// Multiple virtual workspaces can return the same binding. Its
+			// logical cluster and name are the authoritative identity.
+			idx.Set(realCluster, realCluster, b.Name, exportName(b))
+		}
+		namespaces := &corev1.NamespaceList{}
+		if err := c.msp.List(ctx, namespaces); err != nil {
+			return err
+		}
+		for i := range namespaces.Items {
+			ns := &namespaces.Items[i]
+			if _, annotated := ns.Annotations[c.cfg.ExportsAnnotationKey]; annotated {
+				if id := ns.Labels[c.cfg.ClusterLabelKey]; id != "" {
+					clusters[id] = struct{}{}
+				}
+			}
+		}
+		c.index = idx
+		for id := range clusters {
+			if err := c.syncNamespaceAnnotation(ctx, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// Engage requests a fresh snapshot on disengagement. Cancellation can be a
+// transport failure or reconnect, so it must never delete index entries itself.
 func (c *BindingController) Engage(ctx context.Context, name string, _ cluster.Cluster) error {
-	mcCluster := name
 	realCluster := c.realCluster(name)
 	go func() {
 		<-ctx.Done()
@@ -122,12 +162,10 @@ func (c *BindingController) Engage(ctx context.Context, name string, _ cluster.C
 		if c.root.Err() != nil {
 			return
 		}
-		c.index.RemoveCluster(realCluster, mcCluster)
-
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
-		if err := c.syncNamespaceAnnotation(cleanupCtx, realCluster); err != nil {
-			c.log.Error(err, "failed to clean up namespace annotation on disengage", "cluster", realCluster, "workspace", c.index.Path(realCluster))
+		if err := c.SyncAll(cleanupCtx); err != nil {
+			c.log.Error(err, "preserving namespace annotation on disengage until complete inventory is available", "cluster", realCluster)
 		}
 	}()
 	return nil
@@ -175,7 +213,7 @@ func (c *BindingController) ensureNamespace(ctx context.Context, name string) er
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
-			Labels: map[string]string{c.cfg.ManagedLabelKey: "true"},
+			Labels: map[string]string{c.cfg.ManagedLabelKey: "true", c.cfg.ClusterLabelKey: name},
 		},
 	}
 	switch err := c.msp.Create(ctx, ns); {

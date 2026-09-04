@@ -70,6 +70,8 @@ func main() {
 	workspaces := splitCSV(goutils.Env("KCP_WORKSPACES", ""))
 	disc, err := discovery.New(mp, baseCfg, controller.Scheme, workspaces, goutils.Env("KCP_DISCOVERY_INTERVAL", time.Minute))
 	goutils.ExitOnErrorf(err, 1, "cannot create discovery")
+	bc.Inventory = disc
+	disc.Sync = bc.SyncAll
 	go func() {
 		if err := disc.Start(ctx); err != nil {
 			ctrllog.Log.Error(err, "discovery loop stopped")

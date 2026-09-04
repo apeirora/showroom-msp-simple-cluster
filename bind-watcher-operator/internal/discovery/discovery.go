@@ -5,7 +5,9 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -17,6 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -27,6 +30,7 @@ import (
 // Discovery periodically reconciles the set of apiexport providers against the
 // APIExportEndpointSlices found in one or more KCP workspaces.
 type Discovery struct {
+	mu       sync.RWMutex
 	mp       *multi.Provider
 	baseCfg  *rest.Config
 	scheme   *runtime.Scheme
@@ -36,8 +40,22 @@ type Discovery struct {
 	// clients lists the workspaces to scan: workspace path -> client. A single
 	// "" key means "use the kubeconfig's own workspace as-is".
 	clients     map[string]client.Client
-	active      map[string]string // "workspace|slice" -> URL currently registered
-	lastListErr map[string]string // workspace -> last logged list error (dedup)
+	active      map[string]*endpoint // "workspace|slice" -> current provider generation
+	lastListErr map[string]string    // workspace -> last logged list error (dedup)
+	ready       bool
+	generation  uint64
+	// Sync publishes an aggregate inventory after discovery, including when no
+	// APIBinding events exist to trigger reconciliation. Set before Start.
+	Sync     func(context.Context) error
+	register func(context.Context, string, string) (*endpoint, error)
+	remove   func(string)
+}
+
+type endpoint struct {
+	url    string
+	prefix string
+	ctx    context.Context
+	cache  cache.Cache
 }
 
 // New builds a Discovery. If workspaces is empty the kubeconfig's own workspace
@@ -64,13 +82,13 @@ func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, works
 		}
 	}
 	return &Discovery{
-		mp:       mp,
-		baseCfg:  baseCfg,
-		scheme:   scheme,
-		interval: interval,
-		log:      ctrllog.Log.WithName("discovery"),
+		mp:          mp,
+		baseCfg:     baseCfg,
+		scheme:      scheme,
+		interval:    interval,
+		log:         ctrllog.Log.WithName("discovery"),
 		clients:     clients,
-		active:      map[string]string{},
+		active:      map[string]*endpoint{},
 		lastListErr: map[string]string{},
 	}, nil
 }
@@ -80,17 +98,25 @@ func (d *Discovery) Start(ctx context.Context) error {
 	t := time.NewTicker(d.interval)
 	defer t.Stop()
 	d.reconcile(ctx)
+	d.publish(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
 			d.reconcile(ctx)
+			d.publish(ctx)
 		}
 	}
 }
 
 func (d *Discovery) reconcile(ctx context.Context) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	// Incomplete discovery is not evidence of an unbind. Keep existing
+	// providers and annotations until every configured workspace is readable.
+	d.ready = false
+	complete := true
 	desired := map[string]string{} // "workspace|slice" -> url
 	for ws, cl := range d.clients {
 		slices := &apisv1alpha1.APIExportEndpointSliceList{}
@@ -101,29 +127,41 @@ func (d *Discovery) reconcile(ctx context.Context) {
 				d.log.Error(err, "listing APIExportEndpointSlices", "workspace", wsLabel(ws))
 				d.lastListErr[ws] = err.Error()
 			}
+			complete = false
 			continue
 		}
 		delete(d.lastListErr, ws)
 		for i := range slices.Items {
 			if url := firstURL(&slices.Items[i]); url != "" {
 				desired[ws+"|"+slices.Items[i].Name] = url
+			} else {
+				complete = false
 			}
 		}
+	}
+	if !complete {
+		return
 	}
 
 	// Register new endpoints and re-register those whose URL changed.
 	for key, url := range desired {
-		if d.active[key] == url {
+		if old := d.active[key]; old != nil && old.url == url && old.ctx.Err() == nil {
 			continue
 		}
-		if _, ok := d.active[key]; ok {
-			d.mp.RemoveProvider(prefix(key))
+		if old := d.active[key]; old != nil {
+			d.removeProvider(old.prefix)
 		}
-		if err := d.add(ctx, key, url); err != nil {
+		register := d.register
+		if register == nil {
+			register = d.add
+		}
+		ep, err := register(ctx, key, url)
+		if err != nil {
 			d.log.Error(err, "registering provider", "endpoint", key, "url", url)
+			complete = false
 			continue
 		}
-		d.active[key] = url
+		d.active[key] = ep
 		d.log.Info("watching export endpoint", "endpoint", key, "url", url)
 	}
 
@@ -132,22 +170,85 @@ func (d *Discovery) reconcile(ctx context.Context) {
 		if _, ok := desired[key]; ok {
 			continue
 		}
-		d.mp.RemoveProvider(prefix(key))
+		d.removeProvider(d.active[key].prefix)
 		delete(d.active, key)
 		d.log.Info("stopped watching export endpoint", "endpoint", key)
 	}
+	d.ready = complete
 }
 
-func (d *Discovery) add(ctx context.Context, key, url string) error {
+func (d *Discovery) add(ctx context.Context, key, url string) (*endpoint, error) {
 	cfg := rest.CopyConfig(d.baseCfg)
 	cfg.Host = url
 	prov, err := apiexport.New(cfg, apiexport.Options{Scheme: d.scheme})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return d.mp.AddProvider(ctx, prefix(key), prov, func(ctx context.Context, mgr multiclusterruntime.Manager) error {
+	// multi.Provider removes a prefix asynchronously when Run returns. A new
+	// generation must not reuse it: the previous Run could remove its successor.
+	d.generation++
+	runCtx, cancel := context.WithCancel(ctx)
+	ep := &endpoint{url: url, prefix: fmt.Sprintf("%s-%d", prefix(key), d.generation), ctx: runCtx, cache: prov.GetWildcard()}
+	if err := d.mp.AddProvider(runCtx, ep.prefix, prov, func(ctx context.Context, mgr multiclusterruntime.Manager) error {
+		defer cancel()
 		return prov.Run(ctx, mgr)
-	})
+	}); err != nil {
+		cancel()
+		return nil, err
+	}
+	return ep, nil
+}
+
+func (d *Discovery) removeProvider(name string) {
+	if d.remove != nil {
+		d.remove(name)
+		return
+	}
+	d.mp.RemoveProvider(name)
+}
+
+// WithSnapshot calls publish only with the full initial inventory from every
+// discovered provider. It holds discovery stable while publication runs. Cache
+// or transport failures leave the last published annotation untouched.
+func (d *Discovery) WithSnapshot(ctx context.Context, publish func([]apisv1alpha1.APIBinding) error) error {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if !d.ready {
+		return errors.New("binding inventory is not ready: discovery is incomplete")
+	}
+	var bindings []apisv1alpha1.APIBinding
+	for key, ep := range d.active {
+		if ep.ctx.Err() != nil {
+			return errors.Errorf("binding inventory is not ready: provider %s stopped", key)
+		}
+		informer, err := ep.cache.GetInformer(ctx, &apisv1alpha1.APIBinding{}, cache.BlockUntilSynced(false))
+		if err != nil {
+			return errors.Wrapf(err, "getting binding informer for %s", key)
+		}
+		if !informer.HasSynced() {
+			return errors.Errorf("binding inventory is not ready: initial cache for %s is not synchronized", key)
+		}
+		list := &apisv1alpha1.APIBindingList{}
+		if err := ep.cache.List(ctx, list); err != nil {
+			return errors.Wrapf(err, "reading binding cache for %s", key)
+		}
+		bindings = append(bindings, list.Items...)
+	}
+	// Check cancellation again after collecting all caches, before publishing.
+	for key, ep := range d.active {
+		if ep.ctx.Err() != nil {
+			return errors.Errorf("binding inventory is not ready: provider %s stopped", key)
+		}
+	}
+	return publish(bindings)
+}
+
+func (d *Discovery) publish(ctx context.Context) {
+	if d.Sync != nil {
+		if err := d.Sync(ctx); err != nil && ctx.Err() == nil {
+			d.log.Error(err, "preserving namespace annotations until binding inventory is complete")
+		}
+	}
 }
 
 func firstURL(s *apisv1alpha1.APIExportEndpointSlice) string {

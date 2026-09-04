@@ -19,11 +19,14 @@ account?"* by reading a single namespace annotation instead of guessing.
   hard-coded, and multiple provider workspaces (e.g. simple-cluster and dati) can
   be watched at once. All log lines carry the KCP `workspace` path (from the
   APIBinding `kcp.io/path` annotation) alongside the logical cluster id.
-* **Bind** — through an APIExport virtual workspace, multicluster-runtime
-  *engages* exactly the workspaces that have bound that export. On every
-  `APIBinding` change the reconciler updates an in-memory index
-  (`realCluster → provider → binding → export`) and re-renders the annotation on
-  the matching MSP namespace.
+* **Complete inventory before writes** — an `APIBinding` event triggers an
+  aggregate snapshot, not an incremental annotation replacement. Every
+  configured workspace must have a successful endpoint discovery, every
+  discovered slice must have a URL, and every provider's initial APIBinding
+  cache must be synchronized before any annotation is changed. This preserves
+  existing provider configuration during startup and reconnect; informer event
+  order is not an authoritative inventory. A failure in any configured source
+  conservatively delays all annotation changes until it recovers.
 * **Mapping** — the MSP namespace is named after the KCP logical cluster, so it
   is selected by its well-known name label
   `kubernetes.io/metadata.name == <logical cluster>` (configurable via
@@ -35,14 +38,16 @@ account?"* by reading a single namespace annotation instead of guessing.
   binding can be recorded, tagging it with `MANAGED_LABEL_KEY` to tell it apart
   from sync-agent-created namespaces. Creation is idempotent; the operator never
   deletes namespaces.
-* **Unbind** is handled explicitly: the controller is registered as a
-  cluster-aware runnable, so when a workspace disengages (its binding is removed,
-  or the whole endpoint slice goes away) it drops that provider's entries and
-  clears the annotation. Operator shutdown is distinguished from a real
-  disengage, so stopping the operator does not wipe annotations.
-* Because the same workspace may bind several exports through several providers,
-  the index is keyed per provider and annotation writes use an optimistic-lock
-  patch with conflict retry, so concurrent providers cannot lose an update.
+* **Unbind** requires authoritative absence from a complete inventory. Transport
+  cancellation, discovery errors and temporarily unready endpoint slices do not
+  delete exports. A successfully observed binding/endpoint deletion still removes
+  that export, including the last binding. Periodic discovery also republishes
+  the snapshot, covering unbinds while stopped and caches that synchronize after
+  their initial events. Stopped providers are retried with generation-specific
+  names so a previous provider's asynchronous exit cannot remove its replacement.
+* Snapshot publication is serialized and annotation patches retain optimistic
+  conflict retries. Duplicate observations of a binding are deduplicated;
+  conflicting export identities or missing logical-cluster identity block writes.
 * The MSP namespace is written through a direct in-cluster client; the manager
   itself only talks to KCP.
 
