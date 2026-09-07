@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/sprig/v3"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 
@@ -427,7 +428,23 @@ func renderFuncs() template.FuncMap {
 	funcs := sprig.TxtFuncMap()
 	delete(funcs, "env")
 	delete(funcs, "expandenv")
+	funcs["quantityCmp"] = compareQuantities
 	return funcs
+}
+
+// compareQuantities compares Kubernetes resource quantities without losing
+// precision through floats or treating equivalent units as different strings.
+// Invalid operands fail template execution instead of becoming a zero value.
+func compareQuantities(left, right string) (int, error) {
+	lhs, err := resource.ParseQuantity(left)
+	if err != nil {
+		return 0, fmt.Errorf("parse left quantity: %w", err)
+	}
+	rhs, err := resource.ParseQuantity(right)
+	if err != nil {
+		return 0, fmt.Errorf("parse right quantity: %w", err)
+	}
+	return lhs.Cmp(rhs), nil
 }
 
 // ResolveInputs computes the closed input set for an SC against its SCPC:

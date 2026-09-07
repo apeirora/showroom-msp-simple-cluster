@@ -147,6 +147,22 @@ a typo like `.Inputs.regoin` fails loudly instead of producing an empty string.
 Sprig's `env` and `expandenv` are removed — they would expose the operator pod's
 environment to template authors in a multi-tenant cluster.
 
+`quantityCmp left right` compares two Kubernetes resource quantity strings and
+returns `-1`, `0`, or `1`. For example, `quantityCmp "2000m" "2"` and
+`quantityCmp "4096Mi" "4Gi"` both return `0`. It uses exact quantity arithmetic;
+an invalid operand stops rendering. Providers with fixed machine capacity can
+validate generic CPU/memory requests without exposing an overridable machine
+type input:
+
+```gotemplate
+{{- if or (le (quantityCmp .SC.workers.requested.cpu "0") 0) (gt (quantityCmp .SC.workers.requested.cpu "2") 0) }}
+{{ fail "requested CPU must be positive and fit the 2 CPU machine" }}
+{{- end }}
+```
+
+Validate memory and any other required capacity separately. This helper compares
+quantities; it does not select a profile or infer the meaning of a unit.
+
 The render context:
 
 | Path | Value |
