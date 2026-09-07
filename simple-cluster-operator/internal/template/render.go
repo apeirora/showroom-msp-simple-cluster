@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/sprig/v3"
-	"k8s.io/apimachinery/pkg/api/resource"
+	resourcequantity "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 
@@ -436,11 +436,11 @@ func renderFuncs() template.FuncMap {
 // precision through floats or treating equivalent units as different strings.
 // Invalid operands fail template execution instead of becoming a zero value.
 func compareQuantities(left, right string) (int, error) {
-	lhs, err := resource.ParseQuantity(left)
+	lhs, err := resourcequantity.ParseQuantity(left)
 	if err != nil {
 		return 0, fmt.Errorf("parse left quantity: %w", err)
 	}
-	rhs, err := resource.ParseQuantity(right)
+	rhs, err := resourcequantity.ParseQuantity(right)
 	if err != nil {
 		return 0, fmt.Errorf("parse right quantity: %w", err)
 	}
