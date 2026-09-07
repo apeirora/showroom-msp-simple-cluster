@@ -180,7 +180,10 @@ type ResourceSpec struct {
 	// iteration and .Prev is the list of objects rendered so far for this
 	// ResourceSpec. From sibling ResourceSpecs' Templates, .Resources.<name>
 	// is exposed as a list (rather than a single object) when <name> had
-	// Repeat set.
+	// Repeat set. Crash cleanup can reconstruct repeat counts derived from
+	// .SC and .Inputs. Deletion cannot rebuild predecessor context for a
+	// count derived from .Resources; it deletes recorded owned instances and
+	// retains the SimpleCluster finalizer for verified manual cleanup.
 	// +optional
 	Repeat string `json:"repeat,omitempty"`
 
@@ -200,6 +203,8 @@ type ResourceSpec struct {
 	// DeletionAnnotations are applied to R before the operator deletes it.
 	// Required by some controllers as a "double opt-in"
 	// (e.g. Gardener Shoot needs `confirmation.gardener.cloud/deletion: "true"`).
+	// SimpleCluster ownership annotations and the core allow-delete marker are
+	// reserved and rejected at reconcile time.
 	// +optional
 	DeletionAnnotations map[string]string `json:"deletionAnnotations,omitempty"`
 
@@ -217,16 +222,53 @@ type ResourceSpec struct {
 	ForceCleanupOnCascade bool `json:"forceCleanupOnCascade,omitempty"`
 }
 
+// ConditionMatch identifies one Kubernetes-style status condition by its
+// exact type and status.
+type ConditionMatch struct {
+	// Type is the condition type (for example Ready or Synced).
+	// +kubebuilder:validation:MinLength=1
+	Type string `json:"type"`
+
+	// Status is the condition status to match.
+	// +kubebuilder:validation:Enum=True;False;Unknown
+	Status metav1.ConditionStatus `json:"status"`
+}
+
+// ConditionReadinessCheck projects a Kubernetes-style status.conditions list
+// onto the universal Phase enum without depending on list order.
+type ConditionReadinessCheck struct {
+	// Ready identifies the condition value that means the resource is Ready.
+	Ready ConditionMatch `json:"ready"`
+
+	// Failures identify condition values that mean the resource is Failed.
+	// When several match simultaneously, all matching messages are surfaced.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	Failures []ConditionMatch `json:"failures,omitempty"`
+
+	// MatchObservedGeneration ignores a condition whose non-zero
+	// observedGeneration differs from the target object's generation. Keep
+	// this disabled for APIs synced across clusters whose source and target
+	// generations belong to different domains.
+	// +optional
+	MatchObservedGeneration bool `json:"matchObservedGeneration,omitempty"`
+}
+
 // ReadinessCheck (formerly StatusMap) projects a target resource's status
-// onto the universal Phase enum.
+// onto the universal Phase enum. Exactly one of the legacy PhasePath mapping
+// and the typed Conditions mapping must be configured. The SCPC reconciler
+// validates that mutual exclusion before resolving target resources.
 type ReadinessCheck struct {
 	// PhasePath is a JSONPath into R that resolves to a state value
 	// (e.g. status.lastOperation.state).
-	PhasePath string `json:"phasePath"`
+	// +optional
+	PhasePath string `json:"phasePath,omitempty"`
 
 	// PhaseReadyValue is the value at PhasePath that indicates Ready
 	// (e.g. Succeeded).
-	PhaseReadyValue string `json:"phaseReadyValue"`
+	// +optional
+	PhaseReadyValue string `json:"phaseReadyValue,omitempty"`
 
 	// PhaseFailedValues are values at PhasePath that indicate Failed.
 	// +optional
@@ -239,6 +281,11 @@ type ReadinessCheck struct {
 	// LastErrorPath optionally provides a human-readable error string.
 	// +optional
 	LastErrorPath string `json:"lastErrorPath,omitempty"`
+
+	// Conditions selects Kubernetes-style status conditions by type and
+	// status. It is mutually exclusive with the legacy PhasePath mapping.
+	// +optional
+	Conditions *ConditionReadinessCheck `json:"conditions,omitempty"`
 }
 
 // KubeconfigSource describes how to obtain the kubeconfig of NC once the
@@ -254,7 +301,11 @@ type KubeconfigSource struct {
 	// namespace (typical for Cluster API / Gardener seed Secrets). Name/
 	// Namespace are Go templates evaluated against the same context as the
 	// named resource's Template, with the live R bound at
-	// .Resources.<resourceName>.
+	// .Resources.<resourceName>. Metadata validation uses a strict
+	// meta.k8s.io/v1 PartialObjectMetadata request with verified response
+	// TypeMeta and without a full-object fallback. The target API server must
+	// honor that negotiation and return canonical application/json carrying
+	// meta.k8s.io/v1 PartialObjectMetadata.
 	// +optional
 	SecretRef *KubeconfigSecretSource `json:"secretRef,omitempty"`
 
@@ -285,6 +336,22 @@ type KubeconfigSecretSource struct {
 	// DataKey is the key in the Secret holding the kubeconfig; defaults to "kubeconfig".
 	// +optional
 	DataKey string `json:"dataKey,omitempty"`
+	// RequiredLabels is an optional exact metadata requirement for the referenced Secret.
+	// Values are Go templates evaluated with the same context as Name. When at least one
+	// label is configured, the data request is a server-filtered list constrained by
+	// namespace, metadata.name and every rendered label. This prevents a raced replacement
+	// without those labels from returning its data. Metadata equality is not issuer
+	// authentication: providers must protect these keys with admission/RBAC or a stronger
+	// claim relation.
+	// +optional
+	RequiredLabels map[string]string `json:"requiredLabels,omitempty"`
+	// RequiredAnnotations is the annotation counterpart of RequiredLabels. Values are
+	// Go templates evaluated with the same context as Name and require the same external
+	// writer-integrity guarantee. Kubernetes cannot server-filter a Secret list by
+	// annotation; without at least one RequiredLabels entry, annotation checks and the
+	// UID/resourceVersion guard prevent credential use but not a raced full-data transfer.
+	// +optional
+	RequiredAnnotations map[string]string `json:"requiredAnnotations,omitempty"`
 }
 
 type KubeconfigSubResourceSource struct {
@@ -303,6 +370,15 @@ type KubeconfigInlineSource struct {
 
 // SimpleClusterProviderConfigSpec defines the desired state of SimpleClusterProviderConfig.
 type SimpleClusterProviderConfigSpec struct {
+	// ProvisioningEnabled controls whether this provider config may create new
+	// target resources. It defaults to true so existing SCPCs keep their current
+	// behaviour. Setting it to false retires the provider for new provisioning
+	// while preserving the target and resource contract needed to observe and
+	// delete resources that already exist.
+	// +kubebuilder:default=true
+	// +optional
+	ProvisioningEnabled *bool `json:"provisioningEnabled,omitempty"`
+
 	// Target describes which cluster the resources are created on plus the
 	// default Namespace.
 	Target TargetSpec `json:"target"`
@@ -342,6 +418,13 @@ type SimpleClusterProviderConfigSpec struct {
 	// AutoscalingSupported condition is set to False.
 	// +optional
 	Autoscaling bool `json:"autoscaling,omitempty"`
+}
+
+// AllowsProvisioning reports whether the SCPC may create new target
+// resources. Omission is intentionally treated as true for backwards
+// compatibility with SCPCs created before the lifecycle gate existed.
+func (s *SimpleClusterProviderConfigSpec) AllowsProvisioning() bool {
+	return s.ProvisioningEnabled == nil || *s.ProvisioningEnabled
 }
 
 // ResolvedResource records a successfully resolved ResourceSpec on the target cluster.

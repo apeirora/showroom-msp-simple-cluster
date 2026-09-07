@@ -181,6 +181,23 @@ you can omit this. Otherwise map its status onto the universal phase:
 Fill in `lastOperationPath` and `lastErrorPath` whenever the resource offers
 them. They are what turns "Provisioning" into an answer to "provisioning what?".
 
+For controllers that publish `status.conditions`, match the condition type and
+status directly:
+
+```yaml
+    readiness:
+      conditions:
+        ready: {type: Ready, status: "True"}
+        failures:
+          - {type: Synced, status: "False"}
+          - {type: Responsive, status: "False"}
+```
+
+Failure matches win over readiness and surface the provider's condition
+messages. Set `matchObservedGeneration: true` only when the observed object and
+its controller share the same generation domain; synced objects commonly do
+not.
+
 ### Step 7: declare the kubeconfig source
 
 This is the deliverable. Pick the strategy that matches how your platform hands
@@ -212,9 +229,38 @@ kubeconfigSource:
     name: "{{ .Target.name }}-kubeconfig"
     namespace: "{{ .Target.namespace }}"
     dataKey: value
+    requiredLabels:
+      provider.example/cluster: "{{ .Target.name }}"
+    requiredAnnotations:
+      provider.example/owner: "{{ .SC.namespace }}/{{ .SC.name }}"
 ```
 
-Name and namespace are templates, with the live resource in scope.
+Name, namespace, and required metadata values are templates, with the live resource
+in scope. Configure `requiredLabels` and `requiredAnnotations` whenever the Secret
+name comes from provider-written status or a separate mirroring controller. The
+operator requests only `meta.k8s.io/v1 PartialObjectMetadata` (without a full
+Secret fallback), verifies response TypeMeta before exposing bytes to the
+decoder, and checks the requirements.
+When `requiredLabels` is non-empty, the data request is a server-filtered list
+constrained by namespace, `metadata.name`, and every rendered label; exactly one
+result with the metadata-read UID and resourceVersion is accepted. This keeps a
+raced same-name replacement that lost a required label from returning its data.
+The target API server must support PartialObjectMetadata content negotiation and
+return canonical `Content-Type: application/json` with an exact
+`meta.k8s.io/v1 PartialObjectMetadata` envelope. The prefix check prevents an
+ordinary full-object negotiation fallback; it is not authentication against a
+malicious endpoint that forges valid TypeMeta before duplicate or payload fields.
+Its credential needs `get` on Secrets for the metadata request and, when
+`requiredLabels` is non-empty, `list` on Secrets for the selector-constrained
+data request.
+
+Kubernetes cannot server-filter a Secret list by annotation. For compatibility,
+a config with no required label uses a name-only full GET: annotation and
+UID/resourceVersion checks prevent credential use, but cannot prevent a raced
+object's bytes from crossing the transport. These requirements do not authenticate
+the issuer when another principal can write the same metadata. Protect required
+keys with provider-side admission/RBAC, or publish a stronger claim-to-Secret
+relationship outside the generic SimpleCluster core.
 
 **Inline** — the kubeconfig is a field of the resource:
 
@@ -235,6 +281,27 @@ kubeconfigSource:
 Only set `forceCleanupOnCascade: true` where the resource owns **no external
 state** — see the [contract](provider-contract.md#3-correct-deletion-behaviour).
 Getting this wrong leaks infrastructure.
+
+Do not change the target connection, generated names, or deletion annotations of an
+SCPC that still has dependent SimpleClusters. For planned offboarding, set
+`spec.provisioningEnabled: false`, wait for or delete the dependants, and remove
+the SCPC only after their cascades finish. Use a new versioned SCPC name for a
+replacement contract.
+
+Crash cleanup can reconstruct non-repeated resources and repeats whose count is
+derived only from `.SC`/`.Inputs`. Do not rely on automatic crash reconstruction
+for a `repeat` expression that reads predecessor `.Resources`. Deletion does not
+rebuild that context: it deletes recorded owned instances, then retains the
+SimpleCluster finalizer because it cannot prove no unrecorded instance exists.
+Verify and remove all owned targets manually before manually removing the
+finalizer.
+
+New targets are stamped with the `SimpleCluster` UID and exact SCPC namespace/UID.
+For an upgrade, only a legacy target already recorded by exact GVK, name and
+namespace in `SimpleCluster.status.resources` is migrated automatically. Empty
+or mismatched legacy status GVK fails closed. An unrecorded target from a legacy
+create-before-status crash is deliberately not adopted; verify it manually
+before changing either finalizer.
 
 ### Step 9: try it
 

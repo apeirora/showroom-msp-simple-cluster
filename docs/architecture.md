@@ -46,15 +46,17 @@ per-tenant overrides.
 ```
 
 1. **Select.** The operator walks `spec.providerConfigRefs` in order, takes the
-   first `SimpleClusterProviderConfig` it can resolve, and records the choice in
-   `status.providerConfigRef`. The choice is then locked: later edits to the
-   spec do not migrate a cluster that is already being built.
+   first `SimpleClusterProviderConfig` it can resolve, and atomically records its
+   name, namespace and UID in status before target work. Later spec edits,
+   same-name tenant overrides and same-name replacement objects cannot migrate
+   or redirect a cluster that is already being built.
 2. **Render.** Each entry in `scpc.spec.resources[]` is a Go `text/template`
    body — the same engine Helm uses, with [sprig](https://masterminds.github.io/sprig/)
    — evaluated against the SimpleCluster's fields, the resolved inputs, and any
    predecessor resources. See [Templating](#templating).
-3. **Apply.** The rendered object is applied with a dynamic client, either to
-   the management cluster or, when the SCPC carries
+3. **Apply.** The rendered object is stamped with the `SimpleCluster` UID and
+   exact SCPC namespace/UID, then applied with a dynamic client, either to the
+   management cluster or, when the SCPC carries
    `spec.target.kubeconfigSecretRef`, to a remote cluster.
 4. **Wait.** A provider operator (Gardener's gardenlet, this repository's KinD or
    OpenStack operators, an external branded provider) turns R into a real
@@ -65,6 +67,14 @@ per-tenant overrides.
    `<sc-name>-kubeconfig` in the SimpleCluster's namespace. Any manifests in the
    SimpleCluster's own `spec.resources[]` are then applied *into* the new cluster,
    and its nodes are mirrored into `status.nodes`.
+
+Immediately before every target `Create`, the operator bypasses its cache and
+re-reads both the SimpleCluster and its selected SCPC. Creation stops if either
+object was replaced or its spec changed, if a render-visible SimpleCluster label
+changed, or if deletion, finalizer removal, or retirement is already visible at
+that guard. The management and target APIs cannot make this cross-cluster check
+atomic, so staged retirement is still required. Observation and reverse-order
+deletion continue to use the same target contract.
 
 ## The resource DAG
 
@@ -99,12 +109,59 @@ Inside a repeated template, `.Index` is the current iteration and `.Prev` is the
 list of objects already rendered for that entry. Siblings see a repeated
 resource as a **list** under `.Resources.<name>`.
 
+Deletion can reconstruct instances after a create-before-status crash when
+`repeat` is constant or depends only on `.SC`/`.Inputs`. It does not rebuild the
+predecessor context needed by a repeat count that reads `.Resources`. Cleanup
+deletes recorded owned instances, then retains the SimpleCluster finalizer because
+it cannot prove that no unrecorded instance exists. Providers using such a count
+must provide verified manual crash cleanup before that finalizer is removed.
+
+Invalid provisioning inputs do not prevent cleanup of identities derived only
+from immutable `.SC.name`, `.SC.namespace` and `.SC.uid` fields (for example a
+hashed cluster name in `.SC.namespace`). Creation still
+requires the full valid input set. On input-resolution failure, cleanup accepts
+only a conservatively checked immutable identity expression; `.Inputs`, mutable
+SC spec/labels, whole SC/root context access, opaque aliases and named templates
+are not evaluated with missing
+or substituted values. This exceptional path allows only `printf`, `sha256sum`,
+`trunc`, `len`, boolean operators and comparisons; other functions (including
+randomness, clock reads and external lookups) fail closed. Normal rendering with
+valid inputs is unchanged. Explicitly recorded owned targets can still be deleted
+when reconstruction fails, but the finalizer remains with `Error=CleanupBlocked`
+until the missing identities are resolved or independently verified. Empty
+resource status is never treated as proof that no target was created.
+
+This exceptional path rejects worker-based repeat counts as well as mutable
+name/namespace expressions: the current SC cannot recover values from before an
+edit. Recorded targets still clean up, but uncertain reconstruction holds the
+finalizer. Reconstruction also assumes that the provider's identity contract has
+not changed: an SCPC UID lock does not freeze its template/spec. Arbitrary
+historical SCPC changes or mutable identities on the normal valid-input path
+remain a separate identity-journaling limitation; they are not proven safe by
+this input-error fallback.
+
 ## Templating
 
 Templates are Go `text/template` plus sprig, rendered with `missingkey=error` so
 a typo like `.Inputs.regoin` fails loudly instead of producing an empty string.
 Sprig's `env` and `expandenv` are removed — they would expose the operator pod's
 environment to template authors in a multi-tenant cluster.
+
+`quantityCmp left right` compares two Kubernetes resource quantity strings and
+returns `-1`, `0`, or `1`. For example, `quantityCmp "2000m" "2"` and
+`quantityCmp "4096Mi" "4Gi"` both return `0`. It uses exact quantity arithmetic;
+an invalid operand stops rendering. Providers with fixed machine capacity can
+validate generic CPU/memory requests without exposing an overridable machine
+type input:
+
+```gotemplate
+{{- if or (le (quantityCmp .SC.workers.requested.cpu "0") 0) (gt (quantityCmp .SC.workers.requested.cpu "2") 0) }}
+{{ fail "requested CPU must be positive and fit the 2 CPU machine" }}
+{{- end }}
+```
+
+Validate memory and any other required capacity separately. This helper compares
+quantities; it does not select a profile or infer the meaning of a unit.
 
 The render context:
 
@@ -147,7 +204,7 @@ and picks one of three retrieval strategies:
 
 | Strategy | Use when |
 |---|---|
-| `secretRef` | the platform writes the kubeconfig into a Secret (Cluster API, Gardener seed secrets). Name and namespace are templates, with the live resource in scope. |
+| `secretRef` | the platform writes the kubeconfig into a Secret (Cluster API, Gardener seed secrets). Name, namespace, and optional exact required label/annotation values are templates, with the live resource in scope. The operator requests only `meta.k8s.io/v1 PartialObjectMetadata` (no full-object fallback), verifies response TypeMeta before exposing bytes to the decoder, and checks the requirements. When at least one required label exists, the data read is a server-filtered list constrained by namespace, `metadata.name`, and every rendered label; the sole result must keep the metadata-read UID and resourceVersion. Kubernetes cannot server-filter by annotation. For backward compatibility, a config with no required label uses a name-only full GET: the metadata and UID/resourceVersion checks prevent credential use, but not transfer of a raced object's bytes. The target API server must support PartialObjectMetadata negotiation. Cross-controller transports should configure a protected required label or supply a stronger claim relation; matching user-writable metadata is not issuer authentication. |
 | `subResource` | the platform issues credentials on request (Gardener's `/adminkubeconfig`). Supports `validity` and `renewalBefore`, and the operator re-issues before expiry. |
 | `inline` | the kubeconfig is a field of the resource itself; a JSONPath locates it. |
 

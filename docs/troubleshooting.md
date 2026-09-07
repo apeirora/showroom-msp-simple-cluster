@@ -16,8 +16,13 @@ provider's own resource.
 | Check | Meaning |
 |---|---|
 | `status.providerConfigRef` is empty | None of `spec.providerConfigRefs` resolved. The names are looked up in the cluster's own namespace first, then in `--scpc-fallback-namespace`. |
+| `Error` condition, reason `SCPCReferenceAmbiguous` | A legacy name-only lock matches both tenant and fallback SCPCs. Remove the ambiguity only after identifying which exact config owns the targets; the operator will not guess. |
+| `Error` condition, reason `SCPCIdentityMismatch` | The locked SCPC name/namespace now has a different UID. Restore the original object/contract or perform verified manual cleanup; replacement objects are not followed. |
+| Deleting with reason `SCPCNotFound` | The exact locked SCPC is missing. Restore it so cleanup can use its target connection and resource contract. The finalizer is intentionally retained. |
+| `Error` condition, reason `TargetOwnershipConflict` | A deterministic target name is occupied by an object without this SimpleCluster's ownership annotations. The operator neither adopts nor deletes it; resolve the collision explicitly. |
 | `Error` condition, reason `UnknownInput` | `spec.inputs` has a key the chosen config does not declare. Inputs are a closed set. |
 | `Error` condition, reason `BadInput` | A value does not parse against its declared type. The message names the key, the type and the value. |
+| `Error` condition, reason `ProvisioningDisabled` | The selected SCPC is retired and at least one target is missing. The cluster is `Failed`/`Ready=False`; observed targets remain deletable, but the operator will not recreate the missing one. |
 
 ## Phase is `NoHardware`
 
@@ -94,7 +99,11 @@ why. If the source resource is Ready and the Secret still does not appear:
 - **`secretRef`** — the templated name or namespace does not match reality.
   Both are templates with the live resource in scope; render them mentally
   against `status.resources[]`. Check `dataKey` too — it defaults to
-  `kubeconfig`.
+  `kubeconfig`. A `406`, unexpected metadata `Content-Type`, or unexpected
+  response kind means the target API server did not satisfy the strict
+  `meta.k8s.io/v1 PartialObjectMetadata` contract. A zero-result data query
+  means the Secret was removed or no longer has every configured required
+  label; retry only after verifying its ownership metadata.
 - **`subResource`** — the credential lacks permission to call the subresource, or
   `kubeconfigPath` points at the wrong field.
 - **`inline`** — `kubeconfigPath` does not resolve on the object.

@@ -37,6 +37,49 @@ kubectl get scpc my-provider -o jsonpath='{.status}' | jq
   GroupVersionKind. A missing entry means the target cluster does not serve that
   type, and every `SimpleCluster` using this config will fail.
 
+## Retiring a provider config
+
+Set `spec.provisioningEnabled: false` before unpublishing or removing a provider.
+The operator checks this directly from the API server immediately before each
+target create, while continuing to observe and delete existing target resources.
+Retired configurations are also reported unavailable in the ORD catalogue.
+Because that check and a remote create cannot be one atomic transaction, wait
+for controllers to observe retirement before removing any supporting access.
+
+If a retired config is missing a target, the `SimpleCluster` moves to `Failed`
+with `Ready=False` and reason `ProvisioningDisabled`; a stale `Ready=True` is
+never preserved. The chosen SCPC's name, namespace and UID are persisted before
+any target work. Cleanup uses both observed status identities and deterministically
+reconstructed identities after a create-before-status crash. Every new candidate
+must carry the SimpleCluster name/UID and exact SCPC name/namespace/UID before it
+can be deleted, so an unrelated same-name object is left untouched and cleanup
+keeps retrying. The allow-delete patch and Delete request are guarded by the
+observed target UID (and the patch also by resourceVersion), so a replacement
+racing cleanup is not modified or removed.
+
+Crash reconstruction is complete for non-repeated resources and for `repeat`
+expressions derived only from `.SC` and `.Inputs`. Deletion does not rebuild the
+predecessor context for a `repeat` expression that reads `.Resources`. It deletes
+any recorded owned instances but cannot prove that an interrupted reconcile left
+no additional unrecorded instance, so it fails closed and retains the
+SimpleCluster finalizer. Verify and remove every owned target manually before
+manually removing that finalizer.
+
+Targets created by older releases have only name-based ownership annotations.
+The operator adds immutable identity stamps only when its status already records
+the exact resource/GVK/name/namespace, then re-reads the object on the next
+reconcile. Empty or mismatched legacy status GVK fails closed.
+An unrecorded legacy create-before-status target cannot be safely distinguished
+from a same-name collision; verify and migrate or remove it manually.
+
+Keep the SCPC itself—and its name, target connection, resource names, and deletion
+annotations—unchanged until every dependent SimpleCluster has completed its
+deletion. If the replacement contract differs, publish it under a new SCPC name.
+During an upgrade from a release that recorded only `providerConfigRef.name`, keep
+all referenced SCPCs in place until the new controller has backfilled namespace
+and UID. With no historical UID, a lone current candidate cannot prove that it was
+not replaced before the upgrade; verify that case manually.
+
 ## Watching a cluster come up
 
 ```sh
@@ -145,4 +188,7 @@ The operator holds no state of its own. What matters is:
 - the target-cluster credential Secrets referenced by
   `spec.target.kubeconfigSecretRef`.
 
-Everything else is reconstructed by reconciliation.
+Non-repeated target identities, and repeated identities whose count depends only
+on `.SC` or `.Inputs`, are reconstructed by reconciliation. Repeats whose count
+depends on predecessor `.Resources` require verified manual crash cleanup; see
+[Retiring a provider config](#retiring-a-provider-config).

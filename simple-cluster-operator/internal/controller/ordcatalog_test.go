@@ -131,6 +131,30 @@ func TestORDCatalogDoesNotAdvertiseAnUnreachableReadyProvider(t *testing.T) {
 	}
 }
 
+func TestORDCatalogDoesNotAdvertiseRetiredProviders(t *testing.T) {
+	resource := showroomv1alpha1.ResourceSpec{
+		Name: "cluster", APIVersion: "example.eu/v1", Kind: "Cluster",
+	}
+	retired := ordSCPC("account-a", "provider", true, resource)
+	retired.Spec.ProvisioningEnabled = boolPointer(false)
+
+	available, reason := providerAvailable(retired)
+	if available || reason != "The provider configuration is retired for new provisioning." {
+		t.Fatalf("retired provider availability = %t, %q", available, reason)
+	}
+
+	variant, err := mergeProviderVariants("provider", []showroomv1alpha1.SimpleClusterProviderConfig{
+		*retired,
+		*ordSCPC("account-b", "provider", true, resource),
+	})
+	if err != nil {
+		t.Fatalf("mergeProviderVariants: %v", err)
+	}
+	if !variant.available || variant.reason != "At least one installed provider configuration is ready." {
+		t.Fatalf("enabled ready variant did not keep provider available: %#v", variant)
+	}
+}
+
 func TestORDCatalogDoesNotPublishConditionMessages(t *testing.T) {
 	scpc := ordSCPC("account-a", "provider", false, showroomv1alpha1.ResourceSpec{
 		Name: "cluster", APIVersion: "example.eu/v1", Kind: "Cluster",
