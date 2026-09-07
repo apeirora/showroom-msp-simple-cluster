@@ -34,5 +34,8 @@ KCP:
   # Empty = scan the kubeconfig's own workspace only.
   # e.g. "root:providers:simple-cluster,root:providers:dati"
   workspaces: ""
+  # Optional comma-separated exact workspace|slice keys to leave unobserved.
+  # Empty excludes nothing. Not a wildcard; use only for known unrelated slices.
+  excludedEndpoints: ""
   # How often to re-discover APIExportEndpointSlices in those workspaces.
   discoveryInterval: 1m

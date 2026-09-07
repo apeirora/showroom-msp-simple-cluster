@@ -23,6 +23,8 @@ spec:
               value: /kcp.admin.config
             - name: KCP_WORKSPACES
               value: {{ .Values.KCP.workspaces | quote }}
+            - name: KCP_EXCLUDED_ENDPOINTS
+              value: {{ .Values.KCP.excludedEndpoints | default "" | quote }}
             - name: KCP_DISCOVERY_INTERVAL
               value: {{ .Values.KCP.discoveryInterval | quote }}
             - name: CLUSTER_LABEL_KEY
