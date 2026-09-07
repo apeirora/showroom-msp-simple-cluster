@@ -47,7 +47,8 @@ export const buildWorkspaceUrl = (
 
 export const graphqlFetch = async <T>(
   opts: GraphqlClientOptions,
-  body: { query?: string; mutation?: string; variables?: Record<string, unknown> }
+  body: { query?: string; mutation?: string; variables?: Record<string, unknown> },
+  signal?: AbortSignal
 ): Promise<T> => {
   const url = buildWorkspaceUrl(opts.graphqlUrl, opts.workspacePath);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -55,7 +56,8 @@ export const graphqlFetch = async <T>(
   const resp = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    ...(signal ? { signal } : {})
   });
   if (!resp.ok) {
     throw new GraphqlError(`GraphQL HTTP ${resp.status} ${resp.statusText}`, 'http');

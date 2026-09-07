@@ -31,16 +31,21 @@ import {
 } from './lib/simplecluster';
 import { fetchKubeconfig } from './lib/secret';
 import { fallbackClusterConfig, loadClusterConfig } from './lib/config';
-import { fetchAvailableProviders } from './lib/providers';
+import { fetchAvailableProviders, offeredProviders } from './lib/providers';
 import { entriesForKind, loadAddonCatalog, resolveEntitlements } from './lib/addons';
 import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig, SimpleCluster } from './types';
 
 const POLL_INTERVAL_MS = 5000;
+const LIST_TIMEOUT_MS = 30000;
+
+const sameCluster = (selected: SimpleCluster, current: SimpleCluster) =>
+  selected.metadata.name === current.metadata.name &&
+  (selected.metadata.uid ? selected.metadata.uid === current.metadata.uid : selected === current);
 
 const App = () => {
   const [ctx, setCtx] = useState<RuntimeContext>(emptyRuntimeContext);
   const [config, setConfig] = useState<ClusterConfig>(fallbackClusterConfig);
-  const [clusters, setClusters] = useState<SimpleCluster[]>([]);
+  const [inventory, setInventory] = useState<{ scope: object; items: SimpleCluster[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,8 +53,9 @@ const App = () => {
   const [createBusy, setCreateBusy] = useState(false);
 
   // Live provider list discovered from installed provider CRs. null means
-  // discovery has not produced a list, so the static config list is used.
+  // availability is unconfirmed and dynamic provider submission stays disabled.
   const [discoveredProviders, setDiscoveredProviders] = useState<string[] | null>(null);
+  const [discoveredScope, setDiscoveredScope] = useState<object | null>(null);
   const [providersLoading, setProvidersLoading] = useState(false);
 
   // Extensions offerable at creation time, and whether this workspace has each of them.
@@ -63,7 +69,7 @@ const App = () => {
   const [deleteTarget, setDeleteTarget] = useState<SimpleCluster | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
-  const [detailTarget, setDetailTarget] = useState<SimpleCluster | null>(null);
+  const [detailSelection, setDetailSelection] = useState<{ scope: object; cluster: SimpleCluster } | null>(null);
 
   const [kubeconfigOpen, setKubeconfigOpen] = useState(false);
   const [kubeconfigClusterName, setKubeconfigClusterName] = useState<string | null>(null);
@@ -76,7 +82,11 @@ const App = () => {
     setToastOpen(true);
   }, []);
 
-  const subscriptionActiveRef = useRef(false);
+  const listRequest = useRef<{
+    scope: object; refreshQueued: boolean; controller: AbortController; timeout: number;
+  } | null>(null);
+  const activeClusterScope = useRef<object | null>(null);
+  const providerDiscoveryGeneration = useRef(0);
 
   useEffect(() => subscribeToLuigi(setCtx), []);
 
@@ -93,11 +103,24 @@ const App = () => {
     [ctx.graphqlUrl, ctx.token, ctx.workspacePath]
   );
 
+  // An inventory/selection belongs to this exact account, namespace and auth
+  // context. Hide it immediately when context changes, before effects run.
+  const clusterScope = useMemo(() => ({ client, namespace: ctx.namespace }), [client, ctx.namespace]);
+  const clusters = inventory?.scope === clusterScope ? inventory.items : [];
+  const detailTarget = detailSelection?.scope === clusterScope
+    ? clusters.find((cluster) => sameCluster(detailSelection.cluster, cluster)) ?? null
+    : null;
+
   const usingDynamicProviders = config.providerSources.length > 0;
+  const discoveryScope = useMemo(() => ({ client, namespace: ctx.namespace, sources: config.providerSources }),
+    [client, ctx.namespace, config.providerSources]);
+  const currentDiscoveredProviders = discoveredScope === discoveryScope ? discoveredProviders : null;
 
   const discoverProviders = useCallback(async () => {
+    const generation = ++providerDiscoveryGeneration.current;
+    setDiscoveredProviders(null);
+    setProvidersLoading(false);
     if (!usingDynamicProviders) {
-      setDiscoveredProviders(null);
       return;
     }
     // Provider CRs are cluster-scoped in KCP, so discovery needs the gateway
@@ -106,25 +129,27 @@ const App = () => {
     setProvidersLoading(true);
     try {
       const result = await fetchAvailableProviders(client, ctx.namespace ?? '', config.providerSources);
-      // ran=false means discovery could not run — keep the static fallback.
-      setDiscoveredProviders(result.ran ? result.providers : null);
+      if (providerDiscoveryGeneration.current === generation) {
+        setDiscoveredProviders(result.ran ? result.providers : null);
+        setDiscoveredScope(discoveryScope);
+      }
     } catch (err) {
       console.warn('[simple-cluster-ui] provider discovery failed', err);
     } finally {
-      setProvidersLoading(false);
+      if (providerDiscoveryGeneration.current === generation) setProvidersLoading(false);
     }
-  }, [client, ctx.graphqlUrl, ctx.namespace, config.providerSources, usingDynamicProviders]);
+  }, [client, ctx.graphqlUrl, ctx.namespace, config.providerSources, usingDynamicProviders, discoveryScope]);
   // note: ctx.namespace stays in deps so discovery reruns if it arrives late.
 
   useEffect(() => {
     void discoverProviders();
   }, [discoverProviders]);
 
-  // Providers offered in the create dialog: the discovered list when dynamic
-  // discovery produced one, otherwise the static config list.
+  // Dynamic discovery must confirm availability. A transport failure must not
+  // turn a configured provider name into permission to submit to that provider.
   const providers = useMemo(
-    () => (usingDynamicProviders && discoveredProviders !== null ? discoveredProviders : config.providers),
-    [usingDynamicProviders, discoveredProviders, config.providers]
+    () => offeredProviders(config, currentDiscoveredProviders),
+    [config, currentDiscoveredProviders]
   );
 
   // The catalogue is global and the entitlement per account, so both are resolved
@@ -153,53 +178,84 @@ const App = () => {
     void discoverAddons();
   }, [discoverProviders, discoverAddons]);
 
-  const reload = useCallback(async () => {
-    if (!ctx.graphqlUrl || !ctx.namespace) return;
+  const reload = useCallback(async (): Promise<void> => {
+    if (activeClusterScope.current !== clusterScope || !ctx.graphqlUrl || !ctx.namespace) return;
+    if (listRequest.current?.scope === clusterScope) {
+      // Coalesce event bursts without starving a slow read or racing its result.
+      listRequest.current.refreshQueued = true;
+      return;
+    }
+    const request = { scope: clusterScope, refreshQueued: false, controller: new AbortController(), timeout: 0 };
+    listRequest.current = request;
+    request.timeout = window.setTimeout(() => {
+      if (listRequest.current !== request) return;
+      listRequest.current = null;
+      request.controller.abort();
+      setLoading(false);
+      setError('Cluster list refresh timed out; retrying automatically.');
+    }, LIST_TIMEOUT_MS);
     setLoading(true);
     try {
-      const items = await listSimpleClusters(client, ctx.namespace);
-      setClusters(items);
+      const items = await listSimpleClusters(client, ctx.namespace, request.controller.signal);
+      if (listRequest.current !== request) return;
+      setInventory({ scope: clusterScope, items });
+      setDetailSelection((selection) => selection?.scope === clusterScope &&
+        items.some((item) => sameCluster(selection.cluster, item)) ? selection : null);
       setError(null);
     } catch (err) {
-      setError((err as Error).message);
+      if (listRequest.current === request) setError((err as Error).message);
     } finally {
-      setLoading(false);
+      window.clearTimeout(request.timeout);
+      if (listRequest.current === request) {
+        listRequest.current = null;
+        setLoading(false);
+        if (request.refreshQueued) void reload();
+      }
     }
-  }, [client, ctx.graphqlUrl, ctx.namespace]);
+  }, [client, ctx.graphqlUrl, ctx.namespace, clusterScope]);
 
   useEffect(() => {
+    activeClusterScope.current = clusterScope;
     void reload();
-  }, [reload]);
+    return () => {
+      if (activeClusterScope.current === clusterScope) activeClusterScope.current = null;
+      if (listRequest.current?.scope === clusterScope) {
+        const request = listRequest.current;
+        listRequest.current = null;
+        window.clearTimeout(request.timeout);
+        request.controller.abort();
+      }
+    };
+  }, [reload, clusterScope]);
 
-  // Auto-refresh: prefer graphql-sse subscriptions; fall back to polling.
+  // SSE events refresh immediately. A five-second safety poll also covers
+  // unsupported, failed or silently stalled streams; it never polls Secrets.
   useEffect(() => {
     if (!ctx.graphqlUrl || !ctx.namespace) return;
 
+    let disposed = false;
     let reloadQueued = false;
     const queueReload = () => {
-      if (reloadQueued) return;
+      if (disposed || reloadQueued) return;
       reloadQueued = true;
       queueMicrotask(() => {
         reloadQueued = false;
-        void reload();
+        if (!disposed) void reload();
       });
     };
 
-    subscriptionActiveRef.current = true;
-    const unsubscribe = subscribeSimpleClusters(client, ctx.namespace, () => {
-      subscriptionActiveRef.current = true;
-      queueReload();
-    });
+    const unsubscribe = subscribeSimpleClusters(client, ctx.namespace, queueReload);
 
     const pollHandle = window.setInterval(() => {
-      if (!subscriptionActiveRef.current) void reload();
+      if (!disposed && listRequest.current?.scope !== clusterScope) void reload();
     }, POLL_INTERVAL_MS);
 
     return () => {
+      disposed = true;
       unsubscribe();
       window.clearInterval(pollHandle);
     };
-  }, [client, ctx.graphqlUrl, ctx.namespace, reload]);
+  }, [client, ctx.graphqlUrl, ctx.namespace, reload, clusterScope]);
 
   const handleCreate = async (values: CreateValues) => {
     if (!ctx.namespace) return;
@@ -266,7 +322,7 @@ const App = () => {
   const handleAction = (action: ClusterAction, cluster: SimpleCluster) => {
     switch (action) {
       case 'view':
-        setDetailTarget(cluster);
+        setDetailSelection({ scope: clusterScope, cluster });
         break;
       case 'delete':
         flashToast(`Confirm delete for ${cluster.metadata.name}…`);
@@ -338,6 +394,7 @@ const App = () => {
         config={config}
         providers={providers}
         providersLoading={providersLoading}
+        providersUnavailable={usingDynamicProviders && currentDiscoveredProviders === null && !providersLoading}
         addons={addons}
         entitlements={entitlements}
         addonsLoading={addonsLoading}
@@ -357,7 +414,7 @@ const App = () => {
       <ClusterDetail
         open={Boolean(detailTarget)}
         cluster={detailTarget}
-        onClose={() => setDetailTarget(null)}
+        onClose={() => setDetailSelection(null)}
         onDownloadKubeconfig={(c) => void handleDownloadKubeconfig(c)}
       />
 

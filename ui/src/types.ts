@@ -108,6 +108,9 @@ export interface ProviderSource {
   // whether any CR instance exists yet. This is what lets a freshly-installed
   // provider with zero instances still show up in the create dialog.
   providerConfigName?: string;
+  // Deployment-owned presentation for this exact providerConfigName. Discovery
+  // still has to confirm availability before any of these fields are offered.
+  logoUrl?: string;
 }
 
 export interface ClusterConfig {

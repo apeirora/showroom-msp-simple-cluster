@@ -68,6 +68,8 @@ clusterConfig:
   # (status.providerConfigs). Each entry is a provider CR family — when a user
   # installs a provider and creates its CR, that provider appears automatically.
   # Add an entry per provider family the portal should discover.
+  # Optional per-source label/logoUrl configure provider branding. Every provider
+  # uses the same name and sizing controls; provider settings belong in its SCPC.
   providerSources:
     - group: dati.eu
       version: v1alpha1
