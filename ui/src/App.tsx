@@ -154,7 +154,17 @@ const App = () => {
   }, [discoverProviders, discoverAddons]);
 
   const reload = useCallback(async () => {
-    if (!ctx.graphqlUrl || !ctx.namespace) return;
+    if (!ctx.graphqlUrl) return;
+    if (!ctx.namespace) {
+      // The portal context has settled without a namespace: stop the list
+      // spinner and say so instead of waiting forever on a value that will
+      // never arrive.
+      if (ctx.source !== 'pending') {
+        setLoading(false);
+        setError('The portal did not provide a namespace for this view, so SimpleClusters cannot be listed.');
+      }
+      return;
+    }
     setLoading(true);
     try {
       const items = await listSimpleClusters(client, ctx.namespace);
@@ -165,7 +175,7 @@ const App = () => {
     } finally {
       setLoading(false);
     }
-  }, [client, ctx.graphqlUrl, ctx.namespace]);
+  }, [client, ctx.graphqlUrl, ctx.namespace, ctx.source]);
 
   useEffect(() => {
     void reload();
