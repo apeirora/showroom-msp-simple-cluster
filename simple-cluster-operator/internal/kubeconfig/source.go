@@ -14,8 +14,8 @@ You may obtain a copy of the License at
 // Three strategies, all implemented:
 //
 //   - inline:      walk a JSONPath into R and read kubeconfig bytes.
-//   - secretRef:   render the Secret name/namespace as Go templates and
-//     GET the Secret from the target cluster.
+//   - secretRef:   render the Secret name/namespace as Go templates, check
+//     its metadata requirements, then GET its data from the target cluster.
 //   - subResource: POST a Kind body to R's subresource URL (e.g.
 //     Gardener's adminkubeconfig) and read kubeconfig +
 //     expiry from the response. See subresource.go.
@@ -26,11 +26,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
@@ -118,9 +121,70 @@ func fetchSecretRef(
 	}
 
 	secretGVR := schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
-	obj, err := tc.Dynamic.Resource(secretGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+	if tc.Metadata == nil {
+		return nil, nil, fmt.Errorf("target client has no metadata reader")
+	}
+	requirements, err := renderSecretMetadataRequirements(src, renderCtx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get Secret %s/%s on target cluster: %w", ns, name, err)
+		return nil, nil, err
+	}
+	var labelSelector string
+	if len(requirements.labels) > 0 {
+		selector, selectorErr := labels.Set(requirements.labels).AsValidatedSelector()
+		if selectorErr != nil {
+			return nil, nil, fmt.Errorf("build required Secret label selector: %w", selectorErr)
+		}
+		labelSelector = selector.String()
+	}
+	metadataObj, err := tc.Metadata.Resource(secretGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("get Secret %s/%s metadata on target cluster: %w", ns, name, err)
+	}
+	if metadataObj.GetUID() == "" || metadataObj.GetResourceVersion() == "" {
+		return nil, nil, fmt.Errorf("secret %s/%s metadata response has no UID or resourceVersion", ns, name)
+	}
+	if err := validateRenderedSecretMetadataRequirements(metadataObj, requirements); err != nil {
+		return nil, nil, fmt.Errorf("validate Secret %s/%s metadata requirements: %w", ns, name, err)
+	}
+
+	var obj *unstructured.Unstructured
+	if labelSelector == "" {
+		// Backward compatibility for legacy and annotation-only SecretRefs. A
+		// name-only GET cannot prevent a raced same-name replacement's bytes
+		// from crossing the transport, so UID/RV below is a use boundary only.
+		obj, err = tc.Dynamic.Resource(secretGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("get Secret %s/%s data on target cluster: %w", ns, name, err)
+		}
+	} else {
+		// Put every positive predicate supported by the Secret API on the
+		// server-side data request. A replacement that has lost any required
+		// label is filtered before its data is serialized to this controller.
+		list, listErr := tc.Dynamic.Resource(secretGVR).Namespace(ns).List(ctx, metav1.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector("metadata.name", name).String(),
+			LabelSelector: labelSelector,
+			Limit:         2,
+		})
+		if listErr != nil {
+			return nil, nil, fmt.Errorf("list Secret %s/%s data with required labels on target cluster: %w", ns, name, listErr)
+		}
+		if len(list.Items) != 1 {
+			return nil, nil, fmt.Errorf(
+				"secret %s/%s no longer matches all required labels or is absent; data query returned %d objects; retry",
+				ns, name, len(list.Items))
+		}
+		obj = &list.Items[0]
+		if obj.GetName() != name || obj.GetNamespace() != ns {
+			return nil, nil, fmt.Errorf(
+				"secret data query returned unexpected object %s/%s, want %s/%s",
+				obj.GetNamespace(), obj.GetName(), ns, name)
+		}
+		if err := validateRenderedSecretMetadataRequirements(obj, requirements); err != nil {
+			return nil, nil, fmt.Errorf("validate listed Secret %s/%s metadata requirements: %w", ns, name, err)
+		}
+	}
+	if obj.GetUID() != metadataObj.GetUID() || obj.GetResourceVersion() != metadataObj.GetResourceVersion() {
+		return nil, nil, fmt.Errorf("secret %s/%s changed after its metadata requirements were checked; retry", ns, name)
 	}
 
 	// Secret data fields are base64-encoded strings in unstructured.
@@ -136,6 +200,99 @@ func fetchSecretRef(
 		return nil, nil, fmt.Errorf("secret %s/%s data.%s not valid base64: %w", ns, name, dataKey, err)
 	}
 	return decoded, nil, nil
+}
+
+type renderedSecretMetadataRequirements struct {
+	labels      map[string]string
+	annotations map[string]string
+}
+
+func renderSecretMetadataRequirements(
+	src *showroomv1alpha1.KubeconfigSecretSource,
+	renderCtx map[string]any,
+) (renderedSecretMetadataRequirements, error) {
+	result := renderedSecretMetadataRequirements{
+		labels:      make(map[string]string, len(src.RequiredLabels)),
+		annotations: make(map[string]string, len(src.RequiredAnnotations)),
+	}
+	checks := []struct {
+		kind string
+		want map[string]string
+		out  map[string]string
+	}{
+		{kind: "label", want: src.RequiredLabels, out: result.labels},
+		{kind: "annotation", want: src.RequiredAnnotations, out: result.annotations},
+	}
+	for _, check := range checks {
+		keys := make([]string, 0, len(check.want))
+		for key := range check.want {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if strings.TrimSpace(key) == "" {
+				return renderedSecretMetadataRequirements{}, fmt.Errorf("required %s key is empty", check.kind)
+			}
+			expected, err := rendertpl.RenderString(
+				"secretRef.requiredMetadata."+check.kind+"."+key,
+				check.want[key], renderCtx,
+			)
+			if err != nil {
+				return renderedSecretMetadataRequirements{}, fmt.Errorf("render required %s %q: %w", check.kind, key, err)
+			}
+			check.out[key] = expected
+		}
+	}
+	return result, nil
+}
+
+// validateSecretMetadataRequirements enforces the provider config's exact metadata
+// requirements before kubeconfig bytes are fetched. A status field may legitimately supply
+// a Secret name, but a name alone cannot distinguish an expected transport copy from an
+// unrelated local collision. Both maps are optional for backward compatibility.
+//
+// Metadata equality is not issuer authentication. A provider using these requirements must
+// protect the required keys with admission/RBAC or publish a stronger claim-to-Secret
+// relationship outside the generic SimpleCluster core. At least one required label also
+// lets the data request carry a server-side selector; annotation-only requirements remain
+// a credential-use boundary, not a read-exposure boundary.
+func validateSecretMetadataRequirements(
+	obj metav1.Object,
+	src *showroomv1alpha1.KubeconfigSecretSource,
+	renderCtx map[string]any,
+) error {
+	requirements, err := renderSecretMetadataRequirements(src, renderCtx)
+	if err != nil {
+		return err
+	}
+	return validateRenderedSecretMetadataRequirements(obj, requirements)
+}
+
+func validateRenderedSecretMetadataRequirements(
+	obj metav1.Object,
+	requirements renderedSecretMetadataRequirements,
+) error {
+	checks := []struct {
+		kind   string
+		want   map[string]string
+		actual map[string]string
+	}{
+		{kind: "label", want: requirements.labels, actual: obj.GetLabels()},
+		{kind: "annotation", want: requirements.annotations, actual: obj.GetAnnotations()},
+	}
+	for _, check := range checks {
+		keys := make([]string, 0, len(check.want))
+		for key := range check.want {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if actual, ok := check.actual[key]; !ok || actual != check.want[key] {
+				return fmt.Errorf("required %s %q does not match", check.kind, key)
+			}
+		}
+	}
+	return nil
 }
 
 // coerceBytes interprets a JSONPath-extracted value as kubeconfig bytes.

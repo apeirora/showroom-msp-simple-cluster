@@ -88,6 +88,17 @@ For each resource, either:
     lastErrorPath: status.lastError.description
   ```
 
+  or match Kubernetes-style conditions by exact type and status:
+
+  ```yaml
+  readiness:
+    conditions:
+      ready: {type: Ready, status: "True"}
+      failures:
+        - {type: Synced, status: "False"}
+      matchObservedGeneration: false
+  ```
+
 `lastOperationPath` and `lastErrorPath` are optional but strongly recommended:
 they are what a user sees in `kubectl describe simc` while waiting, and their
 absence is the difference between "Provisioning" and "Provisioning, image
@@ -103,6 +114,12 @@ download 40%".
   disappearing in the same cascade. A k3s uninstall over SSH against VMs that are
   being deleted qualifies. A Gardener `Shoot` or an `OpenStackVM` does not —
   setting it there leaks real infrastructure.
+- Keep an SCPC's target connection, resource identities, and deletion contract stable
+  while any SimpleCluster refers to it. To retire a provider, first set
+  `provisioningEnabled: false`; this blocks new target creation but keeps existing
+  resources observable and deletable. Remove the SCPC only after its dependent
+  SimpleClusters are gone, or publish a new versioned SCPC name instead of
+  mutating the old contract in place.
 
 ### 4. For a provider with its own operator
 
@@ -128,13 +145,46 @@ The controller must:
   operator forces `apiVersion`, `kind`, `metadata.name` and `metadata.namespace`
   to the declared values. A template cannot retarget itself into another
   namespace or another kind.
-- **The SCPC choice is locked** at first reconcile. Editing a `SimpleCluster`
-  does not migrate a cluster that is already building.
+- **The SCPC identity is locked before target work.** Name, namespace and UID
+  are persisted together. A same-name tenant config or replacement cannot
+  redirect observation, creation or cleanup after a crash. Legacy name-only
+  locks are backfilled only when one current candidate exists; because they have
+  no historical UID, providers must not replace or remove their SCPC during the
+  upgrade window.
 - **Predecessors are live.** A `dependsOn` predecessor is re-read from the target
   cluster on every reconcile, so `.Resources.<name>.status.…` always reflects
   current state.
-- **Ownership is stamped.** Every created resource carries annotations naming the
-  owning `SimpleCluster` and the SCPC that produced it.
+- **Ownership is stamped and checked.** Every created resource carries the
+  owning `SimpleCluster` name and UID plus the producing SCPC name, namespace and
+  UID. Partial or mismatched identity is neither adopted nor deleted. A legacy
+  target with only the two name annotations is upgraded only when
+  controller-owned `SimpleCluster` status already records that exact resource,
+  GVK, name and namespace; legacy reconstruction-only objects and status without
+  an exact GVK require manual verification. Ownership migration, delete-enabling
+  annotations and forced finalizer removal use UID/resourceVersion-guarded JSON
+  patches, and Delete is
+  UID-preconditioned so a same-name replacement cannot be mutated or removed.
+  Provider templates cannot pre-set the allow-delete marker, and
+  `deletionAnnotations` cannot overwrite lifecycle ownership keys.
+- **Crash cleanup is collision-safe within its reconstruction boundary.**
+  Deletion unions identities recorded in status with identities reconstructed by
+  the same name/namespace code used for create, and deletes either form only when
+  exact ownership annotations match. Reconstruction is complete for non-repeated
+  resources and repeats derived only from `.SC`/`.Inputs`. Deletion does not
+  rebuild predecessor context for a repeat count that reads `.Resources`; it
+  deletes recorded owned instances, then retains the SimpleCluster finalizer
+  because it cannot prove that no unrecorded instance exists. An operator must
+  verify and remove all owned targets before manually removing that finalizer.
+  The same manual gate applies to an unrecorded target created by a legacy
+  release before status was persisted, because it has no immutable ownership
+  stamp to distinguish it from a same-name collision.
+- **Retirement is checked at the create boundary.** The operator re-reads both
+  the SimpleCluster and SCPC directly from the API server immediately before
+  every target `Create`. Replacement, a changed spec, a render-visible
+  SimpleCluster label change, deletion, finalizer removal, or
+  `provisioningEnabled: false` already visible at that guard stops the create.
+  The two clusters do not offer an atomic transaction, so providers must still
+  follow the staged retirement sequence above.
 - **`env` and `expandenv` are unavailable** in templates. The operator pod's
   environment is not template-author-reachable.
 

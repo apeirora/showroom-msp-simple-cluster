@@ -76,7 +76,9 @@ request is not rejected.
 | Field | Type | Description |
 |---|---|---|
 | `phase` | `Phase` | Aggregate state — see [Phases](#phases). |
-| `providerConfigRef` | `LocalObjectReference` | The SCPC locked in at first reconcile. |
+| `providerConfigRef` | `LocalObjectReference` | Name of the SCPC locked before target work. |
+| `providerConfigNamespace` | `string` | Namespace of the locked SCPC. |
+| `providerConfigUID` | `UID` | Kubernetes identity of the locked SCPC; a same-name replacement is rejected. |
 | `targetCluster` | `string` | Where the resources live: the SCPC name for a remote target, `local` otherwise. |
 | `resources` | `[]ResourceStatus` | Per-resource state of the SCPC's DAG. |
 | `kubeconfigSecretRef` | `LocalObjectReference` | The Secret in this namespace holding the new cluster's kubeconfig. |
@@ -184,6 +186,7 @@ spec:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `provisioningEnabled` | `bool` | no | Defaults to `true`. Set to `false` to stop this SCPC from creating missing target resources while preserving observation and deletion of resources that already exist. |
 | `target` | `TargetSpec` | yes | Which cluster the resources are created on, and the default namespace. |
 | `resources` | `[]ResourceSpec` | yes (≥1) | The DAG of resources to render and create. |
 | `kubeconfigSource` | `KubeconfigSource` | yes | How to obtain the provisioned cluster's kubeconfig. |
@@ -208,13 +211,17 @@ spec:
 | `namespace` | `string` | no | Overrides `target.namespace` for this resource. May be a template. |
 | `namePrefix` | `string` | no | Prepended to the generated name: `sanitise(<namePrefix><sc-name>-<name>)`. |
 | `nameTemplate` | `string` | no | Overrides `namePrefix` and computes the name by rendering this template. Used verbatim. |
-| `repeat` | `string` | no | Template rendering to a non-negative integer; fans this entry out to N objects suffixed `-0`, `-1`, … . `.Index` and `.Prev` are in scope inside `template`. |
+| `repeat` | `string` | no | Template rendering to a non-negative integer; fans this entry out to N objects suffixed `-0`, `-1`, … . `.Index` and `.Prev` are in scope inside `template`. Crash cleanup can reconstruct counts derived from `.SC`/`.Inputs`. Deletion cannot rebuild predecessor context for a count derived from `.Resources`; it deletes recorded owned instances, then retains the finalizer for verified manual cleanup. |
 | `dependsOn` | `[]string` | no | Sibling names that must be Ready first. Cycles, unknown names and self-references are rejected. |
 | `readiness` | `ReadinessCheck` | no | How to project this resource's status onto `Phase`. When omitted, the operator reads `status.phase` and treats `Ready` as ready, `Failed`/`Error` as failed, empty as pending, anything else as provisioning. |
 | `deletionAnnotations` | `map[string]string` | no | Applied before deletion. Some controllers require a double opt-in, e.g. Gardener's `confirmation.gardener.cloud/deletion: "true"`. |
 | `forceCleanupOnCascade` | `bool` | no | After Delete, strip finalizers following a short grace window. Only for resources with **no external state worth reclaiming** — e.g. a k3s uninstall over SSH against VMs that are disappearing in the same cascade. Setting it on a Gardener Shoot or an OpenStackVM leaks infrastructure. |
 
 #### `ReadinessCheck`
+
+Choose exactly one mapping shape.
+
+Scalar status mapping:
 
 | Field | Description |
 |---|---|
@@ -223,6 +230,14 @@ spec:
 | `phaseFailedValues` | Values that mean Failed. |
 | `lastOperationPath` | Optional JSONPath to a human-readable progress string. |
 | `lastErrorPath` | Optional JSONPath to a human-readable error string. |
+
+Kubernetes condition mapping:
+
+| Field | Description |
+|---|---|
+| `conditions.ready.{type,status}` | Exact condition type and status (`True`, `False` or `Unknown`) that means Ready. |
+| `conditions.failures[]` | Exact condition matches that mean Failed. Failure matches take precedence over readiness, and their messages are surfaced in stable type order. |
+| `conditions.matchObservedGeneration` | When true, ignores non-zero condition generations that differ from the target object's generation. Leave false for cross-cluster sync paths whose source and target generations differ. |
 
 #### `InputDeclaration`
 
@@ -258,6 +273,7 @@ Exactly one of `secretRef`, `subResource` or `inline` must be set.
 | `resourceName` | `string` | Which `resources[]` entry produces the cluster. |
 | `secretRef.name`, `.namespace` | `string` (template) | Secret in the target cluster holding the kubeconfig. `namespace` defaults to the resource's namespace. The live resource is in scope as `.Resources.<resourceName>`. |
 | `secretRef.dataKey` | `string` | Key inside the Secret; defaults to `kubeconfig`. |
+| `secretRef.requiredLabels`, `.requiredAnnotations` | `map[string]string` (templated values) | Optional exact metadata requirements checked through a strict `meta.k8s.io/v1 PartialObjectMetadata` request with no full-object fallback. The server must return canonical `Content-Type: application/json` with an exact `meta.k8s.io/v1 PartialObjectMetadata` envelope. With at least one required label, the subsequent Secret data request is a server-filtered list constrained by namespace, `metadata.name`, and every rendered label; exactly one result with the metadata-read UID and resourceVersion is accepted. Annotation requirements cannot be server-filtered. With no required label, the compatibility path uses a name-only GET: metadata and UID/resourceVersion checks prevent use of a raced object but cannot prevent its bytes from being returned. Protect required keys with provider-side admission/RBAC or a stronger claim relation; matching user-writable metadata is not issuer authentication. |
 | `subResource.{apiVersion,kind,subResource,kubeconfigPath}` | `string` | Call a subresource on the object, e.g. Gardener's `adminkubeconfig`, and read the kubeconfig at `kubeconfigPath`. |
 | `subResource.expirationPath` | `string` | Optional JSONPath to the credential's expiry. |
 | `inline.kubeconfigPath` | `string` | JSONPath locating kubeconfig bytes inside the object itself. |

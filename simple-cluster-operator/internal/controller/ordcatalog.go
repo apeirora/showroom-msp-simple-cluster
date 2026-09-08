@@ -421,6 +421,9 @@ func sameGraph(a, b []providerGraphNode) bool {
 }
 
 func providerAvailable(scpc *showroomv1alpha1.SimpleClusterProviderConfig) (bool, string) {
+	if !scpc.Spec.AllowsProvisioning() {
+		return false, "The provider configuration is retired for new provisioning."
+	}
 	if scpc.Status.Reachable != nil && !*scpc.Status.Reachable {
 		return false, "The provider target is not reachable."
 	}

@@ -16,13 +16,20 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 )
 
 func minimalSCPC(inputs []showroomv1alpha1.InputDeclaration) *showroomv1alpha1.SimpleClusterProviderConfig {
 	return &showroomv1alpha1.SimpleClusterProviderConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "provider",
+			Namespace: "provider-system",
+			UID:       types.UID("provider-uid"),
+		},
 		Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
 			Target: showroomv1alpha1.TargetSpec{Namespace: "default"},
 			Inputs: inputs,
@@ -34,6 +41,7 @@ func minimalSC(workers int32, inputs map[string]string) *showroomv1alpha1.Simple
 	sc := &showroomv1alpha1.SimpleCluster{}
 	sc.Name = "foo"
 	sc.Namespace = "users"
+	sc.UID = types.UID("simple-cluster-uid")
 	sc.Spec.Workers = showroomv1alpha1.WorkersSpec{Nodes: &workers}
 	sc.Spec.Inputs = inputs
 	return sc
@@ -53,6 +61,8 @@ func TestRender_SingleResource(t *testing.T) {
 kind: ConfigMap
 metadata:
   name: ignored
+  annotations:
+    showroom.apeirora.eu/allow-delete: "true"
 data:
   workers: "{{ .SC.workers.nodes }}"
   region: "{{ .Inputs.region }}"
@@ -80,6 +90,21 @@ data:
 	annos := obj.GetAnnotations()
 	if annos[AnnoSimpleCluster] != "users/foo" {
 		t.Errorf("%s = %q want users/foo", AnnoSimpleCluster, annos[AnnoSimpleCluster])
+	}
+	if annos[AnnoSimpleClusterProvider] != "provider" {
+		t.Errorf("%s = %q want provider", AnnoSimpleClusterProvider, annos[AnnoSimpleClusterProvider])
+	}
+	if annos[AnnoSimpleClusterUID] != "simple-cluster-uid" {
+		t.Errorf("%s = %q want simple-cluster-uid", AnnoSimpleClusterUID, annos[AnnoSimpleClusterUID])
+	}
+	if annos[AnnoSimpleClusterProviderNamespace] != "provider-system" {
+		t.Errorf("%s = %q want provider-system", AnnoSimpleClusterProviderNamespace, annos[AnnoSimpleClusterProviderNamespace])
+	}
+	if annos[AnnoSimpleClusterProviderUID] != "provider-uid" {
+		t.Errorf("%s = %q want provider-uid", AnnoSimpleClusterProviderUID, annos[AnnoSimpleClusterProviderUID])
+	}
+	if _, ok := annos[AnnoAllowDelete]; ok {
+		t.Errorf("provider template preserved reserved %s annotation", AnnoAllowDelete)
 	}
 	if got := obj.GetLabels()[LabelSimpleCluster]; got != "foo" {
 		t.Errorf("%s = %q want foo", LabelSimpleCluster, got)
@@ -432,6 +457,77 @@ metadata:
 	objs2, _ := Render(scpc, sc, r, nil)
 	if objs2[0].GetName() != name {
 		t.Errorf("not deterministic: %q vs %q", name, objs2[0].GetName())
+	}
+	resolvedName, resolvedNamespace, err := ResolveTarget(scpc, sc, r, 0)
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	if resolvedName != name || resolvedNamespace != objs[0].GetNamespace() {
+		t.Errorf("ResolveTarget=(%q,%q), Render=(%q,%q)",
+			resolvedName, resolvedNamespace, name, objs[0].GetNamespace())
+	}
+}
+
+func TestResolveTargetSharesRenderInputAndNamespaceContext(t *testing.T) {
+	scpc := minimalSCPC([]showroomv1alpha1.InputDeclaration{
+		{Name: "suffix", Type: showroomv1alpha1.InputTypeString, Default: "provider-a"},
+		{Name: "targetNamespace", Type: showroomv1alpha1.InputTypeString, Default: "provider-target"},
+	})
+	scpc.Spec.Target.Namespace = "{{ .Inputs.targetNamespace }}"
+	resourceSpec := &showroomv1alpha1.ResourceSpec{
+		Name:         "claim",
+		APIVersion:   "provider.example/v1",
+		Kind:         "ClusterClaim",
+		NameTemplate: `{{ printf "%s/%s/%s" .SC.namespace .SC.name .Inputs.suffix | sha256sum | trunc 20 | printf "sc-%s" }}`,
+		Template:     "apiVersion: provider.example/v1\nkind: ClusterClaim\nmetadata: {name: ignored}\n",
+	}
+	sc := minimalSC(1, map[string]string{"suffix": "provider-b"})
+
+	objects, err := Render(scpc, sc, resourceSpec, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	resolvedName, resolvedNamespace, err := ResolveTarget(scpc, sc, resourceSpec, 0)
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	if resolvedName != objects[0].GetName() || resolvedNamespace != objects[0].GetNamespace() {
+		t.Fatalf("ResolveTarget=(%q,%q), Render=(%q,%q)",
+			resolvedName, resolvedNamespace, objects[0].GetName(), objects[0].GetNamespace())
+	}
+	if resolvedNamespace != "provider-target" {
+		t.Fatalf("resolved namespace=%q, want provider-target", resolvedNamespace)
+	}
+}
+
+func TestResolveTargetMatchesRepeatedRenderIndices(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	resourceSpec := &showroomv1alpha1.ResourceSpec{
+		Name:         "claim",
+		APIVersion:   "provider.example/v1",
+		Kind:         "ClusterClaim",
+		NameTemplate: `{{ printf "%s/%s" .SC.namespace .SC.name | sha256sum | trunc 16 | printf "sc-%s" }}`,
+		Repeat:       "2",
+		Template:     "apiVersion: provider.example/v1\nkind: ClusterClaim\nmetadata: {name: ignored}\n",
+	}
+	sc := minimalSC(2, nil)
+
+	objects, err := Render(scpc, sc, resourceSpec, nil)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if len(objects) != 2 {
+		t.Fatalf("rendered objects=%d, want 2", len(objects))
+	}
+	for index := range objects {
+		resolvedName, resolvedNamespace, err := ResolveTarget(scpc, sc, resourceSpec, index)
+		if err != nil {
+			t.Fatalf("ResolveTarget(%d): %v", index, err)
+		}
+		if resolvedName != objects[index].GetName() || resolvedNamespace != objects[index].GetNamespace() {
+			t.Fatalf("ResolveTarget(%d)=(%q,%q), Render=(%q,%q)", index,
+				resolvedName, resolvedNamespace, objects[index].GetName(), objects[index].GetNamespace())
+		}
 	}
 }
 

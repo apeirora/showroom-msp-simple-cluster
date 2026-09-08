@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/sprig/v3"
+	resourcequantity "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 
@@ -32,6 +33,12 @@ const (
 	AnnoSimpleCluster = "simple-cluster-name"
 	// AnnoSimpleClusterProvider names the SCPC whose template produced R.
 	AnnoSimpleClusterProvider = "simple-cluster-provider"
+	// AnnoSimpleClusterUID locks ownership to one SimpleCluster incarnation.
+	AnnoSimpleClusterUID = "showroom.apeirora.eu/simple-cluster-uid"
+	// AnnoSimpleClusterProviderNamespace identifies the exact SCPC namespace.
+	AnnoSimpleClusterProviderNamespace = "showroom.apeirora.eu/simple-cluster-provider-namespace"
+	// AnnoSimpleClusterProviderUID locks ownership to one SCPC incarnation.
+	AnnoSimpleClusterProviderUID = "showroom.apeirora.eu/simple-cluster-provider-uid"
 	// LabelSimpleCluster carries the owning SimpleCluster's name on every child it
 	// produces, so children can be selected and, in the portal, protected from
 	// direct deletion (their lifecycle is owned by the SimpleCluster).
@@ -63,6 +70,8 @@ type Predecessor struct {
 // docs/architecture.md has exactly one definition in code.
 const (
 	ctxKeyInputs    = "Inputs"
+	ctxKeyName      = "name"
+	ctxKeyNamespace = "namespace"
 	ctxKeyNodes     = "nodes"
 	ctxKeyRequested = "requested"
 )
@@ -132,8 +141,14 @@ func renderOne(
 	if annos == nil {
 		annos = map[string]string{}
 	}
+	// A provider template cannot pre-authorize direct deletion. The core adds
+	// this marker only inside its UID-guarded delete path.
+	delete(annos, AnnoAllowDelete)
 	annos[AnnoSimpleCluster] = sc.Namespace + "/" + sc.Name
 	annos[AnnoSimpleClusterProvider] = scpc.Name
+	annos[AnnoSimpleClusterUID] = string(sc.UID)
+	annos[AnnoSimpleClusterProviderNamespace] = scpc.Namespace
+	annos[AnnoSimpleClusterProviderUID] = string(scpc.UID)
 	obj.SetAnnotations(annos)
 
 	// Preserve any template-defined labels (e.g. the up-sync owner-cluster label)
@@ -187,6 +202,24 @@ func BuildContext(
 	return buildContext(scpc, sc, resource, predecessors, false, 0, nil)
 }
 
+// ResolveTarget computes the name and namespace Render assigns to one target
+// resource instance. It deliberately shares the same input and template
+// context as the create path so callers such as the crash-window delete
+// fallback cannot derive a different identity. Index is only significant when
+// resource.Repeat is configured.
+func ResolveTarget(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	resource *showroomv1alpha1.ResourceSpec,
+	index int,
+) (string, string, error) {
+	inputs, err := buildInputs(scpc, sc)
+	if err != nil {
+		return "", "", err
+	}
+	return resolveTarget(scpc, sc, resource, inputs, resource.Repeat != "", index)
+}
+
 func buildContext(
 	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 	sc *showroomv1alpha1.SimpleCluster,
@@ -201,26 +234,9 @@ func buildContext(
 		return nil, err
 	}
 
-	var targetName string
-	if resource.NameTemplate != "" {
-		nameCtx := map[string]any{"SC": scContext(sc), ctxKeyInputs: inputs}
-		rendered, nerr := RenderString(resource.Name+".nameTemplate", resource.NameTemplate, nameCtx)
-		if nerr != nil {
-			return nil, fmt.Errorf("nameTemplate: %w", nerr)
-		}
-		base := strings.TrimSpace(rendered)
-		if repeated {
-			targetName = fmt.Sprintf("%s-%d", base, index)
-		} else {
-			targetName = base
-		}
-	} else {
-		baseName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
-		if repeated {
-			targetName = fmt.Sprintf("%s-%d", baseName, index)
-		} else {
-			targetName = baseName
-		}
+	targetName, targetNamespace, err := resolveTarget(scpc, sc, resource, inputs, repeated, index)
+	if err != nil {
+		return nil, err
 	}
 
 	resourcesCtx := make(map[string]any, len(predecessors))
@@ -242,15 +258,6 @@ func buildContext(
 
 	scCtx := scContext(sc)
 
-	rawNamespace := resource.Namespace
-	if rawNamespace == "" {
-		rawNamespace = scpc.Spec.Target.Namespace
-	}
-	targetNamespace, err := renderNamespace(resource.Name, rawNamespace, scCtx, inputs)
-	if err != nil {
-		return nil, err
-	}
-
 	prevAny := make([]any, 0, len(prev))
 	for _, p := range prev {
 		prevAny = append(prevAny, p)
@@ -260,9 +267,9 @@ func buildContext(
 		"SC":         scCtx,
 		ctxKeyInputs: inputs,
 		"Target": map[string]any{
-			"name":      targetName,
-			"namespace": targetNamespace,
-			"kind":      resource.Kind,
+			ctxKeyName:      targetName,
+			ctxKeyNamespace: targetNamespace,
+			"kind":          resource.Kind,
 		},
 		"Resources": resourcesCtx,
 		"Index":     index,
@@ -270,13 +277,56 @@ func buildContext(
 	}, nil
 }
 
+func resolveTarget(
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster,
+	resource *showroomv1alpha1.ResourceSpec,
+	inputs map[string]any,
+	repeated bool,
+	index int,
+) (string, string, error) {
+	var targetName string
+	if resource.NameTemplate != "" {
+		nameCtx := map[string]any{"SC": scContext(sc), ctxKeyInputs: inputs}
+		rendered, nerr := RenderString(resource.Name+".nameTemplate", resource.NameTemplate, nameCtx)
+		if nerr != nil {
+			return "", "", fmt.Errorf("nameTemplate: %w", nerr)
+		}
+		base := strings.TrimSpace(rendered)
+		if repeated {
+			targetName = fmt.Sprintf("%s-%d", base, index)
+		} else {
+			targetName = base
+		}
+	} else {
+		baseName := SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)
+		if repeated {
+			targetName = fmt.Sprintf("%s-%d", baseName, index)
+		} else {
+			targetName = baseName
+		}
+	}
+
+	scCtx := scContext(sc)
+
+	rawNamespace := resource.Namespace
+	if rawNamespace == "" {
+		rawNamespace = scpc.Spec.Target.Namespace
+	}
+	targetNamespace, err := renderNamespace(resource.Name, rawNamespace, scCtx, inputs)
+	if err != nil {
+		return "", "", err
+	}
+	return targetName, targetNamespace, nil
+}
+
 // scContext builds the .SC sub-context shared by the full render context and
 // the standalone namespace resolution.
 func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 	scCtx := map[string]any{
-		"name":      sc.Name,
-		"namespace": sc.Namespace,
-		"uid":       string(sc.UID),
+		ctxKeyName:      sc.Name,
+		ctxKeyNamespace: sc.Namespace,
+		"uid":           string(sc.UID),
 		"workers": map[string]any{
 			ctxKeyNodes:     sc.Spec.Workers.MinNodes(),
 			"min":           sc.Spec.Workers.MinNodes(),
@@ -360,13 +410,9 @@ func nodeResourcesContext(r showroomv1alpha1.NodeResources) map[string]any {
 // context using the same sprig-flavoured engine as Render (with `env` and
 // `expandenv` removed).
 func RenderString(name, body string, ctx map[string]any) (string, error) {
-	funcs := sprig.TxtFuncMap()
-	delete(funcs, "env")
-	delete(funcs, "expandenv")
-
 	tmpl, err := template.New(name).
 		Option("missingkey=error").
-		Funcs(funcs).
+		Funcs(renderFuncs()).
 		Parse(body)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
@@ -376,6 +422,29 @@ func RenderString(name, body string, ctx map[string]any) (string, error) {
 		return "", fmt.Errorf("execute template: %w", err)
 	}
 	return buf.String(), nil
+}
+
+func renderFuncs() template.FuncMap {
+	funcs := sprig.TxtFuncMap()
+	delete(funcs, "env")
+	delete(funcs, "expandenv")
+	funcs["quantityCmp"] = compareQuantities
+	return funcs
+}
+
+// compareQuantities compares Kubernetes resource quantities without losing
+// precision through floats or treating equivalent units as different strings.
+// Invalid operands fail template execution instead of becoming a zero value.
+func compareQuantities(left, right string) (int, error) {
+	lhs, err := resourcequantity.ParseQuantity(left)
+	if err != nil {
+		return 0, fmt.Errorf("parse left quantity: %w", err)
+	}
+	rhs, err := resourcequantity.ParseQuantity(right)
+	if err != nil {
+		return 0, fmt.Errorf("parse right quantity: %w", err)
+	}
+	return lhs.Cmp(rhs), nil
 }
 
 // ResolveInputs computes the closed input set for an SC against its SCPC:

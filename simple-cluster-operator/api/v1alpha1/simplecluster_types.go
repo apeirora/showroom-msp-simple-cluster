@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // SimpleClusterSpec defines the desired state of SimpleCluster.
@@ -279,10 +280,17 @@ type NodeStatus struct {
 
 // SimpleClusterStatus defines the observed state of SimpleCluster.
 type SimpleClusterStatus struct {
-	// ProviderConfigRef is locked at first reconcile so SCPC changes do not
-	// migrate resources mid-flight.
+	// ProviderConfigRef is locked before target work. ProviderConfigNamespace
+	// and ProviderConfigUID complete its immutable identity; name-only values
+	// written by older releases are backfilled only when unambiguous.
 	// +optional
 	ProviderConfigRef *corev1.LocalObjectReference `json:"providerConfigRef,omitempty"`
+	// ProviderConfigNamespace is the namespace of ProviderConfigRef.
+	// +optional
+	ProviderConfigNamespace string `json:"providerConfigNamespace,omitempty"`
+	// ProviderConfigUID rejects a same-name replacement of ProviderConfigRef.
+	// +optional
+	ProviderConfigUID types.UID `json:"providerConfigUID,omitempty"`
 
 	// TargetCluster identifies where the resources live: SCPC name (for remote)
 	// or "local".
