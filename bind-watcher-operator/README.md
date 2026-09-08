@@ -19,11 +19,14 @@ account?"* by reading a single namespace annotation instead of guessing.
   hard-coded, and multiple provider workspaces (e.g. simple-cluster and dati) can
   be watched at once. All log lines carry the KCP `workspace` path (from the
   APIBinding `kcp.io/path` annotation) alongside the logical cluster id.
-* **Bind** — through an APIExport virtual workspace, multicluster-runtime
-  *engages* exactly the workspaces that have bound that export. On every
-  `APIBinding` change the reconciler updates an in-memory index
-  (`realCluster → provider → binding → export`) and re-renders the annotation on
-  the matching MSP namespace.
+* **Complete inventory before writes** — an `APIBinding` event triggers an
+  aggregate snapshot, not an incremental annotation replacement. Every
+  configured workspace must have a successful endpoint discovery, every
+  discovered slice must have a URL, and every provider's initial APIBinding
+  cache must be synchronized before any annotation is changed. This preserves
+  existing provider configuration during startup and reconnect; informer event
+  order is not an authoritative inventory. A failure in any configured source
+  conservatively delays all annotation changes until it recovers.
 * **Mapping** — the MSP namespace is named after the KCP logical cluster, so it
   is selected by its well-known name label
   `kubernetes.io/metadata.name == <logical cluster>` (configurable via
@@ -35,14 +38,16 @@ account?"* by reading a single namespace annotation instead of guessing.
   binding can be recorded, tagging it with `MANAGED_LABEL_KEY` to tell it apart
   from sync-agent-created namespaces. Creation is idempotent; the operator never
   deletes namespaces.
-* **Unbind** is handled explicitly: the controller is registered as a
-  cluster-aware runnable, so when a workspace disengages (its binding is removed,
-  or the whole endpoint slice goes away) it drops that provider's entries and
-  clears the annotation. Operator shutdown is distinguished from a real
-  disengage, so stopping the operator does not wipe annotations.
-* Because the same workspace may bind several exports through several providers,
-  the index is keyed per provider and annotation writes use an optimistic-lock
-  patch with conflict retry, so concurrent providers cannot lose an update.
+* **Unbind** requires authoritative absence from a complete inventory. Transport
+  cancellation, discovery errors and temporarily unready endpoint slices do not
+  delete exports. A successfully observed binding/endpoint deletion still removes
+  that export, including the last binding. Periodic discovery also republishes
+  the snapshot, covering unbinds while stopped and caches that synchronize after
+  their initial events. Stopped providers are retried with generation-specific
+  names so a previous provider's asynchronous exit cannot remove its replacement.
+* Snapshot publication is serialized and annotation patches retain optimistic
+  conflict retries. Duplicate observations of a binding are deduplicated;
+  conflicting export identities or missing logical-cluster identity block writes.
 * The MSP namespace is written through a direct in-cluster client; the manager
   itself only talks to KCP.
 
@@ -59,6 +64,7 @@ remain the annotation is removed.
 |----------------------------|----------|----------------------------------------------|--------------------------------------------------------------|
 | `KCP_KUBECONFIG`           | yes      | —                                            | Kubeconfig for KCP (auth; host rewritten per workspace)      |
 | `KCP_WORKSPACES`           | no       | *(kubeconfig's own)*                         | Comma-separated workspace paths to scan for endpoint slices  |
+| `KCP_EXCLUDED_ENDPOINTS`   | no       | *(none)*                                    | Comma-separated exact `workspace|slice` keys deliberately outside this watcher's scope |
 | `KCP_DISCOVERY_INTERVAL`   | no       | `1m`                                         | How often to re-list `APIExportEndpointSlice`s               |
 | `CLUSTER_LABEL_KEY`        | no       | `kubernetes.io/metadata.name`                | Namespace label whose value is the logical cluster name      |
 | `EXPORTS_ANNOTATION_KEY`   | no       | `bind.simple-cluster.apeirora.eu/exports`    | Annotation written with the bound-export list                |
@@ -68,6 +74,18 @@ remain the annotation is removed.
 
 The MSP (in-cluster) API server is used for namespace access via the standard
 controller-runtime config resolution.
+
+An unrelated, permanently unready slice may be excluded explicitly, for example
+`KCP_EXCLUDED_ENDPOINTS=root:providers:telekom|crossplane.internal.t-systems.com`.
+The workspace must be in `KCP_WORKSPACES`, and slice names must be valid DNS
+subdomains; wildcard, malformed and duplicate keys are rejected. With the default
+kubeconfig workspace, use `|slice-name`. Chart wiring is `KCP.excludedEndpoints`.
+All other slices still require successful discovery and synchronized caches;
+an exclusion does not hide workspace LIST errors. Excluded slices are neither
+modified nor deleted. Do not exclude a serving endpoint until dependent resources
+are drained: removing an observed export can remove its namespace annotation and
+cause provider operators to delete their SCPCs. This is explicit controller scope,
+not an authorization boundary.
 
 ## Access requirements
 
