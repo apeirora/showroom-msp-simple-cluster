@@ -152,6 +152,11 @@ const App = () => {
     [config, currentDiscoveredProviders]
   );
 
+  // Discovery answered and offered nothing: this account has no providers, so
+  // the clusters view says so instead of waiting for a create flow that cannot
+  // succeed. An unconfirmed result (null) keeps the normal loading behaviour.
+  const noProviders = usingDynamicProviders && currentDiscoveredProviders?.length === 0;
+
   // The catalogue is global and the entitlement per account, so both are resolved
   // together: without an entitlement an entry can only be rendered disabled anyway.
   const discoverAddons = useCallback(async () => {
@@ -382,6 +387,7 @@ const App = () => {
           <ClusterList
             clusters={clusters}
             loading={loading}
+            noProviders={noProviders}
             onCreate={openCreate}
             onAction={handleAction}
           />

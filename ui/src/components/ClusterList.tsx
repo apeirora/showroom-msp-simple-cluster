@@ -53,11 +53,24 @@ const phaseColor = (
 interface ClusterListProps {
   clusters: SimpleCluster[];
   loading: boolean;
+  noProviders?: boolean;
   onCreate: () => void;
   onAction: (action: ClusterAction, cluster: SimpleCluster) => void;
 }
 
-export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterListProps) => {
+export const ClusterList = ({ clusters, loading, noProviders = false, onCreate, onAction }: ClusterListProps) => {
+  // Nothing can be created without a provider, so an empty account lands here
+  // instead of on a busy indicator or a create invitation that cannot succeed.
+  if (noProviders && clusters.length === 0) {
+    return (
+      <IllustratedMessage
+        name="NoData"
+        titleText="No cluster providers"
+        subtitleText="No cluster providers are available in this account."
+      />
+    );
+  }
+
   if (loading && clusters.length === 0) {
     return (
       <FlexBox justifyContent={FlexBoxJustifyContent.Center} style={{ padding: '2rem' }}>
@@ -162,7 +175,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
     <FlexBox direction={FlexBoxDirection.Column} style={{ gap: '0.75rem' }}>
       <FlexBox justifyContent={FlexBoxJustifyContent.SpaceBetween} style={{ alignItems: 'baseline' }}>
         <Title level="H3">SimpleClusters</Title>
-        <Button design="Emphasized" icon="add" onClick={onCreate}>
+        <Button design="Emphasized" icon="add" disabled={noProviders} onClick={onCreate}>
           New SimpleCluster
         </Button>
       </FlexBox>
