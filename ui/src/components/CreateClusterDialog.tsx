@@ -15,6 +15,7 @@ import {
   StepInput
 } from '@ui5/webcomponents-react';
 import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig } from '../types';
+import { providerSource, safeLogoUrl } from '../lib/providerPresentation';
 
 const RFC_1123 = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 
@@ -42,6 +43,7 @@ interface Props {
   // discovery is enabled, otherwise the static config list).
   providers: string[];
   providersLoading: boolean;
+  providersUnavailable?: boolean;
   // Installable extensions offered for this kind, and whether this workspace has each
   // one. Empty hides the section entirely.
   addons: AddonCatalogEntry[];
@@ -62,6 +64,7 @@ export const CreateClusterDialog = ({
   config,
   providers,
   providersLoading,
+  providersUnavailable = false,
   addons,
   entitlements,
   addonsLoading,
@@ -72,6 +75,8 @@ export const CreateClusterDialog = ({
   const [name, setName] = useState('');
   const [enabledAddons, setEnabledAddons] = useState<Set<string>>(new Set());
   const [provider, setProvider] = useState(providers[0] ?? '');
+  const details = providerSource(config, provider);
+  const logo = safeLogoUrl(details?.logoUrl);
 
   // Keep the selection valid as the discovered provider list arrives or
   // changes (and whenever the dialog reopens).
@@ -93,18 +98,22 @@ export const CreateClusterDialog = ({
   const [nameTouched, setNameTouched] = useState(false);
 
   const nameValid = useMemo(() => RFC_1123.test(name) && name.length <= 63, [name]);
-  const workersValid = workerAutoscaling ? workerMin >= 1 && workerMax >= workerMin : workerNodes >= 1;
+  const inRange = (value: number, min: number, max: number) =>
+    Number.isSafeInteger(value) && value >= min && value <= max;
+  const workersValid = workerAutoscaling
+    ? inRange(workerMin, config.workers.min, config.workers.max) &&
+      inRange(workerMax, workerMin, config.workers.max)
+    : inRange(workerNodes, config.workers.min, config.workers.max);
   const noProviders = !providersLoading && providers.length === 0;
   const canSubmit =
     nameValid &&
-    Boolean(provider) &&
+    providers.includes(provider) &&
     !providersLoading &&
+    !providersUnavailable &&
     workersValid &&
-    Boolean(workerCpu) &&
-    Boolean(workerMemory) &&
-    controlPlaneNodes >= 1 &&
-    Boolean(controlPlaneCpu) &&
-    Boolean(controlPlaneMemory);
+    config.cpu.includes(workerCpu) && config.memory.includes(workerMemory) &&
+    inRange(controlPlaneNodes, config.controlPlane.min, config.controlPlane.max) &&
+    config.cpu.includes(controlPlaneCpu) && config.memory.includes(controlPlaneMemory);
 
   // Only a box that is both ticked and entitled becomes a label. Entitlement can change
   // between opening the dialog and submitting it (the check is asynchronous), and a
@@ -153,7 +162,7 @@ export const CreateClusterDialog = ({
   };
 
   const handleSubmit = () => {
-    if (!canSubmit) return;
+    if (!canSubmit || busy) return;
     onSubmit({
       name,
       provider,
@@ -226,6 +235,10 @@ export const CreateClusterDialog = ({
               <BusyIndicator active size="S" />
               <span style={{ fontSize: '0.85rem' }}>Loading available providers…</span>
             </FlexBox>
+          ) : providersUnavailable ? (
+            <MessageStrip design="Critical" hideCloseButton>
+              Provider availability could not be confirmed. Check the connection and reopen this dialog.
+            </MessageStrip>
           ) : noProviders ? (
             <MessageStrip design="Critical" hideCloseButton>
               No providers are available in this workspace. Install a provider (for
@@ -236,12 +249,15 @@ export const CreateClusterDialog = ({
             <Select id="sc-provider" onChange={(e) => setProvider(selectValue(e))}>
               {providers.map((p) => (
                 <Option key={p} value={p} selected={p === provider}>
-                  {p}
+                  {providerSource(config, p)?.label ?? p}
                 </Option>
               ))}
             </Select>
           )}
         </FlexBox>
+
+        {logo && <img src={logo} alt={`${details?.label ?? provider} logo`}
+          style={{ width: 120, maxHeight: 56, objectFit: 'contain', alignSelf: 'flex-start' }} />}
 
         {/*
           * Hidden entirely when no extension is installed on the landscape, so the

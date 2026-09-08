@@ -5,11 +5,14 @@ import {
   FlexBox,
   FlexBoxDirection,
   Label,
+  MessageStrip,
   ObjectStatus,
   Panel,
   Title
 } from '@ui5/webcomponents-react';
-import type { Condition, SimpleCluster } from '../types';
+import type { SimpleCluster } from '../types';
+import { clusterDisplayPhase, conditionState, conditionSummary, reconciliationError } from '../lib/clusterStatus';
+import { displayQuantity } from '../lib/quantityDisplay';
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <FlexBox style={{ gap: '0.75rem', padding: '0.25rem 0', alignItems: 'baseline' }}>
@@ -22,12 +25,6 @@ const fmtDate = (ts?: string): string => {
   if (!ts) return '—';
   const d = new Date(ts);
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString();
-};
-
-const conditionState = (c: Condition): 'Positive' | 'Negative' | 'Critical' | 'None' => {
-  if (c.status === 'True') return 'Positive';
-  if (c.status === 'False') return 'Negative';
-  return 'Critical';
 };
 
 const phaseState = (phase?: string): 'Positive' | 'Negative' | 'Critical' | 'None' => {
@@ -49,7 +46,8 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
   const s = cluster.spec ?? {};
   const st = cluster.status ?? {};
   const hasKubeconfig = Boolean(st.kubeconfigSecretRef?.name);
-  const phase = cluster.metadata.deletionTimestamp ? 'Deleting' : st.phase;
+  const phase = clusterDisplayPhase(cluster);
+  const error = reconciliationError(cluster);
 
   return (
     <Dialog
@@ -86,6 +84,11 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
       }
     >
       <FlexBox direction={FlexBoxDirection.Column} style={{ gap: '1rem', padding: '0.25rem 0' }}>
+        {error && (
+          <MessageStrip design="Negative" hideCloseButton>
+            {conditionSummary(error)}
+          </MessageStrip>
+        )}
         <Panel headerText="Cluster" collapsed={false}>
           <Row label="Name">{cluster.metadata.name}</Row>
           <Row label="Phase">
@@ -93,6 +96,7 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
               {phase ?? 'Unknown'}
             </ObjectStatus>
           </Row>
+          {phase === 'Error' && st.phase && <Row label="Last observed phase">{st.phase}</Row>}
           <Row label="Provider">
             {st.providerConfigRef?.name ?? s.providerConfigRefs?.[0]}
           </Row>
@@ -103,8 +107,8 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
         <Panel headerText="Control plane" collapsed={false}>
           <Row label="Ready / declared">{st.cp}</Row>
           <Row label="Nodes">{s.controlPlane?.nodes ?? '—'}</Row>
-          <Row label="CPU / node">{String(s.controlPlane?.requested?.cpu ?? '—')}</Row>
-          <Row label="Memory / node">{String(s.controlPlane?.requested?.memory ?? '—')}</Row>
+          <Row label="CPU / node">{displayQuantity(s.controlPlane?.requested?.cpu)}</Row>
+          <Row label="Memory / node">{displayQuantity(s.controlPlane?.requested?.memory)}</Row>
         </Panel>
 
         <Panel headerText="Workers" collapsed={false}>
@@ -116,8 +120,8 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
           ) : (
             <Row label="Nodes">{s.workers?.nodes ?? '—'}</Row>
           )}
-          <Row label="CPU / node">{String(s.workers?.requested?.cpu ?? '—')}</Row>
-          <Row label="Memory / node">{String(s.workers?.requested?.memory ?? '—')}</Row>
+          <Row label="CPU / node">{displayQuantity(s.workers?.requested?.cpu)}</Row>
+          <Row label="Memory / node">{displayQuantity(s.workers?.requested?.memory)}</Row>
         </Panel>
 
         <Panel headerText="Nodes" collapsed={!st.nodes?.length}>

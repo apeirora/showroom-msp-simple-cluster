@@ -105,6 +105,9 @@ jobs:
       - name: Test ORD renderer
         run: npm run test:ord
 
+      - name: Test provider forms and requests
+        run: npm test
+
       - name: Build
         run: npm run build
 

@@ -9,7 +9,7 @@
  * live provider drop-down.
  */
 
-import type { ProviderSource } from '../types';
+import type { ClusterConfig, ProviderSource } from '../types';
 import { graphqlFetch, GraphqlError, type GraphqlClientOptions } from './graphql';
 import { fixturesEnabled } from './fixtures';
 
@@ -18,9 +18,15 @@ export interface ProviderDiscovery {
   // true once the gateway gave a definitive answer for at least one source —
   // either data, or a GraphQL-level error meaning that provider is simply not
   // installed. false only when the gateway was unreachable (transport error)
-  // or discovery could not run, in which case callers keep the static fallback.
+  // or discovery could not run. Callers must not activate static fallback names
+  // for an unconfirmed dynamic source.
   ran: boolean;
 }
+
+// A configured dynamic source is not evidence of availability. Only use the
+// legacy static list when discovery has explicitly been disabled in config.
+export const offeredProviders = (config: ClusterConfig, discovered: string[] | null): string[] =>
+  config.providerSources.length ? discovered ?? [] : config.providers;
 
 // Kubernetes group -> GraphQL identifier: dots and dashes become underscores
 // (e.g. "dati.eu" -> "dati_eu").

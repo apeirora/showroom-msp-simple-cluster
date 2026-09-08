@@ -49,13 +49,14 @@ interface SimpleClusterListResponse {
 
 export const listSimpleClusters = async (
   opts: GraphqlClientOptions,
-  namespace: string
+  namespace: string,
+  signal?: AbortSignal
 ): Promise<SimpleCluster[]> => {
   if (fixturesEnabled()) return fixtureSimpleClusters();
   const data = await graphqlFetch<SimpleClusterListResponse>(opts, {
     query: CLUSTER_LIST_QUERY,
     variables: { ns: namespace }
-  });
+  }, signal);
   return data.showroom_apeirora_eu?.v1alpha1?.SimpleClusters?.items ?? [];
 };
 

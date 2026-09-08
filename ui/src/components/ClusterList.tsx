@@ -11,6 +11,7 @@ import {
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 import type { SimpleCluster, ClusterPhase } from '../types';
+import { clusterDisplayPhase, conditionSummary, reconciliationError } from '../lib/clusterStatus';
 
 export type ClusterAction = 'view' | 'delete' | 'download-kubeconfig';
 
@@ -49,14 +50,6 @@ const phaseColor = (
   }
 };
 
-const derivePhase = (cluster: SimpleCluster): string => {
-  if (cluster.metadata.deletionTimestamp) return 'Deleting';
-  const st = cluster.status;
-  if (st?.phase) return st.phase;
-  if (typeof st?.observedGeneration === 'number') return 'Pending';
-  return 'Unknown';
-};
-
 interface ClusterListProps {
   clusters: SimpleCluster[];
   loading: boolean;
@@ -89,7 +82,10 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
 
   const rows = clusters.map((c) => ({
     name: c.metadata.name,
-    phase: derivePhase(c),
+    // Filtering/sorting use the same display state as the badge, not a stale
+    // Ready phase concealed behind an Error condition.
+    phase: clusterDisplayPhase(c),
+    error: reconciliationError(c) ? conditionSummary(reconciliationError(c)!) : '',
     provider: c.status?.providerConfigRef?.name ?? c.spec?.providerConfigRefs?.[0] ?? '—',
     cp: c.status?.cp ?? '—',
     wkr: c.status?.wkr ?? '—',
@@ -103,11 +99,19 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
     {
       Header: 'Phase',
       accessor: 'phase',
-      width: 130,
-      Cell: ({ value }: { value: ClusterPhase }) => (
-        <ObjectStatus state={phaseColor(value)} inverted>
-          {value}
-        </ObjectStatus>
+      width: 240,
+      Cell: ({ value, row }: { value: ClusterPhase; row: { original: (typeof rows)[number] } }) => (
+        <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 2, minWidth: 0 }}>
+          <ObjectStatus state={phaseColor(value)} inverted>
+            {value}
+          </ObjectStatus>
+          {row.original.error && (
+            <span title={row.original.error} style={{ fontSize: '0.75rem', maxWidth: '100%',
+              overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              {row.original.error}
+            </span>
+          )}
+        </FlexBox>
       )
     },
     { Header: 'Provider', accessor: 'provider', minWidth: 180 },
@@ -167,6 +171,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
         columns={columns as any}
         visibleRows={10}
         minRows={1}
+        rowHeight={rows.some((row) => row.error) ? 56 : undefined}
         filterable
         sortable
       />
