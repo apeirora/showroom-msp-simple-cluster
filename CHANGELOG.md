@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.0...v0.38.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **ci:** hand back image SBOM files with busybox, not the syft image ([#185](https://github.com/apeirora/showroom-msp-simple-cluster/issues/185)) ([0439a5b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0439a5be5743c7250eb8943cc7e1928225022885))
+
 ## [0.38.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.37.1...v0.38.0) (2026-09-09)
 
 
