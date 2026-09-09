@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.38.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.37.1...v0.38.0) (2026-09-09)
+
+
+### Features
+
+* **ci:** build and test every module and add the compliance gates ([3b3fe1f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3b3fe1f763545226cdb64d5e2d0e94425e7dbafb))
+
+
+### Bug Fixes
+
+* **ci:** grant contents write to the called publish workflow ([69322b9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/69322b9310a56f076cbb942d9ed7487587754c25))
+* **deps:** bump golang.org/x/crypto to v0.56.0 ([4f296c6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4f296c67239c0fbac0bd48a18d275637b5ff21a5))
+* **deps:** update dependencies and pin the Go toolchain ([cec2b36](https://github.com/apeirora/showroom-msp-simple-cluster/commit/cec2b36036c97c4e1dade73020eff966d72c8d69))
+* **release:** drop the sudo assumption in the image SBOM step ([637b727](https://github.com/apeirora/showroom-msp-simple-cluster/commit/637b727b37f8cb41007fddf2e091923c1994ed51))
+* **release:** make the published artefacts consistent ([10362fe](https://github.com/apeirora/showroom-msp-simple-cluster/commit/10362fe4eb94202ebd644da13818a78880b2c557))
+* resolve the UI namespace from Luigi path params and stop the list spinner when it is absent ([#184](https://github.com/apeirora/showroom-msp-simple-cluster/issues/184)) ([74a1cf0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/74a1cf02028ac161d39c1d81223f1c9c9e458161))
+* **sbom:** restore the missing Go dependency licences ([#180](https://github.com/apeirora/showroom-msp-simple-cluster/issues/180)) ([0196b98](https://github.com/apeirora/showroom-msp-simple-cluster/commit/0196b98167f8bc559646dfa64dbcae3aa9779d2e))
+
 ## [0.37.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.37.0...v0.37.1) (2026-08-31)
 
 
