@@ -75,22 +75,34 @@ const resolveWorkspacePath = (context: any, graphqlUrl: string | null): string |
     context?.portalContext?.workspacePath ?? context?.workspacePath ?? context?.accountId
   );
 
-const resolveNamespace = (context: any): string | null =>
+const resolveNamespace = (context: any, pathParams?: any): string | null =>
   normaliseString(
     context?.namespaceId ??
       context?.namespace ??
       context?.portalContext?.namespace ??
-      context?.portalContext?.entityContext?.core_platform_mesh_io_account?.namespace
+      context?.portalContext?.entityContext?.core_platform_mesh_io_account?.namespace ??
+      // The portal delivers entityContext on the top-level context under the
+      // dashed entity key (observed empty today, kept for when it fills in).
+      context?.entityContext?.['core_platform-mesh_io_account']?.namespace ??
+      // The portal delivers the namespace ONLY as the :namespaceId dynamic
+      // segment, which Luigi exposes as a path param, not on the context
+      // (verified live on cc-d2 portal, 2026-09-08).
+      pathParams?.namespaceId ??
+      pathParams?.namespace
   );
 
-export const extractRuntimeContext = (context: any, source: ConfigSource): RuntimeContext => {
+export const extractRuntimeContext = (
+  context: any,
+  source: ConfigSource,
+  pathParams?: any
+): RuntimeContext => {
   const graphqlUrl = resolveGraphqlUrl(context);
   return {
     source,
     graphqlUrl,
     token: normaliseString(context?.token ?? context?.portalContext?.token),
     workspacePath: resolveWorkspacePath(context, graphqlUrl),
-    namespace: resolveNamespace(context)
+    namespace: resolveNamespace(context, pathParams)
   };
 };
 
@@ -107,6 +119,7 @@ interface LuigiClientLike {
   removeInitListener?: (id: string | number) => void;
   addContextUpdateListener: (cb: (context: any) => void) => string | number;
   removeContextUpdateListener?: (id: string | number) => void;
+  getPathParams?: () => any;
   __isMock?: boolean;
 }
 
@@ -164,11 +177,18 @@ export const subscribeToLuigi = (
     if (cancelled || !c) return;
     client = c;
     const source: ConfigSource = c.__isMock ? 'mock' : 'luigi';
+    const params = () => {
+      try {
+        return c.getPathParams?.() ?? null;
+      } catch {
+        return null;
+      }
+    };
     initId = c.addInitListener((context) => {
-      onContext(extractRuntimeContext(context, source));
+      onContext(extractRuntimeContext(context, source, params()));
     });
     updateId = c.addContextUpdateListener((context) => {
-      onContext(extractRuntimeContext(context, source));
+      onContext(extractRuntimeContext(context, source, params()));
     });
   };
 
