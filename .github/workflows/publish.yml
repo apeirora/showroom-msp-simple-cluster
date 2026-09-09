@@ -110,9 +110,9 @@ jobs:
               -o "cyclonedx-json=/out/${IMAGE}.image.cdx.json" \
               -o "spdx-json=/out/${IMAGE}.image.spdx.json"
           # syft runs as root inside the container; hand the files back.
+          # The syft image has no chown binary, so use busybox for that.
           docker run --rm -v "$PWD/sbom-image:/out" \
-            --entrypoint chown "anchore/syft:${SYFT_VERSION}" \
-            -R "$(id -u):$(id -g)" /out
+            busybox:1.37 chown -R "$(id -u):$(id -g)" /out
 
       - name: Upload the image SBOM
         uses: actions/upload-artifact@v4
