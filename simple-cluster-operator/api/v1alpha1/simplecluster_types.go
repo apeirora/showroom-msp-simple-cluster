@@ -383,7 +383,3 @@ type SimpleClusterList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SimpleCluster `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&SimpleCluster{}, &SimpleClusterList{})
-}

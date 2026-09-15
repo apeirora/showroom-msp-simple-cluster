@@ -9,7 +9,7 @@ import (
 	"github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator/internal/controller"
 	"github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator/internal/discovery"
 	"github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator/internal/index"
-	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
+	apisv1alpha1 "github.com/kcp-dev/sdk/apis/apis/v1alpha1"
 	"github.com/m-szalik/goutils"
 
 	"k8s.io/client-go/rest"
@@ -45,7 +45,6 @@ func main() {
 	mp := multi.New(multi.Options{})
 	mgr, err := mcmanager.New(&rest.Config{}, mp, mcmanager.Options{Scheme: controller.Scheme})
 	goutils.ExitOnErrorf(err, 1, "cannot create multicluster manager")
-	mp.SetManager(mgr)
 
 	bc := controller.New(ctx, mgr, mspClient, index.New(), controller.Config{
 		ClusterLabelKey:      goutils.Env("CLUSTER_LABEL_KEY", "kubernetes.io/metadata.name"),

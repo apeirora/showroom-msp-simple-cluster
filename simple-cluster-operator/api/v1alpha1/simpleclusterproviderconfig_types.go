@@ -400,7 +400,3 @@ type SimpleClusterProviderConfigList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SimpleClusterProviderConfig `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&SimpleClusterProviderConfig{}, &SimpleClusterProviderConfigList{})
-}

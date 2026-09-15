@@ -7,7 +7,7 @@ import (
 
 	"github.com/apeirora/showroom-msp-simple-cluster/bind-watcher-operator/internal/index"
 	"github.com/go-logr/logr"
-	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
+	apisv1alpha1 "github.com/kcp-dev/sdk/apis/apis/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,6 +20,7 @@ import (
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	mcmanager "sigs.k8s.io/multicluster-runtime/pkg/manager"
+	"sigs.k8s.io/multicluster-runtime/pkg/multicluster"
 	mcreconcile "sigs.k8s.io/multicluster-runtime/pkg/reconcile"
 )
 
@@ -85,10 +86,10 @@ func New(root context.Context, mgr mcmanager.Manager, msp client.Client, idx *in
 // Reconcile updates the in-memory export index for the changed APIBinding and
 // re-renders the exports annotation on the owning MSP namespace.
 func (c *BindingController) Reconcile(ctx context.Context, req mcreconcile.Request) (ctrl.Result, error) {
-	mcCluster := req.ClusterName
+	mcCluster := string(req.ClusterName)
 	realCluster := c.realCluster(mcCluster)
 
-	cl, err := c.mgr.GetCluster(ctx, mcCluster)
+	cl, err := c.mgr.GetCluster(ctx, req.ClusterName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -112,9 +113,9 @@ func (c *BindingController) Reconcile(ctx context.Context, req mcreconcile.Reque
 
 // Engage is called when a workspace joins the fleet. It arms a cleanup that runs
 // when the per-cluster context is cancelled, i.e. on unbind/disengage.
-func (c *BindingController) Engage(ctx context.Context, name string, _ cluster.Cluster) error {
-	mcCluster := name
-	realCluster := c.realCluster(name)
+func (c *BindingController) Engage(ctx context.Context, name multicluster.ClusterName, _ cluster.Cluster) error {
+	mcCluster := string(name)
+	realCluster := c.realCluster(mcCluster)
 	go func() {
 		<-ctx.Done()
 		// Operator shutdown cancels every cluster context too; that is not an
