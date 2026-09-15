@@ -138,7 +138,3 @@ type SSHKeyList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SSHKey `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&SSHKey{}, &SSHKeyList{})
-}

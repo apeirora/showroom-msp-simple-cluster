@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	apisv1alpha1 "github.com/kcp-dev/kcp/sdk/apis/apis/v1alpha1"
 	"github.com/kcp-dev/multicluster-provider/apiexport"
+	apisv1alpha1 "github.com/kcp-dev/sdk/apis/apis/v1alpha1"
 	"github.com/pkg/errors"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	multiclusterruntime "sigs.k8s.io/multicluster-runtime"
 	"sigs.k8s.io/multicluster-runtime/providers/multi"
 )
 
@@ -36,8 +35,14 @@ type Discovery struct {
 	// clients lists the workspaces to scan: workspace path -> client. A single
 	// "" key means "use the kubeconfig's own workspace as-is".
 	clients     map[string]client.Client
-	active      map[string]string // "workspace|slice" -> URL currently registered
-	lastListErr map[string]string // workspace -> last logged list error (dedup)
+	cfgs        map[string]*rest.Config // workspace path -> rest config for that workspace
+	active      map[string]string       // "workspace|slice" -> URL last seen
+	lastListErr map[string]string       // workspace -> last logged list error (dedup)
+}
+
+// endpoint identifies one ready APIExportEndpointSlice found during a scan.
+type endpoint struct {
+	ws, name, url string
 }
 
 // New builds a Discovery. If workspaces is empty the kubeconfig's own workspace
@@ -45,12 +50,14 @@ type Discovery struct {
 // rewritten to that workspace).
 func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, workspaces []string, interval time.Duration) (*Discovery, error) {
 	clients := map[string]client.Client{}
+	cfgs := map[string]*rest.Config{}
 	if len(workspaces) == 0 {
 		c, err := client.New(baseCfg, client.Options{Scheme: scheme})
 		if err != nil {
 			return nil, errors.Wrap(err, "creating discovery client")
 		}
 		clients[""] = c
+		cfgs[""] = baseCfg
 	} else {
 		base := kcpBase(baseCfg.Host)
 		for _, ws := range workspaces {
@@ -61,15 +68,17 @@ func New(mp *multi.Provider, baseCfg *rest.Config, scheme *runtime.Scheme, works
 				return nil, errors.Wrapf(err, "creating discovery client for workspace %s", ws)
 			}
 			clients[ws] = c
+			cfgs[ws] = cfg
 		}
 	}
 	return &Discovery{
-		mp:       mp,
-		baseCfg:  baseCfg,
-		scheme:   scheme,
-		interval: interval,
-		log:      ctrllog.Log.WithName("discovery"),
+		mp:          mp,
+		baseCfg:     baseCfg,
+		scheme:      scheme,
+		interval:    interval,
+		log:         ctrllog.Log.WithName("discovery"),
 		clients:     clients,
+		cfgs:        cfgs,
 		active:      map[string]string{},
 		lastListErr: map[string]string{},
 	}, nil
@@ -91,7 +100,7 @@ func (d *Discovery) Start(ctx context.Context) error {
 }
 
 func (d *Discovery) reconcile(ctx context.Context) {
-	desired := map[string]string{} // "workspace|slice" -> url
+	desired := map[string]endpoint{} // "workspace|slice" -> endpoint
 	for ws, cl := range d.clients {
 		slices := &apisv1alpha1.APIExportEndpointSliceList{}
 		if err := cl.List(ctx, slices); err != nil {
@@ -106,25 +115,24 @@ func (d *Discovery) reconcile(ctx context.Context) {
 		delete(d.lastListErr, ws)
 		for i := range slices.Items {
 			if url := firstURL(&slices.Items[i]); url != "" {
-				desired[ws+"|"+slices.Items[i].Name] = url
+				desired[ws+"|"+slices.Items[i].Name] = endpoint{ws: ws, name: slices.Items[i].Name, url: url}
 			}
 		}
 	}
 
-	// Register new endpoints and re-register those whose URL changed.
-	for key, url := range desired {
-		if d.active[key] == url {
-			continue
-		}
+	// Register new endpoints. URL changes need no re-registration: the provider
+	// watches its endpoint slice and follows the URL itself.
+	for key, ep := range desired {
 		if _, ok := d.active[key]; ok {
-			d.mp.RemoveProvider(prefix(key))
-		}
-		if err := d.add(ctx, key, url); err != nil {
-			d.log.Error(err, "registering provider", "endpoint", key, "url", url)
+			d.active[key] = ep.url
 			continue
 		}
-		d.active[key] = url
-		d.log.Info("watching export endpoint", "endpoint", key, "url", url)
+		if err := d.add(ep); err != nil {
+			d.log.Error(err, "registering provider", "endpoint", key, "url", ep.url)
+			continue
+		}
+		d.active[key] = ep.url
+		d.log.Info("watching export endpoint", "endpoint", key, "url", ep.url)
 	}
 
 	// Drop endpoints that disappeared.
@@ -138,16 +146,13 @@ func (d *Discovery) reconcile(ctx context.Context) {
 	}
 }
 
-func (d *Discovery) add(ctx context.Context, key, url string) error {
-	cfg := rest.CopyConfig(d.baseCfg)
-	cfg.Host = url
-	prov, err := apiexport.New(cfg, apiexport.Options{Scheme: d.scheme})
+func (d *Discovery) add(ep endpoint) error {
+	cfg := rest.CopyConfig(d.cfgs[ep.ws])
+	prov, err := apiexport.New(cfg, ep.name, apiexport.Options{Scheme: d.scheme})
 	if err != nil {
 		return err
 	}
-	return d.mp.AddProvider(ctx, prefix(key), prov, func(ctx context.Context, mgr multiclusterruntime.Manager) error {
-		return prov.Run(ctx, mgr)
-	})
+	return d.mp.AddProvider(prefix(ep.ws+"|"+ep.name), prov)
 }
 
 func firstURL(s *apisv1alpha1.APIExportEndpointSlice) string {
