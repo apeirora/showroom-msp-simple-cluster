@@ -8,7 +8,6 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/kcp-dev/multicluster-provider v0.8.0
 	github.com/kcp-dev/sdk v0.33.0
-	github.com/m-szalik/goutils v0.4.0
 	github.com/pkg/errors v0.9.1
 	k8s.io/api v0.36.4
 	k8s.io/apimachinery v0.36.4

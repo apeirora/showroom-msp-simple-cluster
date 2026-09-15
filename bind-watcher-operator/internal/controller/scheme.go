@@ -3,8 +3,8 @@ package controller
 
 import (
 	apisv1alpha1 "github.com/kcp-dev/sdk/apis/apis/v1alpha1"
-	"github.com/m-szalik/goutils"
 
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -13,5 +13,5 @@ import (
 var Scheme = scheme.Scheme
 
 func init() {
-	goutils.ExitOnError(apisv1alpha1.AddToScheme(Scheme), 1)
+	utilruntime.Must(apisv1alpha1.AddToScheme(Scheme))
 }

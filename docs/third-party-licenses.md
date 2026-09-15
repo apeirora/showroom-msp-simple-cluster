@@ -17,8 +17,8 @@ build-time tooling and are not part of any shipped artefact.
 
 ## Summary
 
-- **159** distinct third-party dependencies across **8** published components.
-- Licences in use: `Apache-2.0` (65), `MIT` (43), `BSD-3-Clause` (26), `Apache-2.0 AND BSD-3-Clause` (14), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
+- **158** distinct third-party dependencies across **8** published components.
+- Licences in use: `Apache-2.0` (64), `MIT` (43), `BSD-3-Clause` (26), `Apache-2.0 AND BSD-3-Clause` (14), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
 - **No copyleft dependencies.** Every licence above is permissive (Apache-2.0, BSD, MIT, ISC), so redistribution under Apache-2.0 carries no source-disclosure obligation.
 
 ## Obligations
@@ -57,7 +57,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 
 ## Full inventory
 
-### Apache-2.0 (65)
+### Apache-2.0 (64)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -99,7 +99,6 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `github.com/kcp-dev/logicalcluster/v3` | `v3.0.5` | bind-watcher-operator |
 | `github.com/kcp-dev/multicluster-provider` | `v0.8.0` | bind-watcher-operator |
 | `github.com/kcp-dev/sdk` | `v0.33.0` | bind-watcher-operator |
-| `github.com/m-szalik/goutils` | `v0.4.0` | bind-watcher-operator |
 | `github.com/modern-go/concurrent` | `v0.0.0-20180306012644-bacd9c7ef1dd` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/modern-go/reflect2` | `v1.0.3-0.20250322232337-35a7c28c31ee` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/prometheus/client_model` | `v0.6.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
