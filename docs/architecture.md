@@ -152,8 +152,8 @@ and picks one of three retrieval strategies:
 | `inline` | the kubeconfig is a field of the resource itself; a JSONPath locates it. |
 
 The result is written to Secret `<sc-name>-kubeconfig` in the SimpleCluster's
-namespace, and mirrored into `status.kubeconfig` so a portal detail view that can
-only read the SimpleCluster itself can still offer a download.
+namespace; `status.kubeconfigSecretRef` points at it. The Secret is the only
+copy, so reading the kubeconfig requires `get` on that Secret.
 
 ## Platform Mesh integration
 

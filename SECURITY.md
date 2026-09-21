@@ -26,11 +26,10 @@ Two things are worth knowing before you run it anywhere real:
 
 - **Cluster credentials.** The operator reads kubeconfigs for remote target
   clusters from Secrets you supply, and writes the kubeconfigs of the clusters it
-  provisions into Secrets in the requesting namespace. It also mirrors the latter
-  into `SimpleCluster.status.kubeconfig`, so **anyone who can `get` a
-  `SimpleCluster` can read its cluster's credentials** — the same audience that
-  can already read the Secret in that namespace. If that is not the boundary you
-  want, restrict `get` on `simpleclusters`.
+  provisions into Secrets in the requesting namespace. The Secret is the only
+  place those credentials live — `SimpleCluster.status` carries just a reference
+  to it — so **access to a provisioned cluster is gated by `get` on that
+  Secret**, not by `get` on the `SimpleCluster`.
 - **Templates run with the operator's permissions.** A
   `SimpleClusterProviderConfig` can create arbitrary resource types on the target
   cluster. It is an administrator-facing resource and should be treated as
