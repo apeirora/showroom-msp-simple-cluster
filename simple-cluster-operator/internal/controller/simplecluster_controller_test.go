@@ -290,10 +290,6 @@ data:
 			Expect(updated.Status.KubeconfigSecretRef).NotTo(BeNil())
 			Expect(updated.Status.KubeconfigSecretRef.Name).To(Equal("demo-kubeconfig"))
 
-			By("mirroring the kubeconfig onto status so the portal detail view can show it")
-			Expect(updated.Status.Kubeconfig).NotTo(BeEmpty())
-			Expect(updated.Status.Kubeconfig).To(Equal(string(secret.Data["kubeconfig"])))
-
 			kcCond := apimeta.FindStatusCondition(updated.Status.Conditions, showroomv1alpha1.ConditionKubeconfigValid)
 			Expect(kcCond).NotTo(BeNil())
 			Expect(kcCond.Status).To(Equal(metav1.ConditionTrue))

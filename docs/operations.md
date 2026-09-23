@@ -69,10 +69,9 @@ SECRET=$(kubectl get simc demo -n team-a -o jsonpath='{.status.kubeconfigSecretR
 kubectl get secret "$SECRET" -n team-a -o jsonpath='{.data.kubeconfig}' | base64 -d > demo.kubeconfig
 ```
 
-The same bytes are mirrored into `status.kubeconfig` so the portal detail view
-can offer a download. Anyone who can `get` the `SimpleCluster` can read it —
-which is the same audience that can already read the Secret in that namespace.
-If that is not the boundary you want, restrict `get` on `simpleclusters`.
+The Secret is the only copy — `status` carries just the reference, the issuance
+time and the expiry. Reading the kubeconfig therefore requires `get` on that
+Secret; `get` on the `SimpleCluster` alone is not enough.
 
 ## Credential rotation
 

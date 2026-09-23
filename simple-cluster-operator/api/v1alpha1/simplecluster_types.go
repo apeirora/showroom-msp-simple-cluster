@@ -314,15 +314,6 @@ type SimpleClusterStatus struct {
 	// +optional
 	KubeconfigExpiresAt *metav1.Time `json:"kubeconfigExpiresAt,omitempty"`
 
-	// Kubeconfig is the raw NC kubeconfig, mirrored from the Secret referenced
-	// by KubeconfigSecretRef. It is duplicated here so the generic portal
-	// detail view (which can only read fields of the SimpleCluster itself, not
-	// a separate Secret) can surface it for copy/download. It is readable by
-	// anyone with get access to this SimpleCluster — the same audience that can
-	// already read the Secret in the account namespace.
-	// +optional
-	Kubeconfig string `json:"kubeconfig,omitempty"`
-
 	// CP is "<readyControlPlanes>/<declaredControlPlanes>" — surfaced
 	// as the CP printer column (e.g. "1/3"). "-/-" when the SCPC owns
 	// the control plane (spec.controlPlane is omitted).

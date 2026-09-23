@@ -81,7 +81,6 @@ request is not rejected.
 | `resources` | `[]ResourceStatus` | Per-resource state of the SCPC's DAG. |
 | `kubeconfigSecretRef` | `LocalObjectReference` | The Secret in this namespace holding the new cluster's kubeconfig. |
 | `kubeconfigIssuedAt`, `kubeconfigExpiresAt` | `Time` | Lifetime of the embedded credential. |
-| `kubeconfig` | `string` | The kubeconfig, mirrored from the Secret so a portal detail view can offer it for download. Readable by anyone who can `get` this SimpleCluster — the same audience that can already read the Secret. |
 | `cp`, `wkr` | `string` | `<ready>/<declared>` counts, surfaced as printer columns. |
 | `nodes` | `[]NodeStatus` | The provisioned cluster's nodes, read live over the synced kubeconfig. Best-effort; never affects `phase`. |
 | `conditions` | `[]Condition` | See [Conditions](#conditions). |
