@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.1...v0.38.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* dependencies ([#188](https://github.com/apeirora/showroom-msp-simple-cluster/issues/188)) ([65bf6d5](https://github.com/apeirora/showroom-msp-simple-cluster/commit/65bf6d5bd9b70a7ec7c7d7d7a4f2af40e71d38a5))
+
 ## [0.38.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.0...v0.38.1) (2026-09-09)
 
 
