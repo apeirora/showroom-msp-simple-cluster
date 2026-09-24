@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.38.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.2...v0.38.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* bump builder image to go 1.27.1 ([#192](https://github.com/apeirora/showroom-msp-simple-cluster/issues/192)) ([4433d43](https://github.com/apeirora/showroom-msp-simple-cluster/commit/4433d438cc519ffae2a790457027594f576afa15))
+* remove anonymous bind RBAC from pm-integration chart ([#195](https://github.com/apeirora/showroom-msp-simple-cluster/issues/195)) ([6e44366](https://github.com/apeirora/showroom-msp-simple-cluster/commit/6e44366cd1434e44172965f9d12b49816e3d5133))
+
 ## [0.38.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.1...v0.38.2) (2026-09-23)
 
 
