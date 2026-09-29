@@ -140,6 +140,7 @@ kubectl --kubeconfig kind-simple.kubeconfig get nodes
 | [Configuration](docs/configuration.md) | Every chart value and operator flag |
 | [Operations](docs/operations.md) | Running the stack day to day |
 | [Troubleshooting](docs/troubleshooting.md) | When it does not work |
+| [OpenBao KMS encryption](docs/openbao-kms.md) | Optional: encrypt Secrets in etcd with an OpenBao Transit key (KMS v2) |
 | [Release flow](docs/release-flow.md) | CI gates, publication pipeline |
 | [Versioning](docs/versioning.md) | SemVer and Conventional Commits policy |
 | [ORD dependency graphs](docs/ord-dependency-graphs.md) | Provider metadata and onboarding |
