@@ -20,10 +20,10 @@ tracked in [apeirora/showroom#470](https://github.com/apeirora/showroom/issues/4
 ┌──────────────────────┐      ┌──────────────────────────────────────┐    ┌──────────────────┐
 │ Secret               │ SSH  │ /etc/vault-kms/env (0600 root)       │    │ Transit key      │
 │  <cluster>-openbao-  │─────►│        │ EnvironmentFile             │    │  <cluster>       │
-│  kms (connection +   │ push │        ▼                             │TLS │ AppRole role     │
-│  AppRole secret ID)  │      │ vault-kubernetes-kms.service ────────┼───►│  <cluster>       │
-└──────────────────────┘      │        ▲ unix socket                 │    │ policy: encrypt, │
-                              │        │ KMS v2                      │    │  decrypt, read   │
+│  kms (connection;    │ push │        ▼                             │TLS │ AppRole role     │
+│  no secret ID when   │      │ vault-kubernetes-kms.service ────────┼───►│  <cluster>       │
+│  wrapped delivery)   │      │        ▲ unix socket                 │    │ policy: encrypt, │
+└──────────────────────┘      │        │ KMS v2                      │    │  decrypt, read   │
                               │ k3s.service (kube-apiserver)         │    │  this key only   │
                               │   --encryption-provider-config       │    └──────────────────┘
                               └──────────────────────────────────────┘
@@ -43,15 +43,35 @@ so the plugin runs as a systemd unit that starts before `k3s.service`.
 | OpenBao | Reachable over HTTPS from every control-plane host. Tested with 2.5.5. A namespace is optional. |
 | An OpenBao login | Once per environment: may enable a secrets engine and an auth method and write policies in the target namespace |
 | Tools where you run the scripts | `bao`, `jq`, `kubectl`, `ssh` |
-| Control-plane hosts | Ubuntu with systemd and `curl`, amd64 or arm64, **k3s not yet installed**. Tested with k3s v1.36.4+k3s1. |
-| OpenBao backups | Must cover the Transit mount. **If the key is lost, every Secret in the cluster is unreadable.** |
+| Control-plane hosts | Ubuntu with systemd, `curl` and `python3`, amd64 or arm64, **k3s not yet installed**. Tested with k3s v1.36.4+k3s1. |
+
+## What OpenBao has to provide
+
+The Transit key is the only way to read the cluster's Secrets. That puts a few
+demands on the OpenBao instance, beyond what the scripts can check:
+
+- **A namespace nothing deletes.** Keep the Transit mount in a namespace that no
+  controller manages with a delete policy (for example a Crossplane
+  `VaultNamespace` with `deletionPolicy: Delete`). Deleting the namespace
+  deletes every key in it.
+- **Backups.** The keys are not exportable, so scheduled, encrypted raft snapshots
+  stored off the cluster are the only copy. Test a restore before a cluster you
+  care about depends on a key.
+- **Availability.** A running kube-apiserver keeps its unwrapped seeds in memory; a
+  restarting one needs OpenBao before it can read Secrets.
+- **TLS to OpenBao itself.** If a gateway terminates TLS in front of OpenBao, keep
+  the hop behind it encrypted too: Transit requests and responses carry
+  data-key seeds.
+- **Real client addresses**, only if you want `--bound-cidrs`: OpenBao must see
+  the host's address, for example by trusting `X-Forwarded-For` from the gateway
+  (`x_forwarded_for_authorized_addrs` on the listener).
 
 ## 1. Configure OpenBao
 
 ```sh
 export BAO_ADDR=https://openbao.example.com BAO_NAMESPACE=my/namespace
 bao login -method=oidc
-hack/openbao-kms/setup-openbao.sh --cluster demo --secret team-a/demo-openbao-kms
+hack/openbao-kms/setup-openbao.sh --cluster demo --secret team-a/demo-openbao-kms --no-secret-id
 ```
 
 The script is idempotent. It creates what is missing and never modifies an
@@ -60,52 +80,60 @@ existing key:
 | Object | Default name | Settings |
 |---|---|---|
 | Transit mount | `simplecluster-kms/` | shared by all clusters |
-| Transit key | `simplecluster-kms/keys/<cluster>` | `aes256-gcm96`, not exportable, no plaintext backup, deletion not allowed |
+| Transit key | `simplecluster-kms/keys/<cluster>` | `aes256-gcm96`, not exportable, no plaintext backup, deletion not allowed; `--auto-rotate-period` turns on automatic rotation |
 | Policy | `simplecluster-kms-<cluster>` | [policy.hcl.tpl](../hack/openbao-kms/policy.hcl.tpl): `update` on `encrypt/<cluster>` and `decrypt/<cluster>`, `read` on `keys/<cluster>` |
 | AppRole mount | `simplecluster-kms-approle/` | shared by all clusters |
 | AppRole role | `<cluster>` | periodic service token (`--token-period`, default 1h); secret ID TTL `--secret-id-ttl` (default 90 days); unlimited secret ID uses (the plugin logs in again whenever a renewal fails) |
 
+Use a name for `--cluster` that is unique within the OpenBao namespace, such as
+one derived from the `SimpleCluster` UID; cluster names alone are only unique
+within one account.
+
 `--bound-cidrs` limits where the secret ID and its tokens may be used from; list
 every control-plane host's egress address. It only works when OpenBao sees the
-client's real address: behind an ingress that does not pass it through, every
-login comes from the ingress and is refused. Leaving the flag out clears the
-binding, but a secret ID keeps the CIDRs it was issued with, so rotate it after
-changing them. `--ca-cert-file` hands a CA to the plugin when OpenBao's
-certificate is not publicly trusted.
-
-A secret ID is issued only when the destination has none yet, or with
-`--rotate-secret-id`. It goes straight into the Secret (or a 0600 file with
-`--out-file`) and is never printed.
+client's real address (see above); otherwise every login is refused. Leaving the
+flag out clears the binding, but a secret ID keeps the CIDRs it was issued with,
+so rotate it after changing them. `--ca-cert-file` hands a CA to the plugin when
+OpenBao's certificate is not publicly trusted.
 
 ## 2. The connection Secret
 
 One Secret per cluster, in the management cluster, labelled
-`showroom.apeirora.eu/purpose: openbao-kms`:
+`showroom.apeirora.eu/purpose: openbao-kms`. Keep it in a namespace only the
+operator can read, not in the account's namespace.
 
 | Key | Content |
 |---|---|
 | `address` | OpenBao URL; must be `https://` |
 | `namespace` | OpenBao namespace, when used |
 | `transitMount`, `transitKey` | where the key lives |
-| `approleMount`, `roleID` | the AppRole identity |
-| `secretID` | **the credential** |
-| `secretIDAccessor` | identifies the secret ID for revocation (not a credential) |
+| `approleMount`, `approleRole`, `roleID` | the AppRole identity |
+| `secretID` | **the credential**; absent with `--no-secret-id` |
+| `secretIDAccessor` | identifies that secret ID for revocation (not a credential) |
 | `caCert` | optional PEM |
 
-Anyone who can read this Secret can log in as the cluster's plugin. Scope RBAC
-accordingly.
+With a stored `secretID`, anyone who can read this Secret can log in as the
+cluster's plugin.
 
 ## 3. Prepare each control-plane host
 
 Before k3s is installed on the host:
 
 ```sh
-hack/openbao-kms/push-to-host.sh --secret team-a/demo-openbao-kms --host ubuntu@10.0.0.10
+hack/openbao-kms/push-to-host.sh --secret team-a/demo-openbao-kms --host ubuntu@10.0.0.10 --wrap-ttl 5m
 ```
 
-The Secret's data travels base64-encoded over SSH into
-[install.sh](../hack/openbao-kms/install.sh), which decodes it on the host as
-root. It lays down the following:
+With `--wrap-ttl` (recommended) the script mints a new secret ID for this host with
+your `bao` login, response-wrapped: a single-use token valid for the given time.
+[install.sh](../hack/openbao-kms/install.sh) unwraps it on the host and prints the
+secret ID's accessor. The management cluster never stores a credential, each host
+has its own secret ID, and a token that someone else unwrapped first is refused
+loudly, which means the secret ID was compromised. This is the trusted-broker
+pattern the `SimpleCluster` operator should follow.
+
+Without `--wrap-ttl`, the Secret's stored `secretID` is sent instead. Either way
+the data travels base64-encoded over SSH and is decoded only on the host, as
+root. `install.sh` lays down:
 
 | Path | Purpose |
 |---|---|
@@ -127,25 +155,21 @@ one of them before it joins. They all share the key and the role.
 
 ## Verify
 
-On a control-plane host:
+[verify-host.sh](../hack/openbao-kms/verify-host.sh) checks a control-plane host
+and prints one line per check; keep the output as evidence:
 
 ```sh
-kubectl get --raw='/readyz?verbose' | grep kms          # [+]kms-providers ok
-curl -s http://127.0.0.1:10271/health                   # OK
-kubectl create secret generic kms-check --from-literal=value=hello
+sudo bash verify-host.sh            # add --restart to also restart k3s once
 ```
 
-The stored value starts with `k8s:enc:kms:v2:openbao:` and does not contain the
-plaintext. Read it with `etcdctl` using k3s's etcd client certificate from
-`/var/lib/rancher/k3s/server/tls/etcd/`:
-
-```sh
-etcdctl --endpoints=https://127.0.0.1:2379 \
-  --cacert=/var/lib/rancher/k3s/server/tls/etcd/server-ca.crt \
-  --cert=/var/lib/rancher/k3s/server/tls/etcd/client.crt \
-  --key=/var/lib/rancher/k3s/server/tls/etcd/client.key \
-  get /registry/secrets/default/kms-check --print-value-only | head -c 23
-```
+It checks the plugin unit, its unprivileged user, the ordering before k3s, the
+env file's mode, the plugin's health and the kube-apiserver's `kms-providers`
+check. It writes a synthetic Secret and confirms it is stored with the prefix
+`k8s:enc:kms:v2:openbao:`, without its plaintext, and reads back. It then checks
+that every Secret in etcd has that prefix and that the secret ID appears nowhere
+in the journal, unit files, k3s configuration or process list. k3s's embedded
+etcd only speaks gRPC, so the script fetches a pinned, checksum-verified
+`etcdctl` into a temporary directory.
 
 ## Security model
 
@@ -154,14 +178,15 @@ etcdctl --endpoints=https://127.0.0.1:2379 \
 - **Least privilege.** The role can encrypt and decrypt with its own key and read
   that key's metadata. It cannot use another cluster's key, delete, export or
   rotate its own key, or list mounts. The end-to-end test asserts each denial.
-- **Credentials.** The secret ID exists only in the Secret and in
-  `/etc/vault-kms/env`. It never appears in process arguments, unit files, k3s
-  configuration or logs. Known limitation: the plugin logs the AppRole
-  **role ID** (the identifier, not the secret) in its startup line.
+- **Credentials.** With wrapped delivery the secret ID exists only in
+  `/etc/vault-kms/env` on the host; otherwise also in the Secret. It never
+  appears in process arguments, unit files, k3s configuration or logs. Known
+  limitation: the plugin logs the AppRole **role ID** (the identifier, not the
+  secret) in its startup line.
 - **Tokens** are periodic and renewed by the plugin. When a renewal fails, it logs
   in again with the secret ID.
 - **Health and metrics** listen on port `10271` on all interfaces; the plugin
-  has no bind-address option. Block the port from outside the host with a
+  has no bind-address option yet. Block the port from outside the host with a
   firewall or security group. The port is moved off upstream's `8080` to avoid
   k3s ServiceLB host ports.
 
@@ -177,13 +202,48 @@ etcdctl --endpoints=https://127.0.0.1:2379 \
 
 ## Rotation
 
-**Secret ID.** Run `setup-openbao.sh --rotate-secret-id` with the same
+**Secret ID, wrapped delivery.** Run `push-to-host.sh --wrap-ttl` for the host
+again, then destroy the old secret ID by its accessor:
+`bao write auth/simplecluster-kms-approle/role/<cluster>/secret-id-accessor/destroy secret_id_accessor=<old>`.
+
+**Secret ID, stored.** Run `setup-openbao.sh --rotate-secret-id` with the same
 arguments, run `push-to-host.sh` for every control-plane host, then destroy the
 previous secret ID with the command the script prints. k3s keeps running.
 
-**Transit key.** `bao write -f simplecluster-kms/keys/<cluster>/rotate` by an
-administrator. The plugin reports the new key version, and OpenBao keeps the old
-versions for decryption. The end-to-end test does not cover this yet.
+**Transit key.** Rotate with `bao write -f simplecluster-kms/keys/<cluster>/rotate`,
+or let `--auto-rotate-period` do it. The plugin reports the new key version on
+the kube-apiserver's next status check, and new writes use it. Old versions stay
+available for decryption, so nothing else is required. To retire an old version:
+
+```sh
+kubectl get secrets -A -o json | kubectl replace -f -          # re-write every Secret
+bao write simplecluster-kms/keys/<cluster>/config min_decryption_version=<new version>
+```
+
+Wait for the plugin's `v2 encryption request` log line after the rotation before
+re-writing, so the Secrets are encrypted under the new version.
+
+## Removing a cluster
+
+```sh
+hack/openbao-kms/remove-openbao.sh --cluster demo --secret team-a/demo-openbao-kms
+```
+
+This destroys every secret ID of the role, then deletes the role, the policy and
+the Secret. The shared mounts stay. The Transit key stays too, unless you add
+`--delete-key --confirm-key demo`. Deleting the key is irreversible: everything the
+cluster ever wrote, including copies in etcd backups, becomes unreadable. Do it
+only after the cluster is gone.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `install.sh` says the plugin is not running; the journal shows `source address "…" unauthorized by CIDR restrictions` | OpenBao sees a proxy's address, not the host's | Drop `--bound-cidrs`, re-run `setup-openbao.sh --rotate-secret-id` (or re-push wrapped) |
+| `could not unwrap the secret ID … already used or has expired` | The wrapping token timed out, or someone else used it | Push again; if nobody here used it, destroy the role's secret IDs |
+| `kms-providers` failing; Secret writes fail with `got unexpected nil transformer` | The plugin cannot reach OpenBao or log in | `systemctl status vault-kubernetes-kms`, `journalctl -u vault-kubernetes-kms`, OpenBao health |
+| `k3s already has data on this host without the KMS config` | `install.sh` refuses existing clusters | Use a fresh host |
+| etcd's HTTP API answers `415` | k3s's etcd serves gRPC only | Use `etcdctl`; `verify-host.sh` brings one |
 
 ## Testing
 
@@ -202,7 +262,11 @@ way `simple-cluster-operator-ubuntu` runs them. The test checks:
 - failing closed when OpenBao is unavailable
 - the connection Secret and `push-to-host.sh`
 - secret ID rotation
+- wrapped secret IDs, and refusal of a token someone else unwrapped
+- Transit key rotation, re-encryption and retiring the old key version
+- `verify-host.sh`, including a k3s restart
 - the refusal to encrypt an existing cluster
+- removal with `remove-openbao.sh`, after which the plugin can no longer log in
 
 It runs in CI when `hack/openbao-kms/` changes.
 

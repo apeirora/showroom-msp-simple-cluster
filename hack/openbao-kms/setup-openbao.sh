@@ -6,6 +6,8 @@
 # (BAO_NAMESPACE must be set explicitly; the script never creates namespaces).
 # The secret ID is issued only when the destination has none yet or on
 # --rotate-secret-id, and goes straight to a Kubernetes Secret or a 0600 file.
+# With --no-secret-id the destination holds no credential at all; each host then
+# gets a single-use, response-wrapped secret ID from push-to-host.sh --wrap-ttl.
 # Credentials are never printed.
 #
 # usage: setup-openbao.sh --cluster <id> (--secret <namespace>/<name> | --out-file <path>) [options]
@@ -17,10 +19,13 @@
 #   --ca-cert-file <path>    PEM to hand to the plugin when OpenBao's CA is not publicly trusted
 #   --kubeconfig <path>      for --secret
 #   --rotate-secret-id       issue a new secret ID even if the destination has one
+#   --no-secret-id           store no secret ID (and remove one that is there)
+#   --auto-rotate-period <dur>  rotate the Transit key automatically, e.g. 2160h; 0 turns it off
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 cluster='' secret='' out_file='' ca_file='' kubeconfig='' bound_cidrs='' rotate=false
+no_secret_id=false auto_rotate=''
 transit_mount=simplecluster-kms approle_mount=simplecluster-kms-approle
 token_period=1h secret_id_ttl=2160h
 
@@ -39,6 +44,8 @@ while [ $# -gt 0 ]; do
     --ca-cert-file) ca_file=$2; shift 2 ;;
     --kubeconfig) kubeconfig=$2; shift 2 ;;
     --rotate-secret-id) rotate=true; shift ;;
+    --no-secret-id) no_secret_id=true; shift ;;
+    --auto-rotate-period) auto_rotate=$2; shift 2 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -46,6 +53,7 @@ done
 [[ $cluster =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "--cluster must be a DNS label"
 [ -n "$secret" ] || [ -n "$out_file" ] || die "one of --secret or --out-file is required"
 [ -z "$secret" ] || [ -z "$out_file" ] || die "--secret and --out-file are exclusive"
+! $no_secret_id || ! $rotate || die "--no-secret-id and --rotate-secret-id are exclusive"
 [ -n "${BAO_ADDR:-}" ] || die "BAO_ADDR is not set"
 [ -n "${BAO_NAMESPACE+x}" ] || die "set BAO_NAMESPACE explicitly (empty string for the root namespace)"
 case $BAO_ADDR in https://*) ;; *) die "BAO_ADDR must be https://" ;; esac
@@ -79,8 +87,11 @@ else
   bao write -f "$transit_mount/keys/$key" type=aes256-gcm96 exportable=false allow_plaintext_backup=false >/dev/null
   echo "created transit key $transit_mount/keys/$key"
 fi
+if [ -n "$auto_rotate" ]; then
+  bao write "$transit_mount/keys/$key/config" auto_rotate_period="$auto_rotate" >/dev/null
+fi
 bao read -format=json "$transit_mount/keys/$key" \
-  | jq -c '.data | {type, exportable, allow_plaintext_backup, deletion_allowed, latest_version}'
+  | jq -c '.data | {type, exportable, allow_plaintext_backup, deletion_allowed, latest_version, auto_rotate_period}'
 
 # ----------------------------------------------------------------- policy
 sed -e "s|@TRANSIT_MOUNT@|$transit_mount|g" -e "s|@TRANSIT_KEY@|$key|g" "$HERE/policy.hcl.tpl" \
@@ -120,6 +131,7 @@ connection_lines() {
   echo "transitMount=$(b64 "$transit_mount")"
   echo "transitKey=$(b64 "$key")"
   echo "approleMount=$(b64 "$approle_mount")"
+  echo "approleRole=$(b64 "$role")"
   echo "roleID=$(b64 "$role_id")"
   [ -z "$ca_file" ] || echo "caCert=$(base64 < "$ca_file" | tr -d '\n')"
 }
@@ -136,7 +148,7 @@ elif [ -s "$out_file" ] && grep -q '^secretID=' "$out_file"; then
 fi
 
 issue=false
-if ! $has_secret_id || $rotate; then issue=true; fi
+if { ! $has_secret_id || $rotate; } && ! $no_secret_id; then issue=true; fi
 
 old_accessor=
 secret_lines=
@@ -148,14 +160,16 @@ secretIDAccessor=$(jq -r '.data.secret_id_accessor' <<<"$resp" | base64 | tr -d 
 fi
 
 if [ -n "$secret" ]; then
-  if $issue && $has_secret_id; then
+  if { $issue || $no_secret_id; } && $has_secret_id; then
     old_accessor=$("${kc[@]}" get secret "$name" -n "$ns" -o jsonpath='{.data.secretIDAccessor}' | base64 -d)
   fi
   # The data map travels through pipes only; unissued keys keep their values.
   data_json=$({ connection_lines; [ -z "$secret_lines" ] || echo "$secret_lines"; } \
     | jq -R -s 'split("\n") | map(select(length > 0) | capture("^(?<key>[^=]+)=(?<value>.*)$")) | from_entries')
   if "${kc[@]}" get secret "$name" -n "$ns" >/dev/null 2>&1; then
-    printf '%s' "$data_json" | jq '{data: .}' \
+    # --no-secret-id: null removes the credential keys in the merge patch.
+    printf '%s' "$data_json" | jq --argjson strip "$no_secret_id" \
+      '{data: (. + (if $strip then {secretID: null, secretIDAccessor: null} else {} end))}' \
       | "${kc[@]}" patch secret "$name" -n "$ns" --type merge --patch-file /dev/stdin >/dev/null
     echo "updated Secret $ns/$name"
   else
@@ -168,13 +182,13 @@ if [ -n "$secret" ]; then
   fi
   unset data_json
 else
-  if $issue && $has_secret_id; then
+  if { $issue || $no_secret_id; } && $has_secret_id; then
     old_accessor=$(sed -n 's/^secretIDAccessor=//p' "$out_file" | base64 -d)
   fi
   tmp=$(mktemp "$(dirname "$out_file")/.openbao-kms.XXXXXX")
   { connection_lines
     if [ -n "$secret_lines" ]; then echo "$secret_lines"
-    else grep -E '^secretID(Accessor)?=' "$out_file"; fi
+    elif ! $no_secret_id && $has_secret_id; then grep -E '^secretID(Accessor)?=' "$out_file"; fi
   } > "$tmp"
   chmod 0600 "$tmp"
   mv -f "$tmp" "$out_file"
@@ -182,7 +196,9 @@ else
 fi
 unset secret_lines
 
-if $issue; then echo "issued a new secret ID"; else echo "kept the existing secret ID"; fi
+if $no_secret_id; then echo "stored no secret ID; deliver one per host with push-to-host.sh --wrap-ttl"
+elif $issue; then echo "issued a new secret ID"
+else echo "kept the existing secret ID"; fi
 if [ -n "$old_accessor" ]; then
   echo "previous secret ID is still valid until its TTL. After every host runs with the new one, revoke it:"
   echo "  bao write auth/$approle_mount/role/$role/secret-id-accessor/destroy secret_id_accessor=$old_accessor"

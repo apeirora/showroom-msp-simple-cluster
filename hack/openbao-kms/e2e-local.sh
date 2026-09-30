@@ -2,10 +2,12 @@
 # End-to-end check of the OpenBao KMS integration on one simulated control-plane
 # host. OpenBao runs in dev-TLS mode; an Ubuntu container with systemd plays the
 # VM, where setup-openbao.sh, install.sh and the stock k3s installer run the way
-# simple-cluster-operator-ubuntu runs them over SSH.
+# simple-cluster-operator-ubuntu runs them over SSH. It then exercises the day-2
+# paths: secret ID rotation, wrapped single-use secret IDs, Transit key rotation,
+# verify-host.sh and removal with crypto-shredding.
 #
 # Needs Docker with privileged containers and internet access (k3s installer,
-# plugin release, images). Removes everything it created unless KEEP=1.
+# plugin and etcd releases, images). Removes everything it created unless KEEP=1.
 #
 # usage: hack/openbao-kms/e2e-local.sh
 set -euo pipefail
@@ -20,9 +22,12 @@ NS=msp/pm-cc-d2
 CLUSTER=e2e
 TRANSIT=simplecluster-kms
 APPROLE=simplecluster-kms-approle
+PREFIX='k8s:enc:kms:v2:openbao:'
 ROOT_TOKEN=$(od -An -tx1 -N24 /dev/urandom | tr -d ' \n')
+WORK=$(mktemp -d)
 
 cleanup() {
+  rm -rf "$WORK"
   if [ "${KEEP:-}" = 1 ]; then echo "KEEP=1: leaving $P-* in place"; return; fi
   docker rm -f "$P-host" "$P-openbao" >/dev/null 2>&1 || true
   docker volume rm "$P-k3s" >/dev/null 2>&1 || true
@@ -34,6 +39,10 @@ step() { printf '\n== %s\n' "$*"; }
 pass() { printf 'PASS  %s\n' "$*"; }
 fail() { printf 'FAIL  %s\n' "$*" >&2; exit 1; }
 on_host() { docker exec -i "$P-host" bash -euo pipefail -c "$1"; }
+with_bao() { # a host command with the dev root token's bao environment
+  docker exec -i -e BAO_ADDR="https://$P-openbao:8200" -e BAO_CACERT=/opt/openbao-ca.pem \
+    -e BAO_TOKEN="$ROOT_TOKEN" -e BAO_NAMESPACE="$NS" "$P-host" bash -euo pipefail -c "$1"
+}
 as_root_bao() { # bao on the host with the dev root token, in the test namespace
   docker exec -i -e BAO_ADDR="https://$P-openbao:8200" -e BAO_CACERT=/opt/openbao-ca.pem \
     -e BAO_TOKEN="$ROOT_TOKEN" -e BAO_NAMESPACE="${BAO_NS-$NS}" "$P-host" bao "$@"
@@ -44,6 +53,10 @@ etcd_get() {
     --cert=/k3s/server/tls/etcd/client.crt --key=/k3s/server/tls/etcd/client.key \
     "$@" </dev/null
 }
+# Values go to a file before any grep: under pipefail an early grep match can
+# SIGPIPE etcdctl and turn a found leak into a pass.
+etcd_value() { etcd_get get "$1" --print-value-only > "$WORK/value"; }
+encrypted() { etcd_value "$1"; [ "$(head -c ${#PREFIX} "$WORK/value")" = "$PREFIX" ]; }
 wait_apiserver() {
   for _ in $(seq 1 120); do
     on_host 'kubectl get --raw=/readyz >/dev/null 2>&1' && return 0
@@ -52,6 +65,11 @@ wait_apiserver() {
   fail "kube-apiserver not ready after 240s"
 }
 k3s_pid() { on_host 'systemctl show -p MainPID --value k3s'; }
+destroy_secret_ids_except() { # <accessor to keep>
+  for acc in $(as_root_bao list -format=json "auth/$APPROLE/role/$CLUSTER/secret-id" | jq -r '.[]'); do
+    [ "$acc" = "$1" ] || as_root_bao write "auth/$APPROLE/role/$CLUSTER/secret-id-accessor/destroy" secret_id_accessor="$acc" >/dev/null
+  done
+}
 expect_denied() { # <label> <bao args...> as the plugin's AppRole token
   local label=$1 out; shift
   if out=$(docker exec -i -e BAO_ADDR="https://$P-openbao:8200" -e BAO_CACERT=/opt/openbao-ca.pem \
@@ -69,7 +87,7 @@ docker build -q --platform "$PLATFORM" -t "$P-host:latest" - >/dev/null <<'EOF'
 FROM ubuntu:24.04
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      systemd systemd-sysv dbus curl ca-certificates jq iptables kmod sudo \
+      systemd systemd-sysv dbus curl ca-certificates jq python3 iptables kmod sudo \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  && systemctl mask getty.target console-getty.service systemd-udevd.service \
       systemd-logind.service systemd-resolved.service
@@ -132,26 +150,24 @@ step "k3s via get.k3s.io, as the operator installs it"
 on_host "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='$K3S_VERSION' sh -s - server --cluster-init --disable=traefik --disable=metrics-server" \
   | tail -2
 wait_apiserver
-on_host 'systemctl show -p After -p Wants k3s' | grep -q vault-kubernetes-kms.service \
-  || fail "k3s.service is not ordered after the plugin"
-on_host 'kubectl get --raw="/readyz?verbose"' | grep -q '\[+\]kms-providers ok' || fail "kms-providers not ok"
+order=$(on_host 'systemctl show -p After -p Wants k3s')
+grep -q vault-kubernetes-kms.service <<<"$order" || fail "k3s.service is not ordered after the plugin"
+ready=$(on_host 'kubectl get --raw="/readyz?verbose"')
+grep -q '\[+\]kms-providers ok' <<<"$ready" || fail "kms-providers not ok"
 pass "$(on_host 'k3s --version | head -1'); k3s ordered after the plugin; kms-providers ok"
 
 step "Secrets are KMS v2 ciphertext in etcd"
 marker="e2e-plaintext-$(od -An -tx1 -N6 /dev/urandom | tr -d ' \n')"
 on_host "kubectl create secret generic e2e-secret -n default --from-literal=value=$marker" >/dev/null
-etcd_get get /registry/secrets/default/e2e-secret --print-value-only | head -c 23 | grep -qx 'k8s:enc:kms:v2:openbao:' \
-  || fail "e2e-secret is not KMS v2 ciphertext"
-if etcd_get get /registry/secrets/default/e2e-secret --print-value-only | grep -q -a -- "$marker"; then
-  fail "plaintext found in etcd"
-fi
+encrypted /registry/secrets/default/e2e-secret || fail "e2e-secret is not KMS v2 ciphertext"
+[ "$(grep -c -a -F -- "$marker" "$WORK/value" || true)" = 0 ] || fail "plaintext found in etcd"
 [ "$(on_host 'kubectl get secret e2e-secret -n default -o jsonpath={.data.value} | base64 -d')" = "$marker" ] \
   || fail "API read-back mismatch"
 total=0 enc=0
 while read -r key; do
   [ -n "$key" ] || continue
   total=$((total + 1))
-  if etcd_get get "$key" --print-value-only | head -c 23 | grep -qx 'k8s:enc:kms:v2:openbao:'; then enc=$((enc + 1)); fi
+  if encrypted "$key"; then enc=$((enc + 1)); fi
 done < <(etcd_get get /registry/secrets/ --prefix --keys-only)
 [ "$total" -gt 0 ] && [ "$enc" -eq "$total" ] || fail "$enc of $total Secrets encrypted"
 pass "ciphertext prefix, no plaintext, read-back ok; $enc/$total Secrets encrypted"
@@ -209,13 +225,18 @@ pass "recovered without intervention"
 step "connection Secret, push-to-host.sh and secret ID rotation"
 # The test cluster doubles as the management cluster; "ssh" runs on the host itself.
 on_host 'printf "#!/bin/bash\nexec bash -c \"\${@: -1}\"\n" > /usr/local/bin/local-ssh && chmod +x /usr/local/bin/local-ssh'
+docker exec -i "$P-host" bash -c 'cat > /usr/local/bin/secret-lines && chmod +x /usr/local/bin/secret-lines' <<'EOF'
+#!/bin/bash
+# The Secret's data as `key=<base64>` lines, the way push-to-host.sh streams it.
+kubectl get secret "$1" -n default -o json | jq -r '.data | to_entries[] | "\(.key)=\(.value)"'
+EOF
 push() { on_host "PUSH_TO_HOST_SSH=local-ssh bash /opt/openbao-kms/push-to-host.sh --secret default/$CLUSTER-openbao-kms --host localhost" >/dev/null; }
 secret_sha() { on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o jsonpath={.data.secretID} | sha256sum"; }
 setup_secret() { setup_with --secret "default/$CLUSTER-openbao-kms" "$@"; }
 before=$(k3s_pid)
 setup_secret | grep -q 'created Secret' || fail "Secret not created"
 keys=$(on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o json | jq -r '.data | keys | join(\",\")'")
-[ "$keys" = "address,approleMount,caCert,namespace,roleID,secretID,secretIDAccessor,transitKey,transitMount" ] \
+[ "$keys" = "address,approleMount,approleRole,caCert,namespace,roleID,secretID,secretIDAccessor,transitKey,transitMount" ] \
   || fail "unexpected Secret keys: $keys"
 push
 first=$(secret_sha)
@@ -226,14 +247,58 @@ out=$(setup_secret --rotate-secret-id)
 old=$(sed -n 's/.*secret_id_accessor=//p' <<<"$out")
 [ -n "$old" ] || fail "rotation did not report the previous accessor"
 push
-# Revoke every other secret ID of the role: only the Secret's current one may still work.
-current=$(on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o jsonpath={.data.secretIDAccessor} | base64 -d")
-for acc in $(as_root_bao list -format=json "auth/$APPROLE/role/$CLUSTER/secret-id" | jq -r '.[]'); do
-  [ "$acc" = "$current" ] || as_root_bao write "auth/$APPROLE/role/$CLUSTER/secret-id-accessor/destroy" secret_id_accessor="$acc" >/dev/null
-done
+destroy_secret_ids_except "$(on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o jsonpath={.data.secretIDAccessor} | base64 -d")"
 on_host 'systemctl restart vault-kubernetes-kms && kubectl create secret generic e2e-after-rotation -n default --from-literal=value=x >/dev/null'
 [ "$(k3s_pid)" = "$before" ] || fail "k3s restarted during rotation"
 pass "Secret has the documented keys; push-to-host installs it; rotated secret ID in use, older ones destroyed, k3s untouched"
+
+step "wrapped single-use secret IDs (setup --no-secret-id, push-to-host --wrap-ttl)"
+before=$(k3s_pid)
+out=$(setup_secret --no-secret-id)
+grep -q 'stored no secret ID' <<<"$out" || fail "setup did not switch to wrapped delivery"
+held=$(on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o json | jq -r '.data | has(\"secretID\") or has(\"secretIDAccessor\")'")
+[ "$held" = false ] || fail "the Secret still holds a secret ID"
+out=$(with_bao "PUSH_TO_HOST_SSH=local-ssh bash /opt/openbao-kms/push-to-host.sh --secret default/$CLUSTER-openbao-kms --host localhost --wrap-ttl 2m")
+acc=$(sed -n 's/.*its accessor is //p' <<<"$out")
+[ -n "$acc" ] || fail "install.sh did not report an unwrapped secret ID"
+destroy_secret_ids_except "$acc"
+on_host 'systemctl restart vault-kubernetes-kms && kubectl create secret generic e2e-after-wrap -n default --from-literal=value=x >/dev/null'
+[ "$(k3s_pid)" = "$before" ] || fail "k3s restarted during the switch"
+pass "the Secret holds no secret ID; the host unwrapped its own; every other one destroyed"
+tok=$(as_root_bao write -format=json -wrap-ttl=2m -f "auth/$APPROLE/role/$CLUSTER/secret-id" | jq -r '.wrap_info.token')
+as_root_bao unwrap "$tok" >/dev/null # someone else unwraps it first
+env_before=$(on_host 'sha256sum /etc/vault-kms/env')
+if err=$(on_host "{ secret-lines $CLUSTER-openbao-kms; echo secretIDWrapped=$(printf '%s' "$tok" | base64 | tr -d '\n'); } | bash /opt/openbao-kms/install.sh" 2>&1); then
+  fail "install.sh accepted a wrapping token that was already used"
+fi
+grep -q 'already used or has expired' <<<"$err" || fail "unexpected error for a used token: $(tail -1 <<<"$err")"
+[ "$(on_host 'sha256sum /etc/vault-kms/env')" = "$env_before" ] || fail "a refused token changed the env file"
+pass "a token someone else already unwrapped is refused, and nothing changes"
+
+step "Transit key rotation, re-encryption, retiring the old version"
+count_encrypt() { on_host 'journalctl --no-pager -u vault-kubernetes-kms | grep -c "v2 encryption request" || true'; }
+n=$(count_encrypt)
+as_root_bao write -f "$TRANSIT/keys/$CLUSTER/rotate" >/dev/null
+for _ in $(seq 1 60); do [ "$(count_encrypt)" -gt "$n" ] && break; sleep 5; done
+[ "$(count_encrypt)" -gt "$n" ] || fail "the kube-apiserver did not start using the new key version within 5 minutes"
+for attempt in 1 2 3; do
+  on_host 'kubectl get secrets -A -o json | kubectl replace -f - >/dev/null' && break
+  [ "$attempt" -lt 3 ] || fail "could not re-write every Secret"
+  sleep 5
+done
+as_root_bao write "$TRANSIT/keys/$CLUSTER/config" min_decryption_version=2 >/dev/null
+on_host 'systemctl restart k3s'
+wait_apiserver
+on_host 'kubectl get secrets -A -o json >/dev/null' || fail "a Secret is still encrypted under the retired key version"
+encrypted /registry/secrets/default/e2e-secret || fail "e2e-secret lost its KMS v2 prefix"
+pass "new key version in use, every Secret re-written, version 1 retired, all Secrets readable after a restart"
+
+step "verify-host.sh on the host"
+if ! out=$(on_host 'bash /opt/openbao-kms/verify-host.sh --restart' 2>&1); then
+  printf '%s\n' "$out"
+  fail "verify-host.sh reported failures"
+fi
+pass "verify-host.sh: $(grep -c '^PASS' <<<"$out") checks passed, including a k3s restart"
 
 step "install.sh refuses to enable KMS on a cluster that already has data"
 on_host 'mv /etc/rancher/k3s/config.yaml.d/90-vault-kms.yaml /root/'
@@ -242,5 +307,16 @@ if on_host 'bash /opt/openbao-kms/install.sh < /root/kms-connection' >/dev/null 
 fi
 on_host 'mv /root/90-vault-kms.yaml /etc/rancher/k3s/config.yaml.d/'
 pass "refused"
+
+step "remove-openbao.sh: revoke access, then crypto-shred"
+remove() { with_bao "bash /opt/openbao-kms/remove-openbao.sh --cluster $CLUSTER --secret default/$CLUSTER-openbao-kms $*"; }
+if remove --delete-key >/dev/null 2>&1; then fail "--delete-key without --confirm-key was accepted"; fi
+remove --delete-key --confirm-key "$CLUSTER"
+if as_root_bao read "auth/$APPROLE/role/$CLUSTER" >/dev/null 2>&1; then fail "role still exists"; fi
+if as_root_bao policy read "simplecluster-kms-$CLUSTER" >/dev/null 2>&1; then fail "policy still exists"; fi
+if as_root_bao read "$TRANSIT/keys/$CLUSTER" >/dev/null 2>&1; then fail "key still exists"; fi
+if on_host "kubectl get secret $CLUSTER-openbao-kms -n default" >/dev/null 2>&1; then fail "Secret still exists"; fi
+if on_host 'systemctl restart vault-kubernetes-kms' >/dev/null 2>&1; then fail "the plugin could still log in"; fi
+pass "role, secret IDs, policy, Secret and key removed; the plugin can no longer log in"
 
 printf '\nALL CHECKS PASSED\n'

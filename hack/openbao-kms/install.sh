@@ -5,7 +5,9 @@
 #
 # Run as root on the host BEFORE the k3s installer. The connection Secret's data
 # arrives on stdin as `key=<base64 value>` lines (push-to-host.sh produces them);
-# credentials never appear in arguments, unit files or k3s configuration.
+# credentials never appear in arguments, unit files or k3s configuration. The
+# secret ID comes either as `secretID` or as `secretIDWrapped`, a single-use
+# response-wrapping token that this script unwraps on the host.
 #
 # What it lays down:
 #   /usr/local/bin/vault-kubernetes-kms                  pinned release, sha256-verified
@@ -50,17 +52,18 @@ while IFS= read -r line || [ -n "$line" ]; do
   key=${line%%=*}
   val=${line#*=}
   case $key in
-    address|namespace|transitMount|transitKey|approleMount|roleID|secretID|secretIDAccessor|caCert) ;;
+    address|namespace|transitMount|transitKey|approleMount|approleRole|roleID|secretID|secretIDAccessor|secretIDWrapped|caCert) ;;
     *) die "unexpected key in input: $key" ;;
   esac
   in[$key]=$(printf '%s' "$val" | base64 -d) || die "value of $key is not base64"
 done
 
-for k in address transitMount transitKey approleMount roleID secretID; do
+for k in address transitMount transitKey approleMount roleID; do
   [ -n "${in[$k]:-}" ] || die "missing required key: $k"
 done
+[ -n "${in[secretID]:-}" ] || [ -n "${in[secretIDWrapped]:-}" ] || die "missing required key: secretID or secretIDWrapped"
 case ${in[address]} in https://*) ;; *) die "address must be https:// (TLS is always verified)" ;; esac
-for k in address namespace transitMount transitKey approleMount roleID secretID; do
+for k in address namespace transitMount transitKey approleMount roleID secretID secretIDWrapped; do
   case ${in[$k]:-} in *[[:space:]\"\'\\]*) die "value of $k contains whitespace, quotes or backslashes" ;; esac
 done
 
@@ -114,6 +117,34 @@ ca_line=
 if [ -n "${in[caCert]:-}" ]; then
   write_if_changed "$CONF_DIR/ca.pem" 0644 < <(printf '%s\n' "${in[caCert]}")
   ca_line="VAULT_KMS_VAULT_CACERT=$CONF_DIR/ca.pem"
+fi
+
+# A wrapped secret ID is single-use and short-lived, so it is unwrapped only now,
+# after everything that could fail first. A token that no longer unwraps was used
+# by someone else or expired; the first case means the secret ID is compromised.
+if [ -n "${in[secretIDWrapped]:-}" ]; then
+  command -v python3 >/dev/null || die "python3 is required to unwrap a secret ID"
+  hdrs="X-Vault-Token: ${in[secretIDWrapped]}"
+  [ -z "${in[namespace]:-}" ] || hdrs+=$'\n'"X-Vault-Namespace: ${in[namespace]}"
+  curl_ca=()
+  [ -z "${in[caCert]:-}" ] || curl_ca=(--cacert "$CONF_DIR/ca.pem")
+  resp=$(printf '%s\n' "$hdrs" | curl -sS -X POST -H @- ${curl_ca[@]+"${curl_ca[@]}"} \
+    --write-out '\n%{http_code}' "${in[address]}/v1/sys/wrapping/unwrap") || die "cannot reach OpenBao to unwrap the secret ID"
+  unset hdrs 'in[secretIDWrapped]'
+  code=${resp##*$'\n'}
+  if [ "$code" != 200 ]; then
+    why=$(printf '%s' "${resp%$'\n'*}" | python3 -c 'import json,sys
+try: print("; ".join(json.load(sys.stdin).get("errors", [])))
+except Exception: print("unreadable response")')
+    die "could not unwrap the secret ID (HTTP $code: $why). It was already used or has expired; if nobody here used it, treat it as compromised and destroy the role's secret IDs."
+  fi
+  unwrapped=$(printf '%s' "${resp%$'\n'*}" | python3 -c 'import json,sys
+d = json.load(sys.stdin)["data"]; print(d["secret_id"]); print(d["secret_id_accessor"])')
+  unset resp
+  in[secretID]=${unwrapped%%$'\n'*}
+  echo "unwrapped a single-use secret ID; its accessor is ${unwrapped##*$'\n'}"
+  unset unwrapped
+  case ${in[secretID]} in ""|*[[:space:]\"\'\\]*) die "unwrapped secret ID is malformed" ;; esac
 fi
 
 # mktemp creates the file 0600 before any content is written.
