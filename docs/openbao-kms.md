@@ -66,8 +66,12 @@ existing key:
 | AppRole role | `<cluster>` | periodic service token (`--token-period`, default 1h); secret ID TTL `--secret-id-ttl` (default 90 days); unlimited secret ID uses (the plugin logs in again whenever a renewal fails) |
 
 `--bound-cidrs` limits where the secret ID and its tokens may be used from; list
-every control-plane host's egress address. `--ca-cert-file` hands a CA to the
-plugin when OpenBao's certificate is not publicly trusted.
+every control-plane host's egress address. It only works when OpenBao sees the
+client's real address: behind an ingress that does not pass it through, every
+login comes from the ingress and is refused. Leaving the flag out clears the
+binding, but a secret ID keeps the CIDRs it was issued with, so rotate it after
+changing them. `--ca-cert-file` hands a CA to the plugin when OpenBao's
+certificate is not publicly trusted.
 
 A secret ID is issued only when the destination has none yet, or with
 `--rotate-secret-id`. It goes straight into the Secret (or a 0600 file with

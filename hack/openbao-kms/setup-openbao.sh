@@ -94,12 +94,19 @@ case $(mount_type auth "$approle_mount") in
   *) die "$approle_mount/ exists but is not an approle mount" ;;
 esac
 
+# CIDRs are always written, so dropping --bound-cidrs clears them. A secret ID
+# keeps the CIDRs it was issued with; changing them needs --rotate-secret-id.
+old_cidrs=$(bao read -format=json "auth/$approle_mount/role/$role" 2>/dev/null \
+  | jq -r '.data.secret_id_bound_cidrs // [] | join(",")' || true)
 role_args=(
   token_policies="$policy" token_period="$token_period" token_ttl=0 token_max_ttl=0
   token_type=service secret_id_ttl="$secret_id_ttl" secret_id_num_uses=0
+  secret_id_bound_cidrs="$bound_cidrs" token_bound_cidrs="$bound_cidrs"
 )
-[ -z "$bound_cidrs" ] || role_args+=(secret_id_bound_cidrs="$bound_cidrs" token_bound_cidrs="$bound_cidrs")
 bao write "auth/$approle_mount/role/$role" "${role_args[@]}" >/dev/null
+if [ -n "$old_cidrs" ] && [ "$old_cidrs" != "$bound_cidrs" ] && ! $rotate; then
+  echo "note: bound CIDRs changed from '$old_cidrs'; the existing secret ID keeps them until --rotate-secret-id"
+fi
 bao read -format=json "auth/$approle_mount/role/$role" \
   | jq -c '.data | {token_policies, token_period, secret_id_ttl, secret_id_num_uses, secret_id_bound_cidrs}'
 role_id=$(bao read -field=role_id "auth/$approle_mount/role/$role/role-id")
