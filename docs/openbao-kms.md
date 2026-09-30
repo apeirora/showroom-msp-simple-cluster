@@ -186,7 +186,7 @@ etcd only speaks gRPC, so the script fetches a pinned, checksum-verified
 - **Tokens** are periodic and renewed by the plugin. When a renewal fails, it logs
   in again with the secret ID.
 - **Health and metrics** listen on port `10271` on all interfaces; the plugin
-  has no bind-address option yet. Block the port from outside the host with a
+  has no bind-address option. Block the port from outside the host with a
   firewall or security group. The port is moved off upstream's `8080` to avoid
   k3s ServiceLB host ports.
 
