@@ -234,7 +234,10 @@ push() { on_host "PUSH_TO_HOST_SSH=local-ssh bash /opt/openbao-kms/push-to-host.
 secret_sha() { on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o jsonpath={.data.secretID} | sha256sum"; }
 setup_secret() { setup_with --secret "default/$CLUSTER-openbao-kms" "$@"; }
 before=$(k3s_pid)
-setup_secret | grep -q 'created Secret' || fail "Secret not created"
+# Capture, then grep: piping into grep -q would SIGPIPE the next line of output
+# and, under pipefail, report a created Secret as a failure.
+out=$(setup_secret)
+grep -q 'created Secret' <<<"$out" || fail "Secret not created"
 keys=$(on_host "kubectl get secret $CLUSTER-openbao-kms -n default -o json | jq -r '.data | keys | join(\",\")'")
 [ "$keys" = "address,approleMount,approleRole,caCert,namespace,roleID,secretID,secretIDAccessor,transitKey,transitMount" ] \
   || fail "unexpected Secret keys: $keys"
