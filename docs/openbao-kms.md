@@ -74,8 +74,8 @@ bao login -method=oidc
 hack/openbao-kms/setup-openbao.sh --cluster demo --secret team-a/demo-openbao-kms --no-secret-id
 ```
 
-The script is idempotent. It creates what is missing and never modifies an
-existing key:
+The script is idempotent. It creates what is missing and leaves an existing key
+as it is, except for its rotation period when `--auto-rotate-period` is given:
 
 | Object | Default name | Settings |
 |---|---|---|
