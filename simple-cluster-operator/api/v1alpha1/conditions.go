@@ -27,6 +27,12 @@ const (
 	// support, False when the pool stays fixed at workers.min.
 	ConditionAutoscalingSupported = "AutoscalingSupported"
 
+	// ConditionEncryptionReady is set only when the SC requests
+	// spec.encryption: True once the cluster is Ready on an SCPC that lists
+	// the provider (its templates fail closed, so Ready implies encrypted),
+	// False while provisioning or when the SCPC does not support the provider.
+	ConditionEncryptionReady = "EncryptionReady"
+
 	// ConditionResourcePrefix is prepended to a ClusterResource.Name to form
 	// the per-resource apply condition type (e.g. "Resource-deployment-x").
 	ConditionResourcePrefix = "Resource-"

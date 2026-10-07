@@ -112,6 +112,44 @@ spec:
                 - nodes
                 - requested
                 type: object
+              encryption:
+                description: |-
+                  Encryption opts the cluster into encryption at rest of its Kubernetes
+                  Secrets with an external key management provider, from the first write.
+                  The chosen SCPC must list the provider in spec.encryptionProviders,
+                  otherwise the request is refused before anything is created. Immutable:
+                  it can be neither added, removed nor changed after creation. Surfaced as
+                  .SC.encryption.{enabled,provider,keyRotationPeriod} in templates.
+                properties:
+                  provider:
+                    description: |-
+                      Provider is the key management provider the kube-apiserver uses through
+                      a KMS v2 plugin. Only Secrets are encrypted.
+                    properties:
+                      keyRotationPeriod:
+                        description: |-
+                          KeyRotationPeriod rotates the cluster's key automatically at this
+                          interval (at least 1h). Unset means no automatic rotation. Data written
+                          under older key versions stays readable; rewriting it under the new
+                          version is a separate step.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: keyRotationPeriod must be at least 1h
+                          rule: duration(self) >= duration('1h')
+                      type:
+                        description: Type of the provider.
+                        enum:
+                        - OpenBao
+                        type: string
+                    required:
+                    - type
+                    type: object
+                required:
+                - provider
+                type: object
+                x-kubernetes-validations:
+                - message: encryption is immutable
+                  rule: self == oldSelf
               inputs:
                 additionalProperties:
                   type: string
@@ -249,6 +287,9 @@ spec:
             - providerConfigRefs
             - workers
             type: object
+            x-kubernetes-validations:
+            - message: encryption cannot be added or removed after creation
+              rule: has(self.encryption) == has(oldSelf.encryption)
           status:
             description: SimpleClusterStatus defines the observed state of SimpleCluster.
             properties:

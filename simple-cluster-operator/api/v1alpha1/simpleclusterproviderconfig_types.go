@@ -348,6 +348,25 @@ type SimpleClusterProviderConfigSpec struct {
 	// AutoscalingSupported condition is set to False.
 	// +optional
 	Autoscaling bool `json:"autoscaling,omitempty"`
+
+	// EncryptionProviders lists the providers whose .SC.encryption request
+	// this SCPC's templates honor. An SC asking for a provider not listed here
+	// is refused before any resource is created. Listing a provider is a
+	// fail-closed promise: the resource named by kubeconfigSource never reports
+	// Ready unless the cluster encrypts its Secrets with that provider.
+	// +optional
+	// +listType=set
+	EncryptionProviders []EncryptionProviderType `json:"encryptionProviders,omitempty"`
+}
+
+// SupportsEncryption reports whether this SCPC honors the given provider.
+func (s *SimpleClusterProviderConfigSpec) SupportsEncryption(t EncryptionProviderType) bool {
+	for _, p := range s.EncryptionProviders {
+		if p == t {
+			return true
+		}
+	}
+	return false
 }
 
 // ResolvedResource records a successfully resolved ResourceSpec on the target cluster.

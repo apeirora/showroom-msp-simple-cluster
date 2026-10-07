@@ -159,6 +159,21 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.failSC(ctx, &sc, "InputError", err.Error())
 	}
 
+	// Refuse an encryption request the SCPC cannot honor before any resource R
+	// is created: provisioning anyway would store the cluster's Secrets in
+	// plaintext from the first write.
+	if sc.Spec.EncryptionEnabled() && !scpc.Spec.SupportsEncryption(sc.Spec.Encryption.Provider.Type) {
+		return r.encryptionUnsupportedSC(ctx, &sc, &scpc)
+	}
+
+	// With encryption requested, an outdated target CRD must not prune fields
+	// such as spec.encryption with only a warning: strict validation turns the
+	// create into a visible CreateError instead of an unencrypted cluster.
+	createOpts := metav1.CreateOptions{}
+	if sc.Spec.EncryptionEnabled() {
+		createOpts.FieldValidation = metav1.FieldValidationStrict
+	}
+
 	tc, err := r.targetClient(ctx, &sc, &scpc)
 	if err != nil {
 		return r.failSC(ctx, &sc, "TargetClientError", err.Error())
@@ -261,7 +276,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				if err := r.recordAccountChild(ctx, &sc, rs, desired, idx); err != nil {
 					return ctrl.Result{}, err
 				}
-				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
+				created, cerr := ri.Create(ctx, desired, createOpts)
 				if cerr != nil {
 					return r.failSC(ctx, &sc, "CreateError",
 						fmt.Sprintf("resource %q[%d]: %v", name, idx, cerr))
@@ -324,6 +339,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
 	apimeta.RemoveStatusCondition(&sc.Status.Conditions, showroomv1alpha1.ConditionError)
 	setAutoscalingCondition(&sc, &scpc)
+	setEncryptionCondition(&sc, &scpc)
 
 	// Kubeconfig propagation: once the named source resource is Ready,
 	// fetch its kubeconfig and mirror it into a Secret in SC.Namespace.
@@ -985,6 +1001,62 @@ func setAutoscalingCondition(
 		cond.Reason = "UnsupportedByProvider"
 		cond.Message = fmt.Sprintf("SCPC %q does not support autoscaling; worker pool fixed at %d",
 			scpc.Name, sc.Spec.Workers.MinNodes())
+	}
+	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
+}
+
+// encryptionUnsupportedSC refuses an SC whose spec.encryption provider the
+// chosen SCPC does not list in spec.encryptionProviders. No resource R is
+// created and providerConfigRef is not locked, so the SC recovers by itself
+// once the SCPC declares the provider.
+func (r *SimpleClusterReconciler) encryptionUnsupportedSC(
+	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) (ctrl.Result, error) {
+	patch := client.MergeFrom(sc.DeepCopy())
+	setEncryptionCondition(sc, scpc)
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type:   showroomv1alpha1.ConditionError,
+		Status: metav1.ConditionTrue,
+		Reason: "EncryptionUnsupported",
+		Message: fmt.Sprintf("SCPC %q does not support %s encryption; nothing was created",
+			scpc.Name, sc.Spec.Encryption.Provider.Type),
+	})
+	if sc.Status.Phase == "" {
+		sc.Status.Phase = showroomv1alpha1.PhasePending
+	}
+	setRoleCounts(sc)
+	if err := r.Status().Patch(ctx, sc, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+}
+
+// setEncryptionCondition reports the state of the SC's spec.encryption
+// request. The condition exists only while encryption is requested. It turns
+// True once the SC is Ready on an SCPC that lists the provider: such SCPCs
+// promise to fail closed, so a Ready cluster encrypts its Secrets.
+func setEncryptionCondition(
+	sc *showroomv1alpha1.SimpleCluster, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) {
+	if !sc.Spec.EncryptionEnabled() {
+		apimeta.RemoveStatusCondition(&sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
+		return
+	}
+	provider := sc.Spec.Encryption.Provider.Type
+	cond := metav1.Condition{
+		Type:    showroomv1alpha1.ConditionEncryptionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  "Provisioning",
+		Message: fmt.Sprintf("waiting for the cluster to become Ready with %s encryption", provider),
+	}
+	switch {
+	case !scpc.Spec.SupportsEncryption(provider):
+		cond.Reason = "UnsupportedByProvider"
+		cond.Message = fmt.Sprintf("SCPC %q does not support %s encryption", scpc.Name, provider)
+	case sc.Status.Phase == showroomv1alpha1.PhaseReady:
+		cond.Status = metav1.ConditionTrue
+		cond.Reason = "Encrypted"
+		cond.Message = fmt.Sprintf("Secrets are encrypted at rest with %s", provider)
 	}
 	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
 }
