@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.39.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.3...v0.39.0) (2026-10-13)
+
+
+### Features
+
+* add optional OpenBao KMS v2 encryption for k3s clusters ([#197](https://github.com/apeirora/showroom-msp-simple-cluster/issues/197)) ([89d1830](https://github.com/apeirora/showroom-msp-simple-cluster/commit/89d1830cb1983b5aba4592f5472200db1293a592))
+
+
+### Bug Fixes
+
+* **deps:** update Go to 1.27.2 and x/net to v0.60.0 ([#201](https://github.com/apeirora/showroom-msp-simple-cluster/issues/201)) ([3f81b64](https://github.com/apeirora/showroom-msp-simple-cluster/commit/3f81b641ab50c9b066e0e6e022e2fa7d447c4429))
+* mount whole KCP credential Secrets for certificate rotation ([#200](https://github.com/apeirora/showroom-msp-simple-cluster/issues/200)) ([e72c6f6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/e72c6f66f132200ff8fb8929347fd6263acb52ef))
+
 ## [0.38.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.2...v0.38.3) (2026-09-24)
 
 
