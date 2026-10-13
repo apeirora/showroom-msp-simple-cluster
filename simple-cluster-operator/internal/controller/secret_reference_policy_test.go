@@ -252,3 +252,48 @@ func TestReferencePreflightPreservesNoHardwareAndTrackedDeletion(t *testing.T) {
 		t.Fatalf("tracked deletion required profile selection: %v", err)
 	}
 }
+
+func TestReferenceDeleteEnumerationBeforeMutation(t *testing.T) {
+	for _, tc := range []struct {
+		label, repeat string
+		instances     []showroomv1alpha1.InstanceStatus
+	}{
+		{label: "untracked repeat two", repeat: "2"},
+		{label: "untracked repeat zero", repeat: "0"},
+		{label: "empty tracked name", instances: []showroomv1alpha1.InstanceStatus{{TargetName: "demo-seed-0", TargetNamespace: "shared"}, {TargetNamespace: "shared"}}},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			scheme, sc, pc := referenceFixtures(t)
+			now := metav1.Now()
+			sc.DeletionTimestamp = &now
+			sc.Finalizers = []string{showroomv1alpha1.FinalizerName}
+			pc.Spec.Resources[0].Kind = "Secret"
+			pc.Spec.Resources[0].Namespace = "shared"
+			pc.Spec.Resources[0].Repeat = tc.repeat
+			if tc.instances != nil {
+				sc.Status.Resources = []showroomv1alpha1.ResourceStatus{{Name: "seed", Instances: tc.instances}}
+			}
+			spy := &referenceClientSpy{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(sc, pc).Build()}
+			networkCalls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				networkCalls++
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
+			}))
+			defer server.Close()
+			entries := []secretpolicy.Entry{}
+			for _, name := range []string{"demo-seed-0", "demo-seed-1"} {
+				entries = append(entries, secretpolicy.Entry{Namespace: "shared", Name: name, Purpose: secretpolicy.Copy}, secretpolicy.Entry{Namespace: "shared", Name: name, Purpose: secretpolicy.Write})
+			}
+			r := &SimpleClusterReconciler{Client: spy, Scheme: scheme, RESTConfig: &rest.Config{Host: server.URL}, SecretPolicy: secretpolicy.Policy{Allowlist: entries}}
+			_, err := r.reconcileDelete(context.Background(), sc)
+			if !errors.Is(err, secretpolicy.ErrDenied) {
+				t.Fatalf("expected denial: %v", err)
+			}
+			if spy.secretReads != 0 || spy.writes != 0 || networkCalls != 0 {
+				t.Fatalf("access before denial: reads=%d writes=%d network=%d", spy.secretReads, spy.writes, networkCalls)
+			}
+		})
+	}
+}

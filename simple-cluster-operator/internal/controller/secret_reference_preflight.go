@@ -39,13 +39,15 @@ func (r *SimpleClusterReconciler) preflightSecretReferences(ctx context.Context,
 		if resource.APIVersion != "v1" || resource.Kind != "Secret" {
 			continue
 		}
-		references := trackedSecretReferences(sc, resource.Name)
-		if !deleting || len(references) == 0 {
+		var references []secretReference
+		if deleting {
+			references, err = deletionReferences(scpc, sc, resource)
+			if err != nil {
+				return err
+			}
+		} else {
 			renderContext, err := rendertpl.BuildContext(scpc, sc, resource, nil)
 			if err != nil {
-				if deleting {
-					return err
-				}
 				// Normal reconciliation reports input and profile errors. The actual
 				// resource caller still authorizes each fully resolved reference.
 				continue
@@ -57,9 +59,6 @@ func (r *SimpleClusterReconciler) preflightSecretReferences(ctx context.Context,
 			if resource.Repeat != "" {
 				count, err = rendertpl.EvaluateRepeat(scpc, sc, resource, nil)
 				if err != nil {
-					if deleting {
-						return err
-					}
 					continue
 				}
 			}
@@ -73,19 +72,6 @@ func (r *SimpleClusterReconciler) preflightSecretReferences(ctx context.Context,
 			}
 		}
 		for _, ref := range references {
-			if deleting && ref.namespace == "" {
-				ref.namespace = resource.Namespace
-				if ref.namespace == "" {
-					ref.namespace = scpc.Spec.Target.Namespace
-				}
-				if strings.Contains(ref.namespace, "{{") {
-					namespace, err := rendertpl.ResolveNamespace(scpc, sc, resource)
-					if err != nil {
-						return err
-					}
-					ref.namespace = namespace
-				}
-			}
 			if _, err := r.SecretPolicy.Resolve(sc.Namespace, ref.namespace, ref.name, secretpolicy.Copy); err != nil {
 				return err
 			}
@@ -111,9 +97,7 @@ func trackedSecretReferences(sc *showroomv1alpha1.SimpleCluster, name string) []
 		refs := make([]secretReference, 0, len(status.Instances))
 		if len(status.Instances) > 0 {
 			for _, instance := range status.Instances {
-				if instance.TargetName != "" {
-					refs = append(refs, secretReference{namespace: instance.TargetNamespace, name: instance.TargetName})
-				}
+				refs = append(refs, secretReference{namespace: instance.TargetNamespace, name: instance.TargetName})
 			}
 		} else if status.TargetName != "" {
 			refs = append(refs, secretReference{namespace: status.TargetNamespace, name: status.TargetName})
@@ -123,17 +107,29 @@ func trackedSecretReferences(sc *showroomv1alpha1.SimpleCluster, name string) []
 	return nil
 }
 
-func requiresDefaultNamespace(status *showroomv1alpha1.ResourceStatus) bool {
-	if status == nil {
-		return true
+// deletionReferences preserves the status identities and the legacy base fallback.
+// Preflight and deletion use this same list before any target access.
+func deletionReferences(scpc *showroomv1alpha1.SimpleClusterProviderConfig, sc *showroomv1alpha1.SimpleCluster, resource *showroomv1alpha1.ResourceSpec) ([]secretReference, error) {
+	refs := trackedSecretReferences(sc, resource.Name)
+	if len(refs) == 0 {
+		refs = []secretReference{{name: rendertpl.SanitiseTargetName(resource.NamePrefix, sc.Name+"-"+resource.Name)}}
 	}
-	if len(status.Instances) == 0 {
-		return status.TargetNamespace == ""
-	}
-	for _, instance := range status.Instances {
-		if instance.TargetNamespace == "" {
-			return true
+	for i := range refs {
+		if refs[i].namespace != "" {
+			continue
 		}
+		namespace := resource.Namespace
+		if namespace == "" {
+			namespace = scpc.Spec.Target.Namespace
+		}
+		if strings.Contains(namespace, "{{") {
+			var err error
+			namespace, err = rendertpl.ResolveNamespace(scpc, sc, resource)
+			if err != nil {
+				return nil, err
+			}
+		}
+		refs[i].namespace = namespace
 	}
-	return false
+	return refs, nil
 }

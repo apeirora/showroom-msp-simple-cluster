@@ -676,12 +676,6 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		rs := &scpc.Spec.Resources[i]
 		resourceByName[rs.Name] = rs
 	}
-	statusByName := make(map[string]*showroomv1alpha1.ResourceStatus, len(sc.Status.Resources))
-	for i := range sc.Status.Resources {
-		s := &sc.Status.Resources[i]
-		statusByName[s.Name] = s
-	}
-
 	for i := len(order) - 1; i >= 0; i-- {
 		name := order[i]
 		rs := resourceByName[name]
@@ -698,46 +692,9 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
-		defaultNs := rs.Namespace
-		if defaultNs == "" {
-			defaultNs = scpc.Spec.Target.Namespace
-		}
-
-		if strings.Contains(defaultNs, "{{") && requiresDefaultNamespace(statusByName[name]) {
-			var nerr error
-			defaultNs, nerr = rendertpl.ResolveNamespace(&scpc, sc, rs)
-			if nerr != nil {
-				return false, fmt.Errorf("resource %q: resolve namespace: %w", name, nerr)
-			}
-		}
-
-		// Enumerate the (name, namespace) pairs to delete. For repeated
-		// specs, Instances carries one entry per index. For non-repeated,
-		// the top-level TargetName is the single name. Fall back to the
-		// computed base name when status is missing entirely.
-		type nsName struct{ name, namespace string }
-		var targets []nsName
-		s := statusByName[name]
-		switch {
-		case s != nil && len(s.Instances) > 0:
-			for _, inst := range s.Instances {
-				ns := inst.TargetNamespace
-				if ns == "" {
-					ns = defaultNs
-				}
-				targets = append(targets, nsName{inst.TargetName, ns})
-			}
-		case s != nil && s.TargetName != "":
-			ns := s.TargetNamespace
-			if ns == "" {
-				ns = defaultNs
-			}
-			targets = []nsName{{s.TargetName, ns}}
-		default:
-			targets = []nsName{{
-				rendertpl.SanitiseTargetName(rs.NamePrefix, sc.Name+"-"+name),
-				defaultNs,
-			}}
+		targets, err := deletionReferences(&scpc, sc, rs)
+		if err != nil {
+			return false, fmt.Errorf("resource %q: resolve deletion references: %w", name, err)
 		}
 
 		levelDone := true
