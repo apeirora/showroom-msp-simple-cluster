@@ -13,7 +13,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 	"strings"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	ubuntuv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/k3s"
 	sshpkg "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/ssh"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 )
 
 const (

@@ -13,7 +13,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/secretpolicy"
 	"strings"
 	"time"
 
@@ -33,6 +32,7 @@ import (
 
 	openstackv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/openstack"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/secretpolicy"
 )
 
 const (

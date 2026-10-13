@@ -13,7 +13,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/secretpolicy"
 	"sort"
 	"strings"
 	"time"
@@ -37,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/secretpolicy"
 )
 
 // ConditionReady is the type SCPC consumers read by default

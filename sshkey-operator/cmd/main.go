@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -38,6 +37,7 @@ import (
 
 	sshkeysv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/controller"
+	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -85,7 +85,8 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	var secretReferenceAllowlist string
-	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]", "Exact operator-approved reference exceptions as a JSON list.")
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]",
+		"Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
 	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
 	if err != nil {

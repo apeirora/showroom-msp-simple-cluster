@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	"os"
 	"time"
 
@@ -39,6 +38,7 @@ import (
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/controller"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -115,7 +115,8 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	var secretReferenceAllowlist string
-	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]", "Exact operator-approved reference exceptions as a JSON list.")
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]",
+		"Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
 	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
 	if err != nil {

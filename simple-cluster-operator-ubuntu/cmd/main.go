@@ -12,7 +12,6 @@ package main
 
 import (
 	"flag"
-	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -27,6 +26,7 @@ import (
 
 	ubuntuv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/controller"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 )
 
 var (
@@ -50,7 +50,8 @@ func main() {
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
 	var secretReferenceAllowlist string
-	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]", "Exact operator-approved reference exceptions as a JSON list.")
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]",
+		"Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
 	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
 	if err != nil {

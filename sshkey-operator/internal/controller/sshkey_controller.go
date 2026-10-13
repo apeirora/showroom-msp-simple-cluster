@@ -28,7 +28,6 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 	"strings"
 	"time"
 
@@ -44,6 +43,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	sshkeysv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 )
 
 // rotateBefore is how long before expiration an auto-rotating key is regenerated.

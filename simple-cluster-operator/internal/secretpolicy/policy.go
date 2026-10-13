@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
@@ -19,7 +20,7 @@ const (
 	GardenerDNS               = "gardener-dns"
 )
 
-var ErrDenied = errors.New("Secret reference denied")
+var ErrDenied = errors.New("secret reference denied")
 
 // Entry permits one reference for one purpose.
 type Entry struct {
@@ -40,7 +41,7 @@ func Parse(raw string) (Policy, error) {
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
 	token, err := decoder.Token()
 	if err != nil || token != json.Delim('[') {
-		return Policy{}, errors.New("Secret reference allowlist must be a JSON array")
+		return Policy{}, errors.New("secret reference allowlist must be a JSON array")
 	}
 	for decoder.More() {
 		token, err = decoder.Token()
@@ -87,7 +88,7 @@ func Parse(raw string) (Policy, error) {
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
-		return Policy{}, errors.New("Secret reference allowlist must contain one JSON value")
+		return Policy{}, errors.New("secret reference allowlist must contain one JSON value")
 	}
 	return p, nil
 }
