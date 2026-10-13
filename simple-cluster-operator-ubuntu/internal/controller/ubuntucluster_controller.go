@@ -30,6 +30,7 @@ import (
 
 	ubuntuv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/k3s"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 	sshpkg "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/ssh"
 )
 
@@ -47,8 +48,9 @@ const (
 // hosts and mirrors per-host progress back to status.
 type UbuntuClusterReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
 
 	// DefaultK3sVersion is the operator-wide fallback k3s release tag
 	// used when UbuntuCluster.spec.version is empty. Empty falls back

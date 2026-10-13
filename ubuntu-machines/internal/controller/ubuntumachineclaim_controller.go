@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/secretpolicy"
 )
 
 // ConditionReady is the type SCPC consumers read by default
@@ -54,8 +55,9 @@ var sshKeyGVK = schema.GroupVersionKind{
 // one claim → one machine.
 type UbuntuMachineClaimReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachineclaims,verbs=get;list;watch;create;update;patch;delete

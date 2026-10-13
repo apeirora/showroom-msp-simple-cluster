@@ -43,6 +43,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	sshkeysv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 )
 
 // rotateBefore is how long before expiration an auto-rotating key is regenerated.
@@ -51,7 +52,8 @@ const rotateBefore = 24 * time.Hour
 // SSHKeyReconciler reconciles a SSHKey object
 type SSHKeyReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch;create;update;patch;delete

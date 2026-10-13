@@ -26,6 +26,7 @@ import (
 
 	umv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/controller"
+	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/secretpolicy"
 )
 
 var (
@@ -46,7 +47,15 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "enable leader election")
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
+	var secretReferenceAllowlist string
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]",
+		"Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
+	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
+	if err != nil {
+		setupLog.Error(err, "invalid Secret reference configuration")
+		os.Exit(1)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -70,9 +79,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.UbuntuMachineClaimReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("ubuntumachineclaim"),
+		SecretPolicy: secretPolicy,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		Recorder:     mgr.GetEventRecorderFor("ubuntumachineclaim"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UbuntuMachineClaim")
 		os.Exit(1)

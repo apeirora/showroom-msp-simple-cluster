@@ -28,6 +28,7 @@ import (
 
 	openstackv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/openstack"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/secretpolicy"
 )
 
 // SSHSecretReconciler watches Secrets carrying the keypair-cleanup
@@ -38,7 +39,8 @@ import (
 // ownerRef cascade; shared Secrets reach it when an admin deletes them.
 type SSHSecretReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;update;patch

@@ -39,6 +39,7 @@ import (
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/kubeconfig"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/pathwalk"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
@@ -62,8 +63,9 @@ const (
 // mirrors per-resource state into SC.Status.Resources. See DESIGN.md §5.
 type SimpleClusterReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	RESTConfig *rest.Config
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
+	RESTConfig   *rest.Config
 	// APIReader reads straight from the API server, bypassing the cache. It
 	// backs the pre-create deletion re-check so an in-flight pass cannot order
 	// new infrastructure for a SimpleCluster whose deletion has just begun.
