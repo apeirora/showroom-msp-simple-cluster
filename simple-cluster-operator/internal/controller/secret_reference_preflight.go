@@ -122,3 +122,18 @@ func trackedSecretReferences(sc *showroomv1alpha1.SimpleCluster, name string) []
 	}
 	return nil
 }
+
+func requiresDefaultNamespace(status *showroomv1alpha1.ResourceStatus) bool {
+	if status == nil {
+		return true
+	}
+	if len(status.Instances) == 0 {
+		return status.TargetNamespace == ""
+	}
+	for _, instance := range status.Instances {
+		if instance.TargetNamespace == "" {
+			return true
+		}
+	}
+	return false
+}

@@ -702,17 +702,8 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		if defaultNs == "" {
 			defaultNs = scpc.Spec.Target.Namespace
 		}
-		tracked := statusByName[name]
-		needsDefaultNamespace := tracked == nil
-		if tracked != nil {
-			needsDefaultNamespace = len(tracked.Instances) == 0 && tracked.TargetNamespace == ""
-			for _, instance := range tracked.Instances {
-				if instance.TargetNamespace == "" {
-					needsDefaultNamespace = true
-				}
-			}
-		}
-		if strings.Contains(defaultNs, "{{") && needsDefaultNamespace {
+
+		if strings.Contains(defaultNs, "{{") && requiresDefaultNamespace(statusByName[name]) {
 			var nerr error
 			defaultNs, nerr = rendertpl.ResolveNamespace(&scpc, sc, rs)
 			if nerr != nil {
