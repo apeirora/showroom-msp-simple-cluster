@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.40.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.39.0...v0.40.0) (2026-10-13)
+
+
+### Features
+
+* **rbac:** configure Secret reference validation ([#204](https://github.com/apeirora/showroom-msp-simple-cluster/issues/204)) ([94727ff](https://github.com/apeirora/showroom-msp-simple-cluster/commit/94727ffbf2bd24fbb68ae96b6eac68fe7364b6bd))
+
+
+### Bug Fixes
+
+* **controller:** validate Secret reference namespaces ([#202](https://github.com/apeirora/showroom-msp-simple-cluster/issues/202)) ([f180731](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f1807310dad682ed6bb6b5679b378dbf2dcb2d65))
+* validate Secret reference namespaces in SimpleCluster ([#205](https://github.com/apeirora/showroom-msp-simple-cluster/issues/205)) ([c148994](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c148994796f61a25fbf107b77f1cacb8a9668fb7))
+* validate Ubuntu and SSHKey Secret references ([#203](https://github.com/apeirora/showroom-msp-simple-cluster/issues/203)) ([a0dd582](https://github.com/apeirora/showroom-msp-simple-cluster/commit/a0dd5822a04b724b4f2c92a2bcc099891262ede2))
+
 ## [0.39.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.38.3...v0.39.0) (2026-10-13)
 
 
