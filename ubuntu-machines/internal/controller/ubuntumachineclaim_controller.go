@@ -12,6 +12,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -58,6 +59,7 @@ type UbuntuMachineClaimReconciler struct {
 	SecretPolicy secretpolicy.Policy
 	Scheme       *runtime.Scheme
 	Recorder     record.EventRecorder
+	sshDial      func(*umv1alpha1.UbuntuMachine, *corev1.Secret) (*gossh.Client, error)
 }
 
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachineclaims,verbs=get;list;watch;create;update;patch;delete
@@ -163,6 +165,9 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 	claim *umv1alpha1.UbuntuMachineClaim,
 	m umv1alpha1.UbuntuMachine,
 ) (ctrl.Result, error) {
+	if err := r.validateAdminSSH(&m); err != nil {
+		return ctrl.Result{}, err
+	}
 	sshKey, err := r.ensureClaimSSHKey(ctx, claim)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -184,7 +189,7 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		sshClient, err := dialMachine(&m, adminSecret)
+		sshClient, err := r.dialMachine(&m, adminSecret)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("dial machine %s: %w", m.Name, err)
 		}
@@ -284,7 +289,7 @@ func (r *UbuntuMachineClaimReconciler) removeClaimSSHKey(
 	if err != nil {
 		return err
 	}
-	sshClient, err := dialMachine(&machine, adminSecret)
+	sshClient, err := r.dialMachine(&machine, adminSecret)
 	if err != nil {
 		return fmt.Errorf("dial machine %s: %w", machine.Name, err)
 	}
@@ -297,6 +302,9 @@ func (r *UbuntuMachineClaimReconciler) getAdminSecret(
 	ctx context.Context,
 	machine *umv1alpha1.UbuntuMachine,
 ) (*corev1.Secret, error) {
+	if err := r.validateAdminSSH(machine); err != nil {
+		return nil, err
+	}
 	ref := machine.Spec.AdminSSH.PrivateKeySecretRef
 	if ref == nil {
 		ref = machine.Spec.AdminSSH.PasswordSecretRef
@@ -309,6 +317,26 @@ func (r *UbuntuMachineClaimReconciler) getAdminSecret(
 		return nil, fmt.Errorf("get admin secret %s/%s: %w", ref.Namespace, ref.Name, err)
 	}
 	return &secret, nil
+}
+
+// validateAdminSSH requires an exact operator entry for cluster-scoped inventory.
+func (r *UbuntuMachineClaimReconciler) validateAdminSSH(machine *umv1alpha1.UbuntuMachine) error {
+	auth := machine.Spec.AdminSSH
+	if (auth.PrivateKeySecretRef == nil) == (auth.PasswordSecretRef == nil) {
+		return fmt.Errorf("%w: machine %q must set exactly one adminSSH credential reference", secretpolicy.ErrDenied, machine.Name)
+	}
+	ref := auth.PrivateKeySecretRef
+	if ref == nil {
+		ref = auth.PasswordSecretRef
+	}
+	return r.SecretPolicy.Require(ref.Namespace, ref.Name, secretpolicy.Use)
+}
+
+func (r *UbuntuMachineClaimReconciler) dialMachine(machine *umv1alpha1.UbuntuMachine, secret *corev1.Secret) (*gossh.Client, error) {
+	if r.sshDial != nil {
+		return r.sshDial(machine, secret)
+	}
+	return dialMachine(machine, secret)
 }
 
 // dialMachine opens an SSH connection to the machine using adminSSH credentials.
@@ -465,6 +493,9 @@ func (r *UbuntuMachineClaimReconciler) eligibleMachines(
 		if !m.DeletionTimestamp.IsZero() {
 			continue
 		}
+		if err := r.validateAdminSSH(&m); err != nil {
+			continue
+		}
 		if m.Status.Phase == umv1alpha1.MachineBound {
 			continue
 		}
@@ -500,6 +531,9 @@ func (r *UbuntuMachineClaimReconciler) bind(
 	claim *umv1alpha1.UbuntuMachineClaim,
 	m umv1alpha1.UbuntuMachine,
 ) (umv1alpha1.UbuntuMachine, error) {
+	if err := r.validateAdminSSH(&m); err != nil {
+		return m, err
+	}
 	m.Status.Phase = umv1alpha1.MachineBound
 	m.Status.BoundClaimRef = &umv1alpha1.ClaimReference{Name: claim.Name, Namespace: claim.Namespace}
 	m.Status.ObservedGeneration = m.Generation
@@ -519,6 +553,9 @@ func (r *UbuntuMachineClaimReconciler) releaseAll(
 
 	if claim.Status.SSHSecretRef != nil {
 		if err := r.removeClaimSSHKey(ctx, claim); err != nil {
+			if errors.Is(err, secretpolicy.ErrDenied) {
+				return err
+			}
 			logger.Error(err, "failed to remove claim SSH key; proceeding with release")
 		}
 	}

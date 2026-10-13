@@ -56,6 +56,8 @@ type UbuntuClusterReconciler struct {
 	// used when UbuntuCluster.spec.version is empty. Empty falls back
 	// to the get.k3s.io installer default.
 	DefaultK3sVersion string
+	sshDial           func(context.Context, string, int, string, sshpkg.Credential) (*sshpkg.Client, error)
+	sshDialVia        func(context.Context, *sshpkg.Client, string, int, string, sshpkg.Credential) (*sshpkg.Client, error)
 }
 
 // +kubebuilder:rbac:groups=ubuntu.apeirora.eu,resources=ubuntuclusters,verbs=get;list;watch;create;update;patch;delete
@@ -325,7 +327,11 @@ func (r *UbuntuClusterReconciler) dialBootstrap(ctx context.Context, cluster *ub
 	if target == "" {
 		target = h.Address
 	}
-	c, err := sshpkg.Dial(ctx, target, int(cluster.Spec.SSH.Port), user, hostCred)
+	dial := sshpkg.Dial
+	if r.sshDial != nil {
+		dial = r.sshDial
+	}
+	c, err := dial(ctx, target, int(cluster.Spec.SSH.Port), user, hostCred)
 	if err != nil {
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
 			"ssh %s@%s: %s", user, target, err.Error())
@@ -344,7 +350,11 @@ func (r *UbuntuClusterReconciler) dialVia(ctx context.Context, cluster *ubuntuv1
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed", "host %s: %s", h.Name, err.Error())
 		return nil, err
 	}
-	c, err := sshpkg.DialVia(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), user, hostCred)
+	dial := sshpkg.DialVia
+	if r.sshDialVia != nil {
+		dial = r.sshDialVia
+	}
+	c, err := dial(ctx, bastion, h.Address, int(cluster.Spec.SSH.Port), user, hostCred)
 	if err != nil {
 		r.eventf(cluster, corev1.EventTypeWarning, "SSHLoginFailed",
 			"ssh %s@%s via bastion: %s", user, h.Address, err.Error())
@@ -478,17 +488,26 @@ func (r *UbuntuClusterReconciler) uninstallVia(
 // password (`kubernetes.io/basic-auth`), depending on which ref the spec
 // carries. The SSHAuth CEL guarantees exactly one ref is set.
 func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) (sshpkg.Credential, error) {
+	if err := r.validateSecretReferences(cluster); err != nil {
+		return sshpkg.Credential{}, err
+	}
 	auth := cluster.Spec.SSH
 	switch {
 	case auth.PrivateKeySecretRef != nil:
-		ns := refNamespace(auth.PrivateKeySecretRef.Namespace, cluster.Namespace)
+		ns, err := r.SecretPolicy.Resolve(cluster.Namespace, auth.PrivateKeySecretRef.Namespace, auth.PrivateKeySecretRef.Name, secretpolicy.Use)
+		if err != nil {
+			return sshpkg.Credential{}, err
+		}
 		data, err := r.readSecretKey(ctx, ns, auth.PrivateKeySecretRef.Name, ubuntuv1alpha1.SSHSecretPrivateKeyKey)
 		if err != nil {
 			return sshpkg.Credential{}, err
 		}
 		return sshpkg.Credential{PrivateKeyPEM: data}, nil
 	case auth.PasswordSecretRef != nil:
-		ns := refNamespace(auth.PasswordSecretRef.Namespace, cluster.Namespace)
+		ns, err := r.SecretPolicy.Resolve(cluster.Namespace, auth.PasswordSecretRef.Namespace, auth.PasswordSecretRef.Name, secretpolicy.Use)
+		if err != nil {
+			return sshpkg.Credential{}, err
+		}
 		data, err := r.readSecretKey(ctx, ns, auth.PasswordSecretRef.Name, ubuntuv1alpha1.SSHSecretPasswordKey)
 		if err != nil {
 			return sshpkg.Credential{}, err
@@ -505,10 +524,16 @@ func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster
 // carry a distinct password — e.g. per-server root passwords. Otherwise the
 // cluster-wide user and credential apply.
 func (r *UbuntuClusterReconciler) hostCredential(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, h ubuntuv1alpha1.Host, clusterCred sshpkg.Credential) (string, sshpkg.Credential, error) {
+	if err := r.validateSecretReferences(cluster); err != nil {
+		return "", sshpkg.Credential{}, err
+	}
 	if h.PasswordSecretRef == nil {
 		return cluster.Spec.SSH.User, clusterCred, nil
 	}
-	ns := refNamespace(h.PasswordSecretRef.Namespace, cluster.Namespace)
+	ns, err := r.SecretPolicy.Resolve(cluster.Namespace, h.PasswordSecretRef.Namespace, h.PasswordSecretRef.Name, secretpolicy.Use)
+	if err != nil {
+		return "", sshpkg.Credential{}, err
+	}
 	var sec corev1.Secret
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: h.PasswordSecretRef.Name}, &sec); err != nil {
 		return "", sshpkg.Credential{}, fmt.Errorf("read host %s passwordSecretRef %s/%s: %w", h.Name, ns, h.PasswordSecretRef.Name, err)
@@ -524,14 +549,28 @@ func (r *UbuntuClusterReconciler) hostCredential(ctx context.Context, cluster *u
 	return user, sshpkg.Credential{Password: string(pw)}, nil
 }
 
-// refNamespace returns ns when set, otherwise the fallback (the referring
-// object's own namespace). Lets an SSH secret ref omit the namespace to mean
-// "same namespace as the UbuntuCluster".
-func refNamespace(ns, fallback string) string {
-	if ns != "" {
-		return ns
+// validateSecretReferences checks every credential before the first read or connection.
+func (r *UbuntuClusterReconciler) validateSecretReferences(cluster *ubuntuv1alpha1.UbuntuCluster) error {
+	auth := cluster.Spec.SSH
+	if (auth.PrivateKeySecretRef == nil) == (auth.PasswordSecretRef == nil) {
+		return fmt.Errorf("spec.ssh must set exactly one credential reference")
 	}
-	return fallback
+	refs := []*corev1.SecretReference{auth.PrivateKeySecretRef, auth.PasswordSecretRef}
+	for _, h := range cluster.Spec.ControlPlane.Hosts {
+		refs = append(refs, h.PasswordSecretRef)
+	}
+	for _, h := range cluster.Spec.Workers.Hosts {
+		refs = append(refs, h.PasswordSecretRef)
+	}
+	for _, ref := range refs {
+		if ref == nil {
+			continue
+		}
+		if _, err := r.SecretPolicy.Resolve(cluster.Namespace, ref.Namespace, ref.Name, secretpolicy.Use); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // readSecretKey fetches one data key out of a Secret in the given namespace.
