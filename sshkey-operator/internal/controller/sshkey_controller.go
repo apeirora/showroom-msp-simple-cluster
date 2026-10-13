@@ -73,7 +73,7 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Resolve the passphrase and reflect its validity as a condition.
 	passphrase, err := r.resolvePassphrase(ctx, &key)
-	if hasRef(key.Spec.PassPhaseSecret.Name) {
+	if hasRef(key.Spec.PassPhaseSecret.Name) || key.Spec.PassPhaseSecret.Namespace != "" {
 		if !formatSupportsPassphrase(key.Spec.KeyFormat) {
 			msg := fmt.Sprintf("key format %s does not support a passphrase", key.Spec.KeyFormat)
 			meta.SetStatusCondition(&key.Status.Conditions, condition(
@@ -132,12 +132,12 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 // resolvePassphrase returns the passphrase bytes from the referenced secret, or nil when none is set.
 func (r *SSHKeyReconciler) resolvePassphrase(ctx context.Context, key *sshkeysv1alpha1.SSHKey) ([]byte, error) {
 	ref := key.Spec.PassPhaseSecret
-	if !hasRef(ref.Name) {
+	if !hasRef(ref.Name) && ref.Namespace == "" {
 		return nil, nil
 	}
-	ns := ref.Namespace
-	if ns == "" {
-		ns = key.Namespace
+	ns, err := r.SecretPolicy.Resolve(key.Namespace, ref.Namespace, ref.Name, secretpolicy.Use)
+	if err != nil {
+		return nil, err
 	}
 	var secret corev1.Secret
 	if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ns}, &secret); err != nil {
