@@ -39,9 +39,9 @@ import (
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/kubeconfig"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/pathwalk"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
-	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 )
 
 const (
