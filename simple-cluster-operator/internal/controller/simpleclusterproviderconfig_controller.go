@@ -143,11 +143,16 @@ func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 	}
 
 	ref := scpc.Spec.Target.KubeconfigSecretRef
+	namespace, err := r.SecretPolicy.Resolve(scpc.Namespace, ref.Namespace, ref.Name, secretpolicy.Use)
+	if err != nil {
+		c := readyCond(metav1.ConditionFalse, "SecretReferenceDenied", err.Error())
+		return nil, &c, nil
+	}
 	var secret corev1.Secret
-	switch err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &secret); {
+	switch err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: namespace}, &secret); {
 	case apierrors.IsNotFound(err):
 		c := readyCond(metav1.ConditionFalse, "SecretMissing",
-			fmt.Sprintf("kubeconfig Secret %s/%s not found", ref.Namespace, ref.Name))
+			fmt.Sprintf("kubeconfig Secret %s/%s not found", namespace, ref.Name))
 		return nil, &c, nil
 	case err != nil:
 		c := readyCond(metav1.ConditionFalse, "SecretReadError", err.Error())
@@ -157,7 +162,7 @@ func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 	data, ok := secret.Data[kubeconfigSecretKey]
 	if !ok || len(data) == 0 {
 		c := readyCond(metav1.ConditionFalse, "SecretKeyMissing",
-			fmt.Sprintf("Secret %s/%s has no %q key", ref.Namespace, ref.Name, kubeconfigSecretKey))
+			fmt.Sprintf("Secret %s/%s has no %q key", namespace, ref.Name, kubeconfigSecretKey))
 		return nil, &c, nil
 	}
 

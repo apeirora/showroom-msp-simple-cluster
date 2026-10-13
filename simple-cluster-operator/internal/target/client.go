@@ -25,6 +25,8 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 )
 
 const KubeconfigKey = "kubeconfig"
@@ -33,9 +35,11 @@ const KubeconfigKey = "kubeconfig"
 // underlying *rest.Config (needed for raw subresource POSTs that
 // dynamic.Interface does not expose).
 type Client struct {
-	Dynamic    dynamic.Interface
-	Mapper     apimeta.RESTMapper
-	RESTConfig *rest.Config
+	Dynamic        dynamic.Interface
+	Mapper         apimeta.RESTMapper
+	RESTConfig     *rest.Config
+	SecretPolicy   secretpolicy.Policy
+	OwnerNamespace string
 }
 
 // New builds a target Client. If ref is nil, returns a client for the
@@ -47,22 +51,28 @@ func New(
 	mgmtCfg *rest.Config,
 	mgmtMapper apimeta.RESTMapper,
 	ref *corev1.SecretReference,
+	ownerNamespace string,
+	policy secretpolicy.Policy,
 ) (*Client, error) {
 	if ref == nil {
 		d, err := dynamic.NewForConfig(mgmtCfg)
 		if err != nil {
 			return nil, fmt.Errorf("dynamic client (local): %w", err)
 		}
-		return &Client{Dynamic: d, Mapper: mgmtMapper, RESTConfig: mgmtCfg}, nil
+		return &Client{Dynamic: d, Mapper: mgmtMapper, RESTConfig: mgmtCfg, SecretPolicy: policy, OwnerNamespace: ownerNamespace}, nil
 	}
 
+	namespace, err := policy.Resolve(ownerNamespace, ref.Namespace, ref.Name, secretpolicy.Use)
+	if err != nil {
+		return nil, err
+	}
 	var secret corev1.Secret
-	if err := mgmt.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, &secret); err != nil {
-		return nil, fmt.Errorf("get Secret %s/%s: %w", ref.Namespace, ref.Name, err)
+	if err := mgmt.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: namespace}, &secret); err != nil {
+		return nil, fmt.Errorf("get Secret %s/%s: %w", namespace, ref.Name, err)
 	}
 	data := secret.Data[KubeconfigKey]
 	if len(data) == 0 {
-		return nil, fmt.Errorf("secret %s/%s missing %q key", ref.Namespace, ref.Name, KubeconfigKey)
+		return nil, fmt.Errorf("secret %s/%s missing %q key", namespace, ref.Name, KubeconfigKey)
 	}
 	cfg, err := clientcmd.RESTConfigFromKubeConfig(data)
 	if err != nil {
@@ -82,17 +92,26 @@ func New(
 		return nil, fmt.Errorf("discover API groups: %w", err)
 	}
 	return &Client{
-		Dynamic:    d,
-		Mapper:     restmapper.NewDiscoveryRESTMapper(groups),
-		RESTConfig: cfg,
+		Dynamic:        d,
+		SecretPolicy:   policy,
+		OwnerNamespace: ownerNamespace,
+		Mapper:         restmapper.NewDiscoveryRESTMapper(groups),
+		RESTConfig:     cfg,
 	}, nil
 }
 
 // ResourceFor returns the dynamic ResourceInterface scoped (namespaced or
 // cluster-wide) appropriate for obj's namespace+GVK.
-func (c *Client) ResourceFor(mapping *apimeta.RESTMapping, namespace string) dynamic.ResourceInterface {
-	if mapping.Scope.Name() == apimeta.RESTScopeNameNamespace {
-		return c.Dynamic.Resource(mapping.Resource).Namespace(namespace)
+func (c *Client) ResourceFor(mapping *apimeta.RESTMapping, namespace, name, purpose string) (dynamic.ResourceInterface, error) {
+	if mapping.Resource.Group == "" && mapping.Resource.Resource == "secrets" {
+		var err error
+		namespace, err = c.SecretPolicy.Resolve(c.OwnerNamespace, namespace, name, purpose)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return c.Dynamic.Resource(mapping.Resource)
+	if mapping.Scope.Name() == apimeta.RESTScopeNameNamespace {
+		return c.Dynamic.Resource(mapping.Resource).Namespace(namespace), nil
+	}
+	return c.Dynamic.Resource(mapping.Resource), nil
 }
