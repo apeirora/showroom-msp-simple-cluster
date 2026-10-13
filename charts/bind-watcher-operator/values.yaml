@@ -3,6 +3,8 @@ image: /bind-watcher-operator
 # Image tag override; defaults to the chart appVersion when empty.
 imageTag: ""
 
+imagePullSecrets: []
+
 serviceAccount: bind-watcher-operator
 
 resources:

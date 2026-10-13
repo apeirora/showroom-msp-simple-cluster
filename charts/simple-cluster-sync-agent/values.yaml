@@ -5,7 +5,18 @@ syncAgentOperator:
   kcpKubeconfig: pm-kubeconfig
   replicas: 1
   enableLeaderElection: false
-  extraFlags: []
+  extraFlags:
+    - --kcp-kubeconfig=/etc/kcp/kubeconfig
+  # Use the same Secret name as kcpKubeconfig when you override these values.
+  extraVolumes:
+    - name: kcp-credentials
+      secret:
+        secretName: pm-kubeconfig
+        defaultMode: 0444
+  extraVolumeMounts:
+    - name: kcp-credentials
+      mountPath: /etc/kcp
+      readOnly: true
   crds:
     enabled: false
 
