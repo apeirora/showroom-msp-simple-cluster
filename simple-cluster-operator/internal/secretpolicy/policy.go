@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
@@ -20,8 +20,6 @@ const (
 )
 
 var ErrDenied = errors.New("Secret reference denied")
-var namespacePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-var namePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
 
 // Entry permits one reference for one purpose.
 type Entry struct {
@@ -40,18 +38,56 @@ func Parse(raw string) (Policy, error) {
 		return p, nil
 	}
 	decoder := json.NewDecoder(bytes.NewBufferString(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&p.Allowlist); err != nil {
-		return p, fmt.Errorf("invalid Secret reference allowlist: %w", err)
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('[') {
+		return Policy{}, errors.New("Secret reference allowlist must be a JSON array")
+	}
+	for decoder.More() {
+		token, err = decoder.Token()
+		if err != nil || token != json.Delim('{') {
+			return Policy{}, errors.New("each Secret reference exception must be an object")
+		}
+		entry := Entry{}
+		seen := map[string]bool{}
+		for decoder.More() {
+			key, err := decoder.Token()
+			if err != nil {
+				return Policy{}, err
+			}
+			field, ok := key.(string)
+			if !ok || seen[field] {
+				return Policy{}, errors.New("duplicate Secret reference exception field")
+			}
+			seen[field] = true
+			var value *string
+			switch field {
+			case "namespace":
+				value = &entry.Namespace
+			case "name":
+				value = &entry.Name
+			case "purpose":
+				value = &entry.Purpose
+			default:
+				return Policy{}, fmt.Errorf("unknown Secret reference exception field %q", field)
+			}
+			if err := decoder.Decode(value); err != nil {
+				return Policy{}, err
+			}
+		}
+		if _, err := decoder.Token(); err != nil {
+			return Policy{}, err
+		}
+		if err := validate(entry.Namespace, entry.Name, entry.Purpose); err != nil {
+			return Policy{}, err
+		}
+		p.Allowlist = append(p.Allowlist, entry)
+	}
+	if _, err := decoder.Token(); err != nil {
+		return Policy{}, err
 	}
 	var extra any
 	if err := decoder.Decode(&extra); err != io.EOF {
 		return Policy{}, errors.New("Secret reference allowlist must contain one JSON value")
-	}
-	for _, entry := range p.Allowlist {
-		if err := validate(entry.Namespace, entry.Name, entry.Purpose); err != nil {
-			return Policy{}, err
-		}
 	}
 	return p, nil
 }
@@ -87,10 +123,10 @@ func (p Policy) Require(namespace, name, purpose string) error {
 }
 
 func validate(namespace, name, purpose string) error {
-	if len(namespace) == 0 || len(namespace) > 63 || !namespacePattern.MatchString(namespace) {
+	if len(validation.IsDNS1123Label(namespace)) != 0 {
 		return fmt.Errorf("%w: invalid reference namespace", ErrDenied)
 	}
-	if len(name) == 0 || len(name) > 253 || !namePattern.MatchString(name) {
+	if len(validation.IsDNS1123Subdomain(name)) != 0 {
 		return fmt.Errorf("%w: invalid reference name", ErrDenied)
 	}
 	switch purpose {

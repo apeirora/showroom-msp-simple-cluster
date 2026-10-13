@@ -52,7 +52,7 @@ func TestConformance(t *testing.T) {
 }
 
 func TestInvalidConfiguration(t *testing.T) {
-	for _, raw := range []string{`[{"namespace":"*","name":"key","purpose":"use"}]`, `[{"namespace":"shared","name":"*","purpose":"use"}]`, `[{"namespace":"shared","name":"key","purpose":"unknown"}]`, `[{"namespace":"shared","name":"key","purpose":"use","extra":true}]`, `[] []`, `{}`} {
+	for _, raw := range []string{`[{"namespace":"*","name":"key","purpose":"use"}]`, `[{"namespace":"shared","name":"*","purpose":"use"}]`, `[{"namespace":"shared","name":"key","purpose":"unknown"}]`, `[{"namespace":"shared","name":"key","purpose":"use","extra":true}]`, `[] []`, `{}`, `null`, `[{"namespace":"shared","namespace":"other","name":"key","purpose":"use"}]`, `[{"namespace":"shared","Namespace":"other","name":"key","purpose":"use"}]`, `[{"namespace":"shared","name":"a..b","purpose":"use"}]`, `[{"namespace":"shared","name":"a.-b","purpose":"use"}]`, `[{"namespace":"shared","name":"a-.b","purpose":"use"}]`, `[{"namespace":"","name":"key","purpose":"use"}]`} {
 		if _, err := Parse(raw); err == nil {
 			t.Fatalf("accepted invalid allowlist %s", raw)
 		}
