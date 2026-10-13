@@ -108,6 +108,9 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if err := r.preflightSecretReferences(ctx, &sc); err != nil {
+		return ctrl.Result{}, err
+	}
 	if !sc.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, &sc)
 	}
@@ -153,7 +156,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.failSC(ctx, &sc, "InputError", err.Error())
 	}
 
-	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef)
+	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef, sc.Namespace, r.SecretPolicy)
 	if err != nil {
 		return r.failSC(ctx, &sc, "TargetClientError", err.Error())
 	}
@@ -222,7 +225,10 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return r.failSC(ctx, &sc, "GVKNotFound",
 					fmt.Sprintf("resource %q[%d]: RESTMapping %s: %v", name, idx, gvk, mperr))
 			}
-			ri := tc.ResourceFor(mapping, desired.GetNamespace())
+			ri, referenceErr := tc.ResourceFor(mapping, desired.GetNamespace(), desired.GetName(), secretpolicy.Copy)
+			if referenceErr != nil {
+				return ctrl.Result{}, referenceErr
+			}
 
 			existing, gerr := ri.Get(ctx, desired.GetName(), metav1.GetOptions{})
 			switch {
@@ -237,6 +243,9 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				}
 				if !allowed {
 					return ctrl.Result{}, nil
+				}
+				if _, referenceErr := tc.ResourceFor(mapping, desired.GetNamespace(), desired.GetName(), secretpolicy.Write); referenceErr != nil {
+					return ctrl.Result{}, referenceErr
 				}
 				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
 				if cerr != nil {
@@ -422,7 +431,7 @@ func (r *SimpleClusterReconciler) applyClusterResources(ctx context.Context, sc 
 	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), &corev1.SecretReference{
 		Name:      sc.Status.KubeconfigSecretRef.Name,
 		Namespace: sc.Namespace,
-	})
+	}, sc.Namespace, r.SecretPolicy)
 	if err != nil {
 		// Cluster not reachable yet — surface on every resource, retry next loop.
 		for i := range sc.Spec.Resources {
@@ -465,7 +474,11 @@ func applyOneClusterResource(ctx context.Context, tc *target.Client, res showroo
 		return fmt.Errorf("marshal: %w", err)
 	}
 	force := true
-	_, err = tc.ResourceFor(mapping, obj.GetNamespace()).Patch(
+	ri, err := tc.ResourceFor(mapping, obj.GetNamespace(), obj.GetName(), secretpolicy.Write)
+	if err != nil {
+		return err
+	}
+	_, err = ri.Patch(
 		ctx, obj.GetName(), types.ApplyPatchType, data,
 		metav1.PatchOptions{FieldManager: fieldManager, Force: &force},
 	)
@@ -488,7 +501,7 @@ func (r *SimpleClusterReconciler) collectNodes(ctx context.Context, sc *showroom
 	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), &corev1.SecretReference{
 		Name:      sc.Status.KubeconfigSecretRef.Name,
 		Namespace: sc.Namespace,
-	})
+	}, sc.Namespace, r.SecretPolicy)
 	if err != nil {
 		log.Info("collect nodes: cannot reach provisioned cluster", "error", err.Error())
 		return
@@ -571,6 +584,9 @@ func setResourceCondition(sc *showroomv1alpha1.SimpleCluster, name string, statu
 // and deleting R, then removing the finalizer. The kubeconfig Secret is
 // garbage-collected by Kubernetes via its OwnerReference on SC.
 func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) (ctrl.Result, error) {
+	if err := r.preflightSecretReferences(ctx, sc); err != nil {
+		return ctrl.Result{}, err
+	}
 	log := logf.FromContext(ctx)
 
 	if sc.Status.Phase != showroomv1alpha1.PhaseDeleting {
@@ -650,7 +666,7 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		order = orderFromStatus(sc)
 	}
 
-	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef)
+	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef, sc.Namespace, r.SecretPolicy)
 	if err != nil {
 		return false, fmt.Errorf("build target client: %w", err)
 	}
@@ -718,7 +734,10 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 
 		levelDone := true
 		for _, t := range targets {
-			ri := tc.ResourceFor(mapping, t.namespace)
+			ri, err := tc.ResourceFor(mapping, t.namespace, t.name, secretpolicy.Write)
+			if err != nil {
+				return false, err
+			}
 			exists, derr := r.deleteOneTarget(ctx, ri, rs, gvk, name, t.name)
 			if derr != nil {
 				return false, derr

@@ -35,6 +35,7 @@ import (
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/pathwalk"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
@@ -55,6 +56,11 @@ func Fetch(
 	ks := &scpc.Spec.KubeconfigSource
 	switch {
 	case ks.Inline != nil:
+		if live.GetAPIVersion() == "v1" && live.GetKind() == "Secret" {
+			if _, err := tc.SecretPolicy.Resolve(sc.Namespace, live.GetNamespace(), live.GetName(), secretpolicy.Copy); err != nil {
+				return nil, nil, err
+			}
+		}
 		return fetchInline(ks.Inline, live)
 	case ks.SecretRef != nil:
 		return fetchSecretRef(ctx, tc, ks.SecretRef, scpc, sc, resource, live)
@@ -109,7 +115,7 @@ func fetchSecretRef(
 		ns = strings.TrimSpace(ns)
 	}
 	if ns == "" {
-		ns = live.GetNamespace()
+		ns = sc.Namespace
 	}
 
 	dataKey := src.DataKey
@@ -117,6 +123,10 @@ func fetchSecretRef(
 		dataKey = "kubeconfig"
 	}
 
+	ns, err = tc.SecretPolicy.Resolve(sc.Namespace, ns, name, secretpolicy.Copy)
+	if err != nil {
+		return nil, nil, err
+	}
 	secretGVR := schema.GroupVersionResource{Version: "v1", Resource: "secrets"}
 	obj, err := tc.Dynamic.Resource(secretGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
