@@ -69,8 +69,20 @@ func (r *OpenStackVMReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if err := r.validateVMReferences(&vm); err != nil {
+		return ctrl.Result{}, err
+	}
 	if !vm.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, &vm)
+	}
+	if isSSHKeyResourceRef(vm.Spec.SSHKeyRef) {
+		ref, _, err := r.resolveSSHKeyResource(ctx, &vm)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if err := r.validateSSHSecretReference(&vm, ref); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if !controllerutil.ContainsFinalizer(&vm, openstackv1alpha1.FinalizerName) {
@@ -294,6 +306,9 @@ func (r *OpenStackVMReconciler) eventf(vm *openstackv1alpha1.OpenStackVM, eventT
 }
 
 func (r *OpenStackVMReconciler) openstackClients(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (*openstack.Clients, error) {
+	if err := r.validateVMReferences(vm); err != nil {
+		return nil, err
+	}
 	var creds corev1.Secret
 	key := credentialsRef(vm)
 	if err := r.Get(ctx, key, &creds); err != nil {
@@ -303,6 +318,35 @@ func (r *OpenStackVMReconciler) openstackClients(ctx context.Context, vm *openst
 		return nil, fmt.Errorf("get credentials Secret %s: %w", key.String(), err)
 	}
 	return openstack.NewClientsFromSecret(ctx, &creds)
+}
+
+// validateVMReferences checks all direct references before client operations.
+func (r *OpenStackVMReconciler) validateVMReferences(vm *openstackv1alpha1.OpenStackVM) error {
+	cred := credentialsRef(vm)
+	if _, err := r.SecretPolicy.Resolve(vm.Namespace, cred.Namespace, cred.Name, secretpolicy.Use); err != nil {
+		return fmt.Errorf("credentialsRef: %w", err)
+	}
+	if isSSHKeyResourceRef(vm.Spec.SSHKeyRef) {
+		ref := vm.Spec.SSHKeyRef
+		_, err := r.SecretPolicy.Resolve(vm.Namespace, refNamespace(ref.Namespace, vm.Namespace), ref.Name, secretpolicy.Use)
+		return err
+	}
+	ref, _ := secretKeyRef(vm)
+	return r.validateSSHSecretReference(vm, ref)
+}
+
+func (r *OpenStackVMReconciler) validateSSHSecretReference(vm *openstackv1alpha1.OpenStackVM, ref types.NamespacedName) error {
+	for _, purpose := range []string{secretpolicy.Use, secretpolicy.Write} {
+		if _, err := r.SecretPolicy.Resolve(vm.Namespace, ref.Namespace, ref.Name, purpose); err != nil {
+			return fmt.Errorf("sshKeyRef: %w", err)
+		}
+	}
+	// The cleanup controller uses the SSH Secret namespace as its request namespace.
+	cred := credentialsRef(vm)
+	if _, err := r.SecretPolicy.Resolve(ref.Namespace, cred.Namespace, cred.Name, secretpolicy.Use); err != nil {
+		return fmt.Errorf("SSH Secret cleanup credentials: %w", err)
+	}
+	return nil
 }
 
 // credentialsRef resolves the Secret carrying the VM's OpenStack
@@ -345,7 +389,10 @@ func secretKeyRef(vm *openstackv1alpha1.OpenStackVM) (nn types.NamespacedName, s
 // none.
 func (r *OpenStackVMReconciler) resolveSSHKeyResource(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (types.NamespacedName, string, error) {
 	ref := vm.Spec.SSHKeyRef
-	ns := refNamespace(ref.Namespace, vm.Namespace)
+	ns, err := r.SecretPolicy.Resolve(vm.Namespace, refNamespace(ref.Namespace, vm.Namespace), ref.Name, secretpolicy.Use)
+	if err != nil {
+		return types.NamespacedName{}, "", err
+	}
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(schema.GroupVersionKind{
 		Group: openstackv1alpha1.SSHKeyAPIGroup, Version: openstackv1alpha1.SSHKeyVersion, Kind: openstackv1alpha1.SSHKeyKind})
@@ -360,7 +407,13 @@ func (r *OpenStackVMReconciler) resolveSSHKeyResource(ctx context.Context, vm *o
 	if name == "" {
 		name = ref.Name
 	}
-	return types.NamespacedName{Name: name, Namespace: ns}, pub, nil
+	result := types.NamespacedName{Name: name, Namespace: ns}
+	for _, purpose := range []string{secretpolicy.Use, secretpolicy.Write} {
+		if _, err := r.SecretPolicy.Resolve(vm.Namespace, ns, name, purpose); err != nil {
+			return result, "", err
+		}
+	}
+	return result, pub, nil
 }
 
 // keypairNameFor derives a Nova keypair name from a Secret reference so
@@ -384,9 +437,15 @@ func keypairNameFor(ref types.NamespacedName) string {
 // the Nova keypair when the Secret is later deleted, even after the VM
 // CR is gone.
 func (r *OpenStackVMReconciler) ensureSSHKeypair(ctx context.Context, vm *openstackv1alpha1.OpenStackVM) (types.NamespacedName, string, error) {
+	if err := r.validateVMReferences(vm); err != nil {
+		return types.NamespacedName{}, "", err
+	}
 	if isSSHKeyResourceRef(vm.Spec.SSHKeyRef) {
 		ref, pub, err := r.resolveSSHKeyResource(ctx, vm)
 		if err != nil {
+			return ref, "", err
+		}
+		if err := r.validateSSHSecretReference(vm, ref); err != nil {
 			return ref, "", err
 		}
 		// Attach the Nova-keypair-cleanup finalizer/annotations to the SSHKey's
@@ -464,6 +523,12 @@ func (r *OpenStackVMReconciler) ensureSecretBookkeeping(
 	ref types.NamespacedName,
 	wantOwnerRef bool,
 ) error {
+	if err := r.validateVMReferences(vm); err != nil {
+		return err
+	}
+	if err := r.validateSSHSecretReference(vm, client.ObjectKeyFromObject(secret)); err != nil {
+		return err
+	}
 	orig := secret.DeepCopy()
 	changed := false
 
