@@ -192,7 +192,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `golang.org/x/crypto` | `v0.57.0` | simple-cluster-operator, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `golang.org/x/exp` | `v0.0.0-20260908205506-85c1c2202aba` | simple-cluster-operator, sshkey-operator |
 | `golang.org/x/mod` | `v0.41.0` | simple-cluster-operator, sshkey-operator |
-| `golang.org/x/net` | `v0.59.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `golang.org/x/net` | `v0.60.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `golang.org/x/oauth2` | `v0.37.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `golang.org/x/sync` | `v0.23.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `golang.org/x/sys` | `v0.48.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
