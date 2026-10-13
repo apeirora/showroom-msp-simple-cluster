@@ -282,7 +282,7 @@ func TestReferenceDeleteEnumerationBeforeMutation(t *testing.T) {
 				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
 			}))
 			defer server.Close()
-			entries := []secretpolicy.Entry{}
+			entries := make([]secretpolicy.Entry, 0, 4)
 			for _, name := range []string{"demo-seed-0", "demo-seed-1"} {
 				entries = append(entries, secretpolicy.Entry{Namespace: "shared", Name: name, Purpose: secretpolicy.Copy}, secretpolicy.Entry{Namespace: "shared", Name: name, Purpose: secretpolicy.Write})
 			}
