@@ -65,7 +65,14 @@ func (r *SSHSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	credNs := secret.Annotations[openstackv1alpha1.SSHSecretCredentialsNamespaceAnno]
 	keypairName := secret.Annotations[openstackv1alpha1.SSHSecretKeypairNameAnno]
 
-	if credName == "" || credNs == "" || keypairName == "" {
+	if credName != "" {
+		ns, err := r.SecretPolicy.Resolve(secret.Namespace, credNs, credName, secretpolicy.Use)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("cleanup credentials: %w", err)
+		}
+		credNs = ns
+	}
+	if credName == "" || keypairName == "" {
 		log.Info("SSH Secret terminating without cleanup metadata; dropping finalizer",
 			"secret", req.NamespacedName, "credName", credName, "credNs", credNs, "keypairName", keypairName)
 		return r.removeFinalizer(ctx, &secret)
