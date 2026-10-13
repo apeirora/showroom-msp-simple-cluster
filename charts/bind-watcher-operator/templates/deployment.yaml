@@ -15,12 +15,16 @@ spec:
         app: bind-watcher-operator
     spec:
       serviceAccountName: {{ .Values.serviceAccount }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: bind-watcher-operator
           image: {{ .Values.registry }}{{ .Values.image }}:{{ .Values.imageTag | default .Chart.AppVersion }}
           env:
             - name: KCP_KUBECONFIG
-              value: /kcp.admin.config
+              value: /etc/kcp/kubeconfig
             - name: KCP_WORKSPACES
               value: {{ .Values.KCP.workspaces | quote }}
             - name: KCP_DISCOVERY_INTERVAL
@@ -38,10 +42,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - mountPath: /kcp.admin.config
-              subPath: kubeconfig
+            - mountPath: /etc/kcp
+              readOnly: true
               name: kcp-config
       volumes:
         - name: kcp-config
           secret:
             secretName: {{ .Values.KCP.kubeconfig.secretName }}
+            defaultMode: 0444
