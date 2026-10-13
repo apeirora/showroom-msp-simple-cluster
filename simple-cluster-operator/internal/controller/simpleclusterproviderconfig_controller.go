@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -50,7 +51,8 @@ const (
 // on the SimpleCluster reconciler.
 type SimpleClusterProviderConfigReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=showroom.apeirora.eu,resources=simpleclusterproviderconfigs,verbs=get;list;watch;create;update;patch;delete

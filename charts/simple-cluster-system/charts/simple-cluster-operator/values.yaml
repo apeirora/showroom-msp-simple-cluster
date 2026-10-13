@@ -96,3 +96,6 @@ ordCatalog:
   namespace: ""
   configMapName: simple-cluster-ord
   interval: 2m
+
+# Exact operator-approved Secret references. Purposes: use, copy, write.
+secretReferenceAllowlist: []

@@ -75,3 +75,6 @@ certmanager:
 # [NETWORK POLICIES]: To enable NetworkPolicies set true
 networkPolicy:
   enable: false
+
+# Exact operator-approved Secret references. Purposes: use, copy, write.
+secretReferenceAllowlist: []

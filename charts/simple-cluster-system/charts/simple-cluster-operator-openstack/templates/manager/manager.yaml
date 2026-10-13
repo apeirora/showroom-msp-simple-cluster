@@ -28,6 +28,7 @@ spec:
       containers:
         - name: manager
           args:
+            - {{ printf "--secret-reference-allowlist=%s" (.Values.secretReferenceAllowlist | default list | toJson) | quote }}
             {{- range .Values.controllerManager.container.args }}
             - {{ . }}
             {{- end }}

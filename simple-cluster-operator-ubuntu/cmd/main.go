@@ -12,6 +12,7 @@ package main
 
 import (
 	"flag"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -48,7 +49,14 @@ func main() {
 		"k3s release tag used when UbuntuCluster.spec.version is empty (e.g. v1.31.4+k3s1). Empty falls back to the get.k3s.io installer default.")
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
+	var secretReferenceAllowlist string
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]", "Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
+	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
+	if err != nil {
+		setupLog.Error(err, "invalid Secret reference configuration")
+		os.Exit(1)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -65,6 +73,7 @@ func main() {
 	}
 
 	if err := (&controller.UbuntuClusterReconciler{
+		SecretPolicy:      secretPolicy,
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		Recorder:          mgr.GetEventRecorderFor("ubuntucluster"),

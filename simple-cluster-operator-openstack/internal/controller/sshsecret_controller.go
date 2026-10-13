@@ -13,6 +13,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/secretpolicy"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,7 +39,8 @@ import (
 // ownerRef cascade; shared Secrets reach it when an admin deletes them.
 type SSHSecretReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;update;patch

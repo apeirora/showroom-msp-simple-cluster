@@ -79,3 +79,6 @@ networkPolicy:
 # deploys is `ubuntu-machines`. app.kubernetes.io/name is part of the Deployment's
 # immutable selector, so it stays on the workload name.
 nameOverride: ubuntu-machines
+
+# Exact operator-approved Secret references. Purposes: use, copy, write.
+secretReferenceAllowlist: []

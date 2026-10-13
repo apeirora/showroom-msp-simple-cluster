@@ -13,6 +13,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-openstack/internal/secretpolicy"
 	"strings"
 	"time"
 
@@ -48,8 +49,9 @@ const (
 // live in their own reconcile loop.
 type OpenStackVMReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=cloudferro.eu,resources=openstackvms,verbs=get;list;watch;create;update;patch;delete

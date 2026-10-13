@@ -13,6 +13,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"github.com/apeirora/showroom-msp-simple-cluster/ubuntu-machines/internal/secretpolicy"
 	"sort"
 	"strings"
 	"time"
@@ -54,8 +55,9 @@ var sshKeyGVK = schema.GroupVersionKind{
 // one claim → one machine.
 type UbuntuMachineClaimReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ubuntumachines.apeirora.eu,resources=ubuntumachineclaims,verbs=get;list;watch;create;update;patch;delete

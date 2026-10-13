@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	"os"
 	"time"
 
@@ -113,7 +114,14 @@ func main() {
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
+	var secretReferenceAllowlist string
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]", "Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
+	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
+	if err != nil {
+		setupLog.Error(err, "invalid Secret reference configuration")
+		os.Exit(1)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -209,13 +217,15 @@ func main() {
 	}
 
 	if err := (&controller.SimpleClusterProviderConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		SecretPolicy: secretPolicy,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SimpleClusterProviderConfig")
 		os.Exit(1)
 	}
 	if err := (&controller.SimpleClusterReconciler{
+		SecretPolicy:          secretPolicy,
 		Client:                mgr.GetClient(),
 		APIReader:             mgr.GetAPIReader(),
 		Scheme:                mgr.GetScheme(),

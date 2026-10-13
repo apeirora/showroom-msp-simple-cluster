@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -83,7 +84,14 @@ func main() {
 		Development: true,
 	}
 	opts.BindFlags(flag.CommandLine)
+	var secretReferenceAllowlist string
+	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]", "Exact operator-approved reference exceptions as a JSON list.")
 	flag.Parse()
+	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
+	if err != nil {
+		setupLog.Error(err, "invalid Secret reference configuration")
+		os.Exit(1)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -179,8 +187,9 @@ func main() {
 	}
 
 	if err := (&controller.SSHKeyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		SecretPolicy: secretPolicy,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SSHKey")
 		os.Exit(1)

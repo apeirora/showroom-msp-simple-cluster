@@ -28,6 +28,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"github.com/apeirora/showroom-msp-simple-cluster/sshkey-operator/internal/secretpolicy"
 	"strings"
 	"time"
 
@@ -51,7 +52,8 @@ const rotateBefore = 24 * time.Hour
 // SSHKeyReconciler reconciles a SSHKey object
 type SSHKeyReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	SecretPolicy secretpolicy.Policy
+	Scheme       *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=sshkeys.apeirora.eu,resources=sshkeys,verbs=get;list;watch;create;update;patch;delete
