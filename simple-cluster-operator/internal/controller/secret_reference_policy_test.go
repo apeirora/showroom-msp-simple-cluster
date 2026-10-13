@@ -30,6 +30,27 @@ type referenceClientSpy struct {
 	secretReads, writes int
 }
 
+type referenceStatusSpy struct {
+	client.SubResourceWriter
+	owner *referenceClientSpy
+}
+
+func (s referenceStatusSpy) Create(ctx context.Context, obj client.Object, subresource client.Object, opts ...client.SubResourceCreateOption) error {
+	s.owner.writes++
+	return s.SubResourceWriter.Create(ctx, obj, subresource, opts...)
+}
+func (s referenceStatusSpy) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	s.owner.writes++
+	return s.SubResourceWriter.Update(ctx, obj, opts...)
+}
+func (s referenceStatusSpy) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+	s.owner.writes++
+	return s.SubResourceWriter.Patch(ctx, obj, patch, opts...)
+}
+func (s *referenceClientSpy) Status() client.SubResourceWriter {
+	return referenceStatusSpy{SubResourceWriter: s.Client.Status(), owner: s}
+}
+
 func (s *referenceClientSpy) Get(ctx context.Context, key types.NamespacedName, obj client.Object, options ...client.GetOption) error {
 	if _, ok := obj.(*corev1.Secret); ok {
 		s.secretReads++
@@ -145,5 +166,89 @@ func TestReferenceDeniedSourceDoesNotCreateOutput(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReferencePreflightUsesRepeatedNames(t *testing.T) {
+	scheme, sc, pc := referenceFixtures(t)
+	pc.Spec.Resources[0].Kind = "Secret"
+	pc.Spec.Resources[0].Namespace = "shared"
+	pc.Spec.Resources[0].Repeat = "2"
+	spy := &referenceClientSpy{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(sc, pc).Build()}
+	policy := secretpolicy.Policy{Allowlist: []secretpolicy.Entry{
+		{Namespace: "shared", Name: "demo-seed-0", Purpose: secretpolicy.Copy},
+		{Namespace: "shared", Name: "demo-seed-1", Purpose: secretpolicy.Copy},
+	}}
+	r := &SimpleClusterReconciler{Client: spy, Scheme: scheme, SecretPolicy: policy}
+	if err := r.preflightSecretReferences(context.Background(), sc); err != nil {
+		t.Fatalf("valid repeated instances denied: %v", err)
+	}
+	policy.Allowlist = policy.Allowlist[:1]
+	r.SecretPolicy = policy
+	if err := r.preflightSecretReferences(context.Background(), sc); !errors.Is(err, secretpolicy.ErrDenied) {
+		t.Fatalf("missing instance exception accepted: %v", err)
+	}
+}
+
+func TestReferenceDeleteChecksTrackedCopyAndWriteBeforeMutation(t *testing.T) {
+	for _, tc := range []struct {
+		label, namespace, actual string
+		entries                  []secretpolicy.Entry
+	}{
+		{label: "tracked write does not copy", namespace: "shared", actual: "tracked", entries: []secretpolicy.Entry{{Namespace: "shared", Name: "tracked", Purpose: secretpolicy.Write}}},
+		{label: "copy does not delete", namespace: "shared", actual: "tracked", entries: []secretpolicy.Entry{{Namespace: "shared", Name: "tracked", Purpose: secretpolicy.Copy}}},
+		{label: "missing tracked namespace", actual: "tracked", entries: []secretpolicy.Entry{{Namespace: "shared", Name: "tracked", Purpose: secretpolicy.Copy}}},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
+			scheme, sc, pc := referenceFixtures(t)
+			now := metav1.Now()
+			sc.DeletionTimestamp = &now
+			sc.Finalizers = []string{showroomv1alpha1.FinalizerName}
+			pc.Spec.Resources[0].Kind = "Secret"
+			pc.Spec.Resources[0].Namespace = "shared"
+			pc.Spec.Resources = append(pc.Spec.Resources, showroomv1alpha1.ResourceSpec{Name: "dependent", APIVersion: "v1", Kind: "ConfigMap", DependsOn: []string{"seed"}})
+			sc.Status.Resources = []showroomv1alpha1.ResourceStatus{{Name: "seed", TargetName: tc.actual, TargetNamespace: tc.namespace}}
+			spy := &referenceClientSpy{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(sc, pc).Build()}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
+			}))
+			defer server.Close()
+			entries := append(tc.entries, secretpolicy.Entry{Namespace: "shared", Name: "demo-seed", Purpose: secretpolicy.Copy})
+			r := &SimpleClusterReconciler{Client: spy, Scheme: scheme, RESTConfig: &rest.Config{Host: server.URL}, SecretPolicy: secretpolicy.Policy{Allowlist: entries}}
+			_, err := r.reconcileDelete(context.Background(), sc)
+			if !errors.Is(err, secretpolicy.ErrDenied) {
+				t.Fatalf("expected preflight denial: %v", err)
+			}
+			if spy.secretReads != 0 || spy.writes != 0 {
+				t.Fatalf("deletion mutated before authorization: reads=%d writes=%d", spy.secretReads, spy.writes)
+			}
+		})
+	}
+}
+
+func TestReferencePreflightPreservesNoHardwareAndTrackedDeletion(t *testing.T) {
+	scheme, sc, pc := referenceFixtures(t)
+	pc.Spec.Resources[0].Kind = "Secret"
+	pc.Spec.Target.Namespace = "{{ .SC.namespace }}"
+	pc.Spec.Inputs = []showroomv1alpha1.InputDeclaration{{Name: "profile", From: showroomv1alpha1.InputSourceProfile}}
+	spy := &referenceClientSpy{Client: fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(sc).WithObjects(sc, pc).Build()}
+	r := &SimpleClusterReconciler{Client: spy, Scheme: scheme}
+	if _, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(sc)}); err != nil {
+		t.Fatal(err)
+	}
+	var updated showroomv1alpha1.SimpleCluster
+	if err := spy.Client.Get(context.Background(), client.ObjectKeyFromObject(sc), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Phase != showroomv1alpha1.PhaseNoHardware {
+		t.Fatalf("phase=%s, want NoHardware", updated.Status.Phase)
+	}
+	now := metav1.Now()
+	sc.DeletionTimestamp = &now
+	sc.Status.Resources = []showroomv1alpha1.ResourceStatus{{Name: "seed", TargetName: "demo-seed", TargetNamespace: "account"}}
+	if err := r.preflightSecretReferences(context.Background(), sc); err != nil {
+		t.Fatalf("tracked deletion required profile selection: %v", err)
 	}
 }

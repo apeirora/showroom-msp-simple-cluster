@@ -698,9 +698,26 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
 		}
 
-		defaultNs, nerr := rendertpl.ResolveNamespace(&scpc, sc, rs)
-		if nerr != nil {
-			return false, fmt.Errorf("resource %q: resolve namespace: %w", name, nerr)
+		defaultNs := rs.Namespace
+		if defaultNs == "" {
+			defaultNs = scpc.Spec.Target.Namespace
+		}
+		tracked := statusByName[name]
+		needsDefaultNamespace := tracked == nil
+		if tracked != nil {
+			needsDefaultNamespace = len(tracked.Instances) == 0 && tracked.TargetNamespace == ""
+			for _, instance := range tracked.Instances {
+				if instance.TargetNamespace == "" {
+					needsDefaultNamespace = true
+				}
+			}
+		}
+		if strings.Contains(defaultNs, "{{") && needsDefaultNamespace {
+			var nerr error
+			defaultNs, nerr = rendertpl.ResolveNamespace(&scpc, sc, rs)
+			if nerr != nil {
+				return false, fmt.Errorf("resource %q: resolve namespace: %w", name, nerr)
+			}
 		}
 
 		// Enumerate the (name, namespace) pairs to delete. For repeated
@@ -734,6 +751,9 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 
 		levelDone := true
 		for _, t := range targets {
+			if _, err := tc.ResourceFor(mapping, t.namespace, t.name, secretpolicy.Copy); err != nil {
+				return false, err
+			}
 			ri, err := tc.ResourceFor(mapping, t.namespace, t.name, secretpolicy.Write)
 			if err != nil {
 				return false, err
