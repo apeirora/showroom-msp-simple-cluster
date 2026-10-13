@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -77,13 +81,21 @@ func TestReferenceDeniedBeforeReconcileOrDeleteMutations(t *testing.T) {
 					sc.Finalizers = []string{showroomv1alpha1.FinalizerName}
 				}
 				spy := &referenceClientSpy{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(sc, pc).Build()}
-				r := &SimpleClusterReconciler{Client: spy, Scheme: scheme}
+				var networkCalls atomic.Int32
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					networkCalls.Add(1)
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403}`))
+				}))
+				defer server.Close()
+				r := &SimpleClusterReconciler{Client: spy, Scheme: scheme, RESTConfig: &rest.Config{Host: server.URL}}
 				_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(sc)})
 				if !errors.Is(err, secretpolicy.ErrDenied) {
 					t.Fatalf("expected denial, got %v", err)
 				}
-				if spy.secretReads != 0 || spy.writes != 0 {
-					t.Fatalf("denial touched a Secret or changed a request: reads=%d writes=%d", spy.secretReads, spy.writes)
+				if spy.secretReads != 0 || spy.writes != 0 || networkCalls.Load() != 0 {
+					t.Fatalf("denial touched a Secret, changed a request, or called a server: reads=%d writes=%d network=%d", spy.secretReads, spy.writes, networkCalls.Load())
 				}
 			})
 		}
