@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.41.0...v0.41.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* show Clusters on the namespace dashboard too ([#217](https://github.com/apeirora/showroom-msp-simple-cluster/issues/217)) ([9053f2d](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9053f2daf1897c42afc8f8f464690a0a49e6dd81))
+
 ## [0.41.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.3...v0.41.0) (2026-10-14)
 
 
