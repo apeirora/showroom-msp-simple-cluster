@@ -56,10 +56,10 @@ describe('Account context', () => {
     navigation.getCurrentRoute.mockResolvedValue('/home/accounts/a/showroom_apeirora_eu_simpleclusters/old?namespace=team-a');
     await navigateToCluster('same-name', 'team-b');
     expect(navigation.navigate).toHaveBeenCalledWith(
-      '/home/accounts/a/showroom_apeirora_eu_simpleclusters/same-name?namespace=team-b', undefined, true);
+      '/home/accounts/a/showroom_apeirora_eu_simpleclusters/same-name?namespace=team-b');
     await navigateToCluster(null, null);
     expect(navigation.navigate).toHaveBeenLastCalledWith(
-      '/home/accounts/a/showroom_apeirora_eu_simpleclusters?namespace=-all-', undefined, true);
+      '/home/accounts/a/showroom_apeirora_eu_simpleclusters?namespace=-all-');
   });
 
   it('cancels navigation when the account changes during route lookup', async () => {

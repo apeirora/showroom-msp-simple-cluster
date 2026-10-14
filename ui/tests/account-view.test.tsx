@@ -1,15 +1,19 @@
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { extractRuntimeContext, type RuntimeContext } from '../src/lib/luigi';
 import type { SimpleCluster } from '../src/types';
 
 const api = vi.hoisted(() => ({
+  initialContext: undefined as RuntimeContext | undefined,
   onContext: undefined as undefined | ((context: RuntimeContext) => void),
   list: vi.fn(), create: vi.fn(), delete: vi.fn(), secret: vi.fn(), navigate: vi.fn(), stop: vi.fn()
 }));
+const sdk = vi.hoisted(() => ({ getCurrentRoute: vi.fn(), navigate: vi.fn() }));
+vi.mock('@luigi-project/client', () => ({ linkManager: () => sdk }));
 vi.mock('../src/lib/luigi', async (original) => ({
   ...await original<typeof import('../src/lib/luigi')>(),
-  subscribeToLuigi: (listener: typeof api.onContext) => { api.onContext = listener; return () => {}; },
+  subscribeToLuigi: (listener: typeof api.onContext) => { api.onContext = listener; if (api.initialContext) listener?.(api.initialContext); return () => {}; },
   navigateToCluster: api.navigate
 }));
 vi.mock('../src/lib/simplecluster', () => ({
@@ -55,7 +59,7 @@ const cluster = (namespace: string, name = 'same-name'): SimpleCluster => ({
 });
 const changeContext = (next: RuntimeContext) => act(() => api.onContext?.(next));
 
-beforeEach(() => { vi.clearAllMocks(); api.navigate.mockResolvedValue(undefined); api.list.mockResolvedValue([]); api.secret.mockResolvedValue('test-kubeconfig'); });
+beforeEach(() => { vi.clearAllMocks(); api.initialContext = undefined; api.navigate.mockResolvedValue(undefined); api.list.mockResolvedValue([]); api.secret.mockResolvedValue('test-kubeconfig'); });
 afterEach(cleanup);
 
 it('lists all namespaces and requires one namespace for creation', async () => {
@@ -134,9 +138,14 @@ it('makes no resource requests for an unresolved placeholder and a display accou
 
 it('uses the visible Details control with the row namespace', async () => {
   api.list.mockResolvedValue([cluster('team-a'), cluster('team-b')]);
-  render(<App />);
-  changeContext(context('a'));
+  const actual = await vi.importActual<typeof import('../src/lib/luigi')>('../src/lib/luigi');
+  api.navigate.mockImplementation(actual.navigateToCluster);
+  sdk.getCurrentRoute.mockResolvedValue('/home/accounts/a/showroom_apeirora_eu_simpleclusters');
+  api.initialContext = context('a');
+  render(<StrictMode><App /></StrictMode>);
   await screen.findByText('team-b/same-name');
   fireEvent.click(screen.getByText('View team-b'));
   await waitFor(() => expect(api.navigate).toHaveBeenCalledWith('same-name', 'team-b', expect.any(AbortSignal)));
+  expect(sdk.navigate).toHaveBeenCalledWith('/home/accounts/a/showroom_apeirora_eu_simpleclusters/same-name?namespace=team-b');
+  expect(api.list.mock.calls.at(-1)![0].signal.aborted).toBe(false);
 });
