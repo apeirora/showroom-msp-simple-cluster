@@ -87,6 +87,16 @@ clusterConfig:
       listField: IronCoreShoots
       label: SAP Gardener (IronCore)
       providerConfigName: sap-gardener-ironcore
+    - group: apeiro.eu
+      version: v1alpha1
+      listField: OpenStackShoots
+      label: Apeiro Gardener (OpenStack)
+      providerConfigName: apeiro-gardener-openstack
+    - group: apeiro.eu
+      version: v1alpha1
+      listField: IronCoreShoots
+      label: Apeiro Gardener (IronCore)
+      providerConfigName: apeiro-gardener-ironcore
     - group: cloudferro.eu
       version: v1alpha1
       listField: OpenStackVMs

@@ -40,6 +40,7 @@ rules:
   - ubuntu.apeirora.eu
   - ubuntumachines.apeirora.eu
   - sap.eu
+  - apeiro.eu
   - dati.eu
   resources:
   - '*'

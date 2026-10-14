@@ -97,6 +97,7 @@ type SimpleClusterReconciler struct {
 // +kubebuilder:rbac:groups=core.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=authentication.gardener.cloud,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=sap.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apeiro.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=dati.eu,resources=*,verbs=get;list;watch;create;update;patch;delete
 
 // nolint:gocyclo // straight-line orchestration; extracting fragments hurts readability more than it helps
