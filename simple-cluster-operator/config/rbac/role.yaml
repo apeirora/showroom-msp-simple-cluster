@@ -28,6 +28,7 @@ rules:
   - update
   - watch
 - apiGroups:
+  - apeiro.eu
   - arsys.eu
   - authentication.gardener.cloud
   - cloudferro.eu
