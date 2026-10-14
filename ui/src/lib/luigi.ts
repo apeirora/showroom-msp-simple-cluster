@@ -35,15 +35,13 @@ const absolutizeAgainstPortal = (url: string): string => {
 
 const substituteLuigiPlaceholders = (url: string, context: any): string => {
   const accountPath = normaliseString(
-    context?.kcpPath ?? context?.portalContext?.workspacePath ?? context?.workspacePath
+    context?.kcpPath ?? context?.portalContext?.kcpPath ?? context?.portalContext?.workspacePath ?? context?.workspacePath
   );
-  const account = normaliseString(context?.accountId ?? context?.portalContext?.accountId);
   const namespace = normaliseString(
     context?.namespaceId ?? context?.namespace ?? context?.portalContext?.namespace
   );
   let out = url;
   if (accountPath) out = out.replace(':accountId', accountPath);
-  else if (account) out = out.replace(':accountId', account);
   if (namespace) out = out.replace(':namespaceId', namespace);
   return out;
 };
