@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.3...v0.41.0) (2026-10-14)
+
+
+### Features
+
+* support apeiro.eu provider group ([#214](https://github.com/apeirora/showroom-msp-simple-cluster/issues/214)) ([82f72ba](https://github.com/apeirora/showroom-msp-simple-cluster/commit/82f72ba9988065dded885451e4bd72e971ea04a0))
+
 ## [0.40.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.2...v0.40.3) (2026-10-14)
 
 
