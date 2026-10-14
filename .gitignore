@@ -13,10 +13,8 @@ kubeconfig-*.yaml
 # scripts/regen-helm-charts.sh.
 **/dist/chart/
 
-# Local AI-assistant / editor scratch state — never publish.
-.claude/
+# Local scratch state — never publish.
 .notes/
-CLAUDE.md
 DESIGN.md
 
 # Credentials and local environment files.
