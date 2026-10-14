@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.40.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.2...v0.40.3) (2026-10-14)
+
+
+### Bug Fixes
+
+* reject unresolved account workspace placeholders ([#211](https://github.com/apeirora/showroom-msp-simple-cluster/issues/211)) ([9c810cb](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9c810cb6b6489a55627961bb62bf42ffad7608a5))
+* **ui:** use normal portal navigation ([#213](https://github.com/apeirora/showroom-msp-simple-cluster/issues/213)) ([c97483f](https://github.com/apeirora/showroom-msp-simple-cluster/commit/c97483fff47bd0264bd74d0d23aa306ba6174935))
+
 ## [0.40.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.1...v0.40.2) (2026-10-14)
 
 
