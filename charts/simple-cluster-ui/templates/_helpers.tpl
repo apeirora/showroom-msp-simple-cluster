@@ -3,7 +3,7 @@ app.kubernetes.io/name: simple-cluster-ui
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: Helm
 app.kubernetes.io/part-of: simple-cluster
-app.kubernetes.io/version: {{ .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | replace "+" "_" | trunc 63 | trimSuffix "-" | quote }}
 {{- end }}
 
 {{- define "simple-cluster-ui.image" -}}
