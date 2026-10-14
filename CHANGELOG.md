@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.1...v0.40.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* **ui:** attach provider views to accounts ([#209](https://github.com/apeirora/showroom-msp-simple-cluster/issues/209)) ([f4f0f84](https://github.com/apeirora/showroom-msp-simple-cluster/commit/f4f0f84e62261fb62ca804a47e4d4f77716ba78f))
+
 ## [0.40.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.0...v0.40.1) (2026-10-14)
 
 
