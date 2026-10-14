@@ -32,6 +32,7 @@ vi.mock('../src/components/ClusterList', () => ({ ClusterList: (props: any) => <
   <button disabled={!props.canCreate} onClick={props.onCreate}>Create</button>
   {props.clusters.map((cluster: SimpleCluster) => <div key={cluster.metadata.namespace + '/' + cluster.metadata.name}>
     <span>{cluster.metadata.namespace}/{cluster.metadata.name}</span>
+    <button onClick={() => props.onAction('view', cluster)}>View {cluster.metadata.namespace}</button>
     <button onClick={() => props.onAction('delete', cluster)}>Delete {cluster.metadata.namespace}</button>
     <button onClick={() => props.onAction('download-kubeconfig', cluster)}>Secret {cluster.metadata.namespace}</button>
   </div>)}
@@ -54,7 +55,7 @@ const cluster = (namespace: string, name = 'same-name'): SimpleCluster => ({
 });
 const changeContext = (next: RuntimeContext) => act(() => api.onContext?.(next));
 
-beforeEach(() => { vi.clearAllMocks(); api.list.mockResolvedValue([]); api.secret.mockResolvedValue('test-kubeconfig'); });
+beforeEach(() => { vi.clearAllMocks(); api.navigate.mockResolvedValue(undefined); api.list.mockResolvedValue([]); api.secret.mockResolvedValue('test-kubeconfig'); });
 afterEach(cleanup);
 
 it('lists all namespaces and requires one namespace for creation', async () => {
@@ -129,4 +130,13 @@ it('makes no resource requests for an unresolved placeholder and a display accou
   await act(async () => {});
   expect(next.workspacePath).toBeNull();
   expect(api.list).not.toHaveBeenCalled();
+});
+
+it('uses the visible Details control with the row namespace', async () => {
+  api.list.mockResolvedValue([cluster('team-a'), cluster('team-b')]);
+  render(<App />);
+  changeContext(context('a'));
+  await screen.findByText('team-b/same-name');
+  fireEvent.click(screen.getByText('View team-b'));
+  await waitFor(() => expect(api.navigate).toHaveBeenCalledWith('same-name', 'team-b', expect.any(AbortSignal)));
 });
