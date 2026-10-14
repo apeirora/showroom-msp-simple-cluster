@@ -41,6 +41,41 @@
                             "context": { "clusterName": ":clusterName" }
                         }
                     ]
+                },
+                {
+                    "pathSegment": "showroom_apeirora_eu_simpleclusters",
+                    "navigationContext": "showroom_apeirora_eu_simpleclusters",
+                    "label": "Clusters",
+                    "icon": "data:image/svg+xml;base64,{{ $logo }}",
+                    "category": {
+                        "label": {{ $sidebarTitle | quote }},
+                        "icon": "data:image/svg+xml;base64,{{ $logo }}",
+                        "collapsible": true,
+                        "order": 6
+                    },
+                    "entityType": "main.core_platform-mesh_io_account.namespace",
+                    "loadingIndicator": {
+                        "enabled": false
+                    },
+                    "keepSelectedForChildren": true,
+                    "url": "{{ $host }}/index.html",
+                    "context": {
+                        "resourceDefinition": {
+                            "apiGroup": "showroom.apeirora.eu",
+                            "version": "v1alpha1",
+                            "entityCollection": "SimpleClusters",
+                            "entity": "SimpleCluster",
+                            "scope": "Namespaced"
+                        }
+                    },
+                    "children": [
+                        {
+                            "pathSegment": ":clusterName",
+                            "hideFromNav": true,
+                            "url": "{{ $host }}/index.html",
+                            "context": { "clusterName": ":clusterName" }
+                        }
+                    ]
                 }
             ]
         }
