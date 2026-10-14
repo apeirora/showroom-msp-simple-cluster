@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { RuntimeContext } from '../src/lib/luigi';
+import { extractRuntimeContext, type RuntimeContext } from '../src/lib/luigi';
 import type { SimpleCluster } from '../src/types';
 
 const api = vi.hoisted(() => ({
@@ -118,4 +118,15 @@ it('closes old account dialogs and ignores a late kubeconfig response', async ()
   await act(async () => finishSecret('old-account-kubeconfig'));
   expect(screen.queryByText('old-account-kubeconfig')).toBeNull();
   expect(screen.queryByText('Confirm delete')).toBeNull();
+});
+
+it('makes no resource requests for an unresolved placeholder and a display account name', async () => {
+  render(<App />);
+  const next = extractRuntimeContext({ accountId: 'Display name', portalContext: {
+    crdGatewayApiUrl: 'https://portal.test/gateway/api/clusters/:accountId/graphql'
+  } }, 'luigi');
+  act(() => api.onContext?.(next));
+  await act(async () => {});
+  expect(next.workspacePath).toBeNull();
+  expect(api.list).not.toHaveBeenCalled();
 });
