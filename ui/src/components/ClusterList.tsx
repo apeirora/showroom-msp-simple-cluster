@@ -60,11 +60,12 @@ const derivePhase = (cluster: SimpleCluster): string => {
 interface ClusterListProps {
   clusters: SimpleCluster[];
   loading: boolean;
+  canCreate: boolean;
   onCreate: () => void;
   onAction: (action: ClusterAction, cluster: SimpleCluster) => void;
 }
 
-export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterListProps) => {
+export const ClusterList = ({ clusters, loading, canCreate, onCreate, onAction }: ClusterListProps) => {
   if (loading && clusters.length === 0) {
     return (
       <FlexBox justifyContent={FlexBoxJustifyContent.Center} style={{ padding: '2rem' }}>
@@ -80,7 +81,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
         titleText="No SimpleClusters yet"
         subtitleText="Provision your first managed Kubernetes cluster."
       >
-        <Button design="Emphasized" onClick={onCreate}>
+        <Button design="Emphasized" onClick={onCreate} disabled={!canCreate}>
           New SimpleCluster
         </Button>
       </IllustratedMessage>
@@ -89,6 +90,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
 
   const rows = clusters.map((c) => ({
     name: c.metadata.name,
+    namespace: c.metadata.namespace,
     phase: derivePhase(c),
     provider: c.status?.providerConfigRef?.name ?? c.spec?.providerConfigRefs?.[0] ?? '—',
     cp: c.status?.cp ?? '—',
@@ -100,6 +102,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
 
   const columns = [
     { Header: 'Name', accessor: 'name', minWidth: 150 },
+    { Header: 'Namespace', accessor: 'namespace', minWidth: 130 },
     {
       Header: 'Phase',
       accessor: 'phase',
@@ -158,7 +161,7 @@ export const ClusterList = ({ clusters, loading, onCreate, onAction }: ClusterLi
     <FlexBox direction={FlexBoxDirection.Column} style={{ gap: '0.75rem' }}>
       <FlexBox justifyContent={FlexBoxJustifyContent.SpaceBetween} style={{ alignItems: 'baseline' }}>
         <Title level="H3">SimpleClusters</Title>
-        <Button design="Emphasized" icon="add" onClick={onCreate}>
+        <Button design="Emphasized" icon="add" onClick={onCreate} disabled={!canCreate}>
           New SimpleCluster
         </Button>
       </FlexBox>

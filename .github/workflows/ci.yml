@@ -102,6 +102,9 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
+      - name: Test account context and resource views
+        run: npm test
+
       - name: Test ORD renderer
         run: npm run test:ord
 
