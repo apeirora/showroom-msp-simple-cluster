@@ -9,7 +9,7 @@ import { graphqlFetch, subscribe, type GraphqlClientOptions, type SubscriptionHa
 import { fixtureSimpleClusters, fixturesEnabled } from './fixtures';
 
 const CLUSTER_LIST_QUERY = `
-  query SimpleClusters($ns: String!) {
+  query SimpleClusters($ns: String) {
     showroom_apeirora_eu {
       v1alpha1 {
         SimpleClusters(namespace: $ns) {
@@ -49,7 +49,7 @@ interface SimpleClusterListResponse {
 
 export const listSimpleClusters = async (
   opts: GraphqlClientOptions,
-  namespace: string
+  namespace: string | null
 ): Promise<SimpleCluster[]> => {
   if (fixturesEnabled()) return fixtureSimpleClusters();
   const data = await graphqlFetch<SimpleClusterListResponse>(opts, {
@@ -210,7 +210,7 @@ export const deleteSimpleCluster = async (
 };
 
 const SIMPLECLUSTER_SUBSCRIPTION = `
-  subscription SimpleClusters($ns: String!) {
+  subscription SimpleClusters($ns: String) {
     showroom_apeirora_eu_v1alpha1_simpleclusters(
       namespace: $ns
       subscribeToAll: true
@@ -223,7 +223,7 @@ const SIMPLECLUSTER_SUBSCRIPTION = `
 
 export const subscribeSimpleClusters = (
   opts: GraphqlClientOptions,
-  namespace: string,
+  namespace: string | null,
   onEvent: () => void
 ): SubscriptionHandle => {
   if (fixturesEnabled()) return () => {};

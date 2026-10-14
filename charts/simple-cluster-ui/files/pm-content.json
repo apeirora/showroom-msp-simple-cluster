@@ -18,12 +18,29 @@
                         "collapsible": true,
                         "order": 6
                     },
-                    "entityType": "main.core_platform-mesh_io_account.namespace",
+                    "entityType": "main.core_platform-mesh_io_account",
                     "loadingIndicator": {
                         "enabled": false
                     },
                     "keepSelectedForChildren": true,
-                    "url": "{{ $host }}/index.html"
+                    "url": "{{ $host }}/index.html",
+                    "context": {
+                        "resourceDefinition": {
+                            "apiGroup": "showroom.apeirora.eu",
+                            "version": "v1alpha1",
+                            "entityCollection": "SimpleClusters",
+                            "entity": "SimpleCluster",
+                            "scope": "Namespaced"
+                        }
+                    },
+                    "children": [
+                        {
+                            "pathSegment": ":clusterName",
+                            "hideFromNav": true,
+                            "url": "{{ $host }}/index.html",
+                            "context": { "clusterName": ":clusterName" }
+                        }
+                    ]
                 }
             ]
         }

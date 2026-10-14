@@ -11,6 +11,7 @@ export interface RuntimeContext {
   token: string | null;
   workspacePath: string | null;
   namespace: string | null;
+  clusterName: string | null;
 }
 
 const normaliseString = (value: unknown): string | null => {
@@ -34,7 +35,7 @@ const absolutizeAgainstPortal = (url: string): string => {
 
 const substituteLuigiPlaceholders = (url: string, context: any): string => {
   const accountPath = normaliseString(
-    context?.portalContext?.workspacePath ?? context?.workspacePath
+    context?.kcpPath ?? context?.portalContext?.workspacePath ?? context?.workspacePath
   );
   const account = normaliseString(context?.accountId ?? context?.portalContext?.accountId);
   const namespace = normaliseString(
@@ -70,31 +71,20 @@ const workspaceFromUrl = (url: string | null): string | null => {
 };
 
 const resolveWorkspacePath = (context: any, graphqlUrl: string | null): string | null =>
-  workspaceFromUrl(graphqlUrl) ??
-  normaliseString(
-    context?.portalContext?.workspacePath ?? context?.workspacePath ?? context?.accountId
-  );
+  normaliseString(context?.kcpPath ?? context?.portalContext?.kcpPath) ??
+  normaliseString(context?.workspacePath ?? context?.portalContext?.workspacePath) ??
+  workspaceFromUrl(graphqlUrl);
 
-const resolveNamespace = (context: any, pathParams?: any): string | null =>
-  normaliseString(
-    context?.namespaceId ??
-      context?.namespace ??
-      context?.portalContext?.namespace ??
-      context?.portalContext?.entityContext?.core_platform_mesh_io_account?.namespace ??
-      // The portal delivers entityContext on the top-level context under the
-      // dashed entity key (observed empty today, kept for when it fills in).
-      context?.entityContext?.['core_platform-mesh_io_account']?.namespace ??
-      // The portal delivers the namespace ONLY as the :namespaceId dynamic
-      // segment, which Luigi exposes as a path param, not on the context
-      // (verified live on cc-d2 portal, 2026-09-08).
-      pathParams?.namespaceId ??
-      pathParams?.namespace
-  );
+const resolveNamespace = (context: any, searchParams?: any): string | null => {
+  const namespace = normaliseString(searchParams?.namespace ?? context?.namespaceId);
+  return namespace === '-all-' ? null : namespace;
+};
 
 export const extractRuntimeContext = (
   context: any,
   source: ConfigSource,
-  pathParams?: any
+  pathParams?: any,
+  searchParams?: any
 ): RuntimeContext => {
   const graphqlUrl = resolveGraphqlUrl(context);
   return {
@@ -102,7 +92,8 @@ export const extractRuntimeContext = (
     graphqlUrl,
     token: normaliseString(context?.token ?? context?.portalContext?.token),
     workspacePath: resolveWorkspacePath(context, graphqlUrl),
-    namespace: resolveNamespace(context, pathParams)
+    namespace: resolveNamespace(context, searchParams),
+    clusterName: normaliseString(pathParams?.clusterName ?? context?.clusterName)
   };
 };
 
@@ -111,7 +102,8 @@ export const emptyRuntimeContext = (): RuntimeContext => ({
   graphqlUrl: null,
   token: null,
   workspacePath: null,
-  namespace: null
+  namespace: null,
+  clusterName: null
 });
 
 interface LuigiClientLike {
@@ -120,6 +112,7 @@ interface LuigiClientLike {
   addContextUpdateListener: (cb: (context: any) => void) => string | number;
   removeContextUpdateListener?: (id: string | number) => void;
   getPathParams?: () => any;
+  getCoreSearchParams?: () => any;
   __isMock?: boolean;
 }
 
@@ -139,7 +132,7 @@ const installDevMock = () => {
   const context = {
     token: mockToken,
     workspacePath: mockWorkspace,
-    namespace: mockNamespace,
+    namespaceId: mockNamespace,
     portalContext: {
       graphqlUrl: mockGraphql,
       workspacePath: mockWorkspace,
@@ -185,10 +178,10 @@ export const subscribeToLuigi = (
       }
     };
     initId = c.addInitListener((context) => {
-      onContext(extractRuntimeContext(context, source, params()));
+      onContext(extractRuntimeContext(context, source, params(), c.getCoreSearchParams?.()));
     });
     updateId = c.addContextUpdateListener((context) => {
-      onContext(extractRuntimeContext(context, source, params()));
+      onContext(extractRuntimeContext(context, source, params(), c.getCoreSearchParams?.()));
     });
   };
 
@@ -219,4 +212,19 @@ export const subscribeToLuigi = (
       if (updateId != null && client.removeContextUpdateListener) client.removeContextUpdateListener(updateId);
     }
   };
+};
+
+export const navigateToCluster = async (name: string | null, namespace: string | null, signal?: AbortSignal): Promise<void> => {
+  signal?.throwIfAborted();
+  const client = await import('@luigi-project/client');
+  const route = await client.linkManager().getCurrentRoute();
+  signal?.throwIfAborted();
+  const url = new URL(route, window.location.origin);
+  const segment = '/showroom_apeirora_eu_simpleclusters';
+  const index = url.pathname.lastIndexOf(segment);
+  if (index < 0) throw new Error('The portal provider route is unavailable.');
+  url.pathname = url.pathname.slice(0, index + segment.length) +
+    (name ? `/${encodeURIComponent(name)}` : '');
+  url.searchParams.set('namespace', namespace ?? '-all-');
+  client.linkManager().navigate(`${url.pathname}${url.search}`, undefined, true);
 };

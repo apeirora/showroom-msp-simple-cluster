@@ -20,6 +20,7 @@ import { ClusterDetail } from './components/ClusterDetail';
 import {
   emptyRuntimeContext,
   subscribeToLuigi,
+  navigateToCluster,
   type RuntimeContext
 } from './lib/luigi';
 import type { GraphqlClientOptions } from './lib/graphql';
@@ -78,7 +79,32 @@ const App = () => {
 
   const subscriptionActiveRef = useRef(false);
 
-  useEffect(() => subscribeToLuigi(setCtx), []);
+  const requestController = useRef(new AbortController());
+  const currentContext = useRef(ctx);
+  useEffect(() => subscribeToLuigi((next) => {
+    const previous = currentContext.current;
+    const changed = previous.workspacePath !== next.workspacePath ||
+      previous.namespace !== next.namespace || previous.graphqlUrl !== next.graphqlUrl;
+    requestController.current.abort();
+    requestController.current = new AbortController();
+    currentContext.current = next;
+    if (changed) {
+      setClusters([]);
+      setLoading(true);
+      setError(null);
+      setDetailTarget(null);
+      setDeleteTarget(null);
+      setCreateOpen(false);
+      setCreateBusy(false);
+      setDeleteBusy(false);
+      setKubeconfigOpen(false);
+      setKubeconfigContents(null);
+      setDiscoveredProviders(null);
+      setEntitlements(new Map());
+    }
+    setCtx(next);
+  }), []);
+  useEffect(() => () => requestController.current.abort(), []);
 
   useEffect(() => {
     void loadClusterConfig().then(setConfig);
@@ -88,9 +114,10 @@ const App = () => {
     () => ({
       graphqlUrl: ctx.graphqlUrl ?? '',
       token: ctx.token,
-      workspacePath: ctx.workspacePath
+      workspacePath: ctx.workspacePath,
+      signal: requestController.current.signal
     }),
-    [ctx.graphqlUrl, ctx.token, ctx.workspacePath]
+    [ctx]
   );
 
   const usingDynamicProviders = config.providerSources.length > 0;
@@ -102,16 +129,16 @@ const App = () => {
     }
     // Provider CRs are cluster-scoped in KCP, so discovery needs the gateway
     // but not a namespace.
-    if (!ctx.graphqlUrl) return;
+    if (!ctx.graphqlUrl || !ctx.workspacePath || client.signal?.aborted) return;
     setProvidersLoading(true);
     try {
       const result = await fetchAvailableProviders(client, ctx.namespace ?? '', config.providerSources);
       // ran=false means discovery could not run — keep the static fallback.
-      setDiscoveredProviders(result.ran ? result.providers : null);
+      if (!client.signal?.aborted) setDiscoveredProviders(result.ran ? result.providers : null);
     } catch (err) {
       console.warn('[simple-cluster-ui] provider discovery failed', err);
     } finally {
-      setProvidersLoading(false);
+      if (!client.signal?.aborted) setProvidersLoading(false);
     }
   }, [client, ctx.graphqlUrl, ctx.namespace, config.providerSources, usingDynamicProviders]);
   // note: ctx.namespace stays in deps so discovery reruns if it arrives late.
@@ -130,50 +157,46 @@ const App = () => {
   // The catalogue is global and the entitlement per account, so both are resolved
   // together: without an entitlement an entry can only be rendered disabled anyway.
   const discoverAddons = useCallback(async () => {
+    if (client.signal?.aborted) return;
     setAddonsLoading(true);
     try {
       const catalog = await loadAddonCatalog();
+      if (client.signal?.aborted) return;
       setCatalogUnavailable(!catalog.available);
       const offered = entriesForKind(catalog.entries, 'SimpleCluster');
       setAddons(offered);
-      setEntitlements(await resolveEntitlements(client, ctx.namespace ?? '', offered));
+      const result = await resolveEntitlements(client, ctx.namespace ?? '', offered);
+      if (!client.signal?.aborted) setEntitlements(result);
     } catch (err) {
+      if (client.signal?.aborted) return;
       console.warn('[simple-cluster-ui] extension discovery failed', err);
       setAddons([]);
       setCatalogUnavailable(true);
     } finally {
-      setAddonsLoading(false);
+      if (!client.signal?.aborted) setAddonsLoading(false);
     }
   }, [client, ctx.namespace]);
 
   const openCreate = useCallback(() => {
+    if (!ctx.namespace || client.signal?.aborted) return;
     setCreateOpen(true);
     // Refresh so providers and extensions installed since page load appear.
     void discoverProviders();
     void discoverAddons();
-  }, [discoverProviders, discoverAddons]);
+  }, [ctx.namespace, client, discoverProviders, discoverAddons]);
 
   const reload = useCallback(async () => {
-    if (!ctx.graphqlUrl) return;
-    if (!ctx.namespace) {
-      // The portal context has settled without a namespace: stop the list
-      // spinner and say so instead of waiting forever on a value that will
-      // never arrive.
-      if (ctx.source !== 'pending') {
-        setLoading(false);
-        setError('The portal did not provide a namespace for this view, so SimpleClusters cannot be listed.');
-      }
-      return;
-    }
+    if (!ctx.graphqlUrl || !ctx.workspacePath || client.signal?.aborted) return;
     setLoading(true);
     try {
       const items = await listSimpleClusters(client, ctx.namespace);
+      if (client.signal?.aborted) return;
       setClusters(items);
       setError(null);
     } catch (err) {
-      setError((err as Error).message);
+      if (!client.signal?.aborted) setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (!client.signal?.aborted) setLoading(false);
     }
   }, [client, ctx.graphqlUrl, ctx.namespace, ctx.source]);
 
@@ -183,13 +206,14 @@ const App = () => {
 
   // Auto-refresh: prefer graphql-sse subscriptions; fall back to polling.
   useEffect(() => {
-    if (!ctx.graphqlUrl || !ctx.namespace) return;
+    if (!ctx.graphqlUrl || !ctx.workspacePath) return;
 
     let reloadQueued = false;
     const queueReload = () => {
       if (reloadQueued) return;
       reloadQueued = true;
       queueMicrotask(() => {
+        if (client.signal?.aborted) return;
         reloadQueued = false;
         void reload();
       });
@@ -212,7 +236,7 @@ const App = () => {
   }, [client, ctx.graphqlUrl, ctx.namespace, reload]);
 
   const handleCreate = async (values: CreateValues) => {
-    if (!ctx.namespace) return;
+    if (!ctx.namespace || client.signal?.aborted) return;
     setCreateBusy(true);
     try {
       await createSimpleCluster(client, {
@@ -230,31 +254,33 @@ const App = () => {
         controlPlaneCpu: values.controlPlaneCpu,
         controlPlaneMemory: values.controlPlaneMemory
       });
+      if (client.signal?.aborted) return;
       setCreateOpen(false);
       await reload();
     } catch (err) {
-      setError(`Create failed: ${(err as Error).message}`);
+      if (!client.signal?.aborted) setError(`Create failed: ${(err as Error).message}`);
     } finally {
-      setCreateBusy(false);
+      if (!client.signal?.aborted) setCreateBusy(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!ctx.namespace || !deleteTarget) return;
+    if (!deleteTarget?.metadata.namespace || client.signal?.aborted) return;
     setDeleteBusy(true);
     try {
-      await deleteSimpleCluster(client, ctx.namespace, deleteTarget.metadata.name);
+      await deleteSimpleCluster(client, deleteTarget.metadata.namespace, deleteTarget.metadata.name);
+      if (client.signal?.aborted) return;
       setDeleteTarget(null);
       await reload();
     } catch (err) {
-      setError(`Delete failed: ${(err as Error).message}`);
+      if (!client.signal?.aborted) setError(`Delete failed: ${(err as Error).message}`);
     } finally {
-      setDeleteBusy(false);
+      if (!client.signal?.aborted) setDeleteBusy(false);
     }
   };
 
   const handleDownloadKubeconfig = async (cluster: SimpleCluster) => {
-    if (!ctx.namespace) return;
+    if (!cluster.metadata.namespace || client.signal?.aborted) return;
     const secretName = cluster.status?.kubeconfigSecretRef?.name;
     if (!secretName) {
       setError(`${cluster.metadata.name} has no kubeconfig Secret yet.`);
@@ -265,18 +291,24 @@ const App = () => {
     setKubeconfigContents(null);
     setKubeconfigOpen(true);
     try {
-      const contents = await fetchKubeconfig(client, ctx.namespace, secretName);
-      setKubeconfigContents(contents);
+      const contents = await fetchKubeconfig(client, cluster.metadata.namespace, secretName);
+      if (!client.signal?.aborted) setKubeconfigContents(contents);
     } catch (err) {
-      setKubeconfigOpen(false);
-      setError(`Fetch failed: ${(err as Error).message}`);
+      if (!client.signal?.aborted) setKubeconfigOpen(false);
+      if (!client.signal?.aborted) setError(`Fetch failed: ${(err as Error).message}`);
     }
   };
 
   const handleAction = (action: ClusterAction, cluster: SimpleCluster) => {
+    if (client.signal?.aborted) return;
     switch (action) {
       case 'view':
-        setDetailTarget(cluster);
+        if (!cluster.metadata.namespace) {
+          setError('The cluster namespace is unavailable.');
+          return;
+        }
+        void navigateToCluster(cluster.metadata.name, cluster.metadata.namespace, client.signal)
+          .catch((err: Error) => { if (!client.signal?.aborted) setError(err.message); });
         break;
       case 'delete':
         flashToast(`Confirm delete for ${cluster.metadata.name}…`);
@@ -287,6 +319,21 @@ const App = () => {
         break;
     }
   };
+
+  useEffect(() => {
+    if (!ctx.clusterName) {
+      setDetailTarget(null);
+      return;
+    }
+    if (!ctx.namespace) {
+      setError('Select a namespace to open the cluster details.');
+      return;
+    }
+    const cluster = clusters.find((item) => item.metadata.name === ctx.clusterName &&
+      item.metadata.namespace === ctx.namespace);
+    setDetailTarget(cluster ?? null);
+    if (!loading && !cluster) setError('The cluster does not exist in the selected namespace.');
+  }, [ctx.clusterName, ctx.namespace, clusters, loading]);
 
   if (ctx.source === 'pending') {
     return (
@@ -302,12 +349,12 @@ const App = () => {
     );
   }
 
-  if (!ctx.graphqlUrl) {
+  if (!ctx.graphqlUrl || !ctx.workspacePath) {
     return (
       <IllustratedMessage
         name="UnableToLoad"
-        titleText="No GraphQL gateway"
-        subtitleText="The portal did not provide crdGatewayApiUrl in the Luigi context."
+        titleText="No account context"
+        subtitleText="The portal must provide the account workspace and GraphQL gateway."
       />
     );
   }
@@ -333,9 +380,15 @@ const App = () => {
             </MessageStrip>
           )}
 
+          {!ctx.namespace && (
+            <MessageStrip design="Information" hideCloseButton>
+              All namespaces are shown. Select a namespace in the portal to create a cluster.
+            </MessageStrip>
+          )}
           <ClusterList
             clusters={clusters}
             loading={loading}
+            canCreate={Boolean(ctx.namespace)}
             onCreate={openCreate}
             onAction={handleAction}
           />
@@ -367,7 +420,9 @@ const App = () => {
       <ClusterDetail
         open={Boolean(detailTarget)}
         cluster={detailTarget}
-        onClose={() => setDetailTarget(null)}
+        onClose={() => {
+          void navigateToCluster(null, ctx.namespace, client.signal).catch((err: Error) => { if (!client.signal?.aborted) setError(err.message); });
+        }}
         onDownloadKubeconfig={(c) => void handleDownloadKubeconfig(c)}
       />
 
