@@ -224,5 +224,5 @@ export const navigateToCluster = async (name: string | null, namespace: string |
   url.pathname = url.pathname.slice(0, index + segment.length) +
     (name ? `/${encodeURIComponent(name)}` : '');
   url.searchParams.set('namespace', namespace ?? '-all-');
-  client.linkManager().navigate(`${url.pathname}${url.search}`, undefined, true);
+  client.linkManager().navigate(`${url.pathname}${url.search}`);
 };
