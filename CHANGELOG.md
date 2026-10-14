@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.40.0...v0.40.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* sanitize chart version labels ([#207](https://github.com/apeirora/showroom-msp-simple-cluster/issues/207)) ([77d4462](https://github.com/apeirora/showroom-msp-simple-cluster/commit/77d4462ce6c737952c11c40e003e1190d1e357f0))
+
 ## [0.40.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.39.0...v0.40.0) (2026-10-13)
 
 
