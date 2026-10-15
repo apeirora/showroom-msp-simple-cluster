@@ -435,7 +435,19 @@ func (r *UbuntuClusterReconciler) partial(
 	ready int32,
 	_ bool,
 ) (ctrl.Result, error) {
-	patch := client.MergeFrom(cluster.DeepCopy())
+	return r.partialWithPatch(ctx, cluster, client.MergeFrom(cluster.DeepCopy()), endpoint, hostStatuses, ready)
+}
+
+// partialWithPatch is partial against a baseline the caller took before
+// adding its own status changes, so those changes are part of the patch.
+func (r *UbuntuClusterReconciler) partialWithPatch(
+	ctx context.Context,
+	cluster *ubuntuv1alpha1.UbuntuCluster,
+	patch client.Patch,
+	endpoint string,
+	hostStatuses []ubuntuv1alpha1.HostStatus,
+	ready int32,
+) (ctrl.Result, error) {
 	cluster.Status.ControlPlaneEndpoint = endpoint
 	cluster.Status.HostStatuses = hostStatuses
 	cluster.Status.ReadyHosts = ready
@@ -455,7 +467,9 @@ func (r *UbuntuClusterReconciler) partial(
 	return ctrl.Result{RequeueAfter: requeueWorking}, nil
 }
 
-// partialEnc is partial with the encryption status carried along.
+// partialEnc is partial with the encryption status carried along. The
+// baseline is taken BEFORE the encryption status is applied, otherwise the
+// hosts' secret-ID accessors would be missing from the patch and lost.
 func (r *UbuntuClusterReconciler) partialEnc(
 	ctx context.Context,
 	cluster *ubuntuv1alpha1.UbuntuCluster,
@@ -463,18 +477,28 @@ func (r *UbuntuClusterReconciler) partialEnc(
 	endpoint string,
 	hostStatuses []ubuntuv1alpha1.HostStatus,
 	ready int32,
-	allReady bool,
+	_ bool,
 ) (ctrl.Result, error) {
+	patch := client.MergeFrom(cluster.DeepCopy())
 	if enc != nil {
 		enc.applyStatus(cluster, false)
 	}
-	return r.partial(ctx, cluster, endpoint, hostStatuses, ready, allReady)
+	return r.partialWithPatch(ctx, cluster, patch, endpoint, hostStatuses, ready)
 }
 
 func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(cluster, ubuntuv1alpha1.FinalizerName) {
 		return ctrl.Result{}, nil
+	}
+
+	// KMS objects first and independently of SSH: once the role and secret
+	// IDs are gone, no host can log in again, whatever happens to the hosts
+	// or their SSH access below. The Transit key stays (see encryption.go).
+	allOK := true
+	if err := r.cleanupEncryption(ctx, cluster); err != nil {
+		log.Error(err, "delete: OpenBao cleanup failed; will retry")
+		allOK = false
 	}
 
 	cred, err := r.readSSHCredential(ctx, cluster)
@@ -485,6 +509,9 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 
 	cps := cluster.Spec.ControlPlane.Hosts
 	if len(cps) == 0 {
+		if !allOK {
+			return ctrl.Result{RequeueAfter: requeueWorking}, nil
+		}
 		// Nothing to talk to — let finalizer fall off.
 		patch := client.MergeFrom(cluster.DeepCopy())
 		controllerutil.RemoveFinalizer(cluster, ubuntuv1alpha1.FinalizerName)
@@ -499,15 +526,6 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
 	}
 	defer bastion.Close()
-
-	// KMS objects first: once the role and secret IDs are gone, no host can
-	// log in again, whatever happens to the hosts below. The Transit key
-	// stays (see encryption.go).
-	allOK := true
-	if err := r.cleanupEncryption(ctx, cluster); err != nil {
-		log.Error(err, "delete: OpenBao cleanup failed; will retry")
-		allOK = false
-	}
 
 	// Best effort: agents first (so workers stop calling the CP),
 	// then non-bootstrap servers, then bootstrap last. Failures are
@@ -748,6 +766,13 @@ func (r *UbuntuClusterReconciler) fail(ctx context.Context, cluster *ubuntuv1alp
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:    ubuntuv1alpha1.ConditionError,
 		Status:  metav1.ConditionTrue,
+		Reason:  reason,
+		Message: msg,
+	})
+	// A Failed cluster is not Ready, whatever it was before.
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:    ubuntuv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
 		Reason:  reason,
 		Message: msg,
 	})

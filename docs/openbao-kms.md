@@ -60,11 +60,17 @@ itself, before k3s is installed on each control-plane host:
    the SimpleCluster hands out.
 
 Fail-closed: an operator without `--openbao-address`, a key that is soft-deleted,
-or a host that already runs k3s without the plugin puts the `UbuntuCluster` in
-`Phase=Failed` with `Error`/`EncryptionReady` conditions saying why. Nothing is
-provisioned unencrypted. On delete the operator destroys the hosts' secret IDs and
-the role; the Transit key stays so etcd snapshots remain restorable (removing it is
-an OpenBao admin action, see [Removing a cluster](#removing-a-cluster)).
+or a host that already runs k3s without the plugin or with another cluster's plugin
+configuration puts the `UbuntuCluster` in `Phase=Failed` with `Error`/`EncryptionReady`
+conditions saying why. Nothing is provisioned unencrypted. Key and role are named
+`<namespace>_<name>` and recorded in `status.encryption` before anything is created
+in OpenBao. A reused pool host whose plugin still points at an earlier cluster is
+re-prepared when k3s is not running on it. Each host's secret ID is replaced through
+the same script after 75% of the role's secret ID TTL (default 90 days), the plugin
+restarts, k3s does not, and the previous accessor is destroyed. On delete the
+operator first destroys the hosts' secret IDs and the role, independently of SSH
+access to the hosts; the Transit key stays so etcd snapshots remain restorable
+(removing it is an OpenBao admin action, see [Removing a cluster](#removing-a-cluster)).
 
 The operator is configured through the `openbao.*` values of its Helm chart
 (`charts/simple-cluster-system/charts/simple-cluster-operator-ubuntu`), and the

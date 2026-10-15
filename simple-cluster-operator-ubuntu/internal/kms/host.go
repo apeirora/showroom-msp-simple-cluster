@@ -103,24 +103,67 @@ func Prepare(ctx context.Context, c *ssh.Client, in Input) (accessor, output str
 		return "", "", fmt.Errorf("run install.sh: %w", err)
 	}
 	output = strings.TrimSpace(res.Stdout)
-	if res.ExitCode != 0 {
-		return "", output, fmt.Errorf("install.sh exited %d: %s", res.ExitCode, strings.TrimSpace(res.Stderr+"\n"+res.Stdout))
-	}
+	// The script prints the accessor right after it unwrapped the secret
+	// ID, before anything that can still fail. Parse it first so a failed
+	// run never leaves the operator without the handle to destroy it.
 	if m := accessorRe.FindStringSubmatch(output); m != nil {
 		accessor = m[1]
+	}
+	if res.ExitCode != 0 {
+		return accessor, output, fmt.Errorf("install.sh exited %d: %s", res.ExitCode, strings.TrimSpace(res.Stderr+"\n"+res.Stdout))
 	}
 	return accessor, output, nil
 }
 
-// IsPrepared reports whether install.sh already configured this host: the
-// k3s snippet and the env file exist. Used to avoid minting a secret ID on
-// every retry and to refuse a running server that never had the plugin.
+// IsPrepared reports whether install.sh completed on this host: the k3s
+// snippet and the env file exist and the plugin unit is enabled (the
+// script's last steps). Used to avoid minting a secret ID on every retry
+// and to refuse a running server that never had the plugin. It says nothing
+// about WHICH cluster the host was prepared for: see MatchesCluster.
 func IsPrepared(ctx context.Context, c *ssh.Client) (bool, error) {
-	res, err := c.RunSudo(ctx, fmt.Sprintf("test -f %s -a -f %s", K3sSnippetPath, EnvFilePath))
+	res, err := c.RunSudo(ctx, fmt.Sprintf("test -f %s -a -f %s && systemctl is-enabled --quiet %s", K3sSnippetPath, EnvFilePath, PluginUnit))
 	if err != nil {
 		return false, err
 	}
 	return res.ExitCode == 0, nil
+}
+
+// MatchesCluster reports whether a prepared host carries THIS cluster's
+// connection settings: OpenBao address, namespace, Transit key and role ID.
+// It compares by exit status of fixed-string greps on the root-only env
+// file; no file content travels back, and the secret ID is never matched.
+// A reused pool host still configured for an earlier cluster fails this.
+func MatchesCluster(ctx context.Context, c *ssh.Client, in Input) (bool, error) {
+	want := []string{
+		"VAULT_KMS_VAULT_ADDR=" + in.Address,
+		"VAULT_KMS_TRANSIT_KEY=" + in.TransitKey,
+		"VAULT_KMS_APPROLE_ROLE_ID=" + in.RoleID,
+		"VAULT_KMS_TRANSIT_MOUNT=" + in.TransitMount,
+		"VAULT_KMS_APPROLE_MOUNT=" + in.ApproleMount,
+	}
+	if in.Namespace != "" {
+		want = append(want, "VAULT_KMS_VAULT_NAMESPACE="+in.Namespace)
+	}
+	var b strings.Builder
+	for i, w := range want {
+		if strings.ContainsAny(w, "'\n") {
+			return false, fmt.Errorf("refusing to compare a value with quotes or newlines")
+		}
+		if i > 0 {
+			b.WriteString(" && ")
+		}
+		fmt.Fprintf(&b, "grep -qxF -- '%s' %s", w, EnvFilePath)
+	}
+	res, err := c.RunSudo(ctx, "sh -c "+shellQuote(b.String()))
+	if err != nil {
+		return false, err
+	}
+	return res.ExitCode == 0, nil
+}
+
+// shellQuote wraps s in single quotes for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // Verify is the fail-closed check after k3s starts: the plugin unit is

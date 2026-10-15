@@ -307,6 +307,10 @@ type EncryptionStatus struct {
 	// +listType=map
 	// +listMapKey=name
 	Hosts []HostEncryptionStatus `json:"hosts,omitempty"`
+	// CleanupDone is true once the role and the hosts' secret IDs were
+	// removed from the provider during deletion. The key is kept.
+	// +optional
+	CleanupDone bool `json:"cleanupDone,omitempty"`
 }
 
 // HostEncryptionStatus is one control-plane host's KMS plugin state.
@@ -314,9 +318,14 @@ type HostEncryptionStatus struct {
 	// Name is the host name from spec.
 	Name string `json:"name"`
 	// SecretIDAccessor identifies (without revealing) the AppRole secret ID
-	// this host unwrapped. It is destroyed when the cluster is deleted.
+	// this host unwrapped. It is destroyed when the cluster is deleted or
+	// when the secret ID is replaced.
 	// +optional
 	SecretIDAccessor string `json:"secretIDAccessor,omitempty"`
+	// SecretIDIssuedAt is when the current secret ID was minted. The
+	// operator replaces it before the role's secret ID TTL runs out.
+	// +optional
+	SecretIDIssuedAt *metav1.Time `json:"secretIDIssuedAt,omitempty"`
 	// Verified is true once the host's kube-apiserver reported the
 	// kms-providers check healthy with the plugin active.
 	Verified bool `json:"verified"`

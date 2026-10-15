@@ -37,17 +37,23 @@ import (
 // per-cluster objects inside it: one Transit key and one AppRole role, both
 // named after the cluster, plus one response-wrapped secret ID per
 // control-plane host. The host unwraps it in install.sh; the operator only
-// ever sees the accessor, which it records in status and destroys on delete.
+// ever sees the accessor, which it records in status, replaces before the
+// secret ID expires and destroys on delete.
 //
 // Fail-closed rules:
 //   - no OpenBao configuration on the operator, or a cluster whose key is
 //     soft-deleted or exportable: Phase=Failed, nothing is installed;
-//   - a host that already runs k3s without the plugin: Phase=Failed, never
-//     silently adopted (its Secrets would be plaintext);
+//   - a host that already runs k3s without the plugin, or with another
+//     cluster's plugin configuration: Phase=Failed, never adopted;
 //   - a host whose kube-apiserver does not report kms-providers ok after
 //     the install: host Failed, cluster stays Provisioning and retries;
 //   - Ready, and therefore the kubeconfig the SimpleCluster hands out, is
 //     reached only when every control-plane host verified.
+//
+// Invariant for cleanup: status.encryption (with the key and role names) is
+// persisted BEFORE the first OpenBao object is created. A cluster without
+// status.encryption therefore owns nothing in OpenBao; a cluster with it
+// must be cleaned up, and deletion fails loudly when that is impossible.
 //
 // The Transit key is kept when the cluster is deleted: etcd snapshots taken
 // while the cluster lived can only be restored with it. Removing the key is
@@ -63,6 +69,9 @@ const (
 	verifyInterval = 5 * time.Second
 )
 
+// renewalFraction of the secret ID TTL after which a host gets a new one.
+const renewalFraction = 0.75
+
 // encryptionSession is the OpenBao login and the per-cluster facts one
 // reconcile needs. Close it when the reconcile ends.
 type encryptionSession struct {
@@ -73,6 +82,8 @@ type encryptionSession struct {
 	keyVersion int64
 	// hosts is status.encryption.hosts by name, updated as hosts progress.
 	hosts map[string]ubuntuv1alpha1.HostEncryptionStatus
+	// now is injectable for tests.
+	now func() time.Time
 }
 
 func (s *encryptionSession) close(ctx context.Context) {
@@ -84,31 +95,49 @@ func (s *encryptionSession) close(ctx context.Context) {
 	}
 }
 
-// kmsObjectName is the Transit key and AppRole role name: namespace and
-// name, because one tenancy serves every MSP cluster of an environment and
-// UbuntuCluster names repeat across namespaces. Both parts are DNS labels,
-// so the result has no slash or whitespace and fits a Transit key name.
+// kmsObjectName is the Transit key and AppRole role name for a cluster that
+// has none recorded yet: namespace and name joined by "_", a character no
+// Kubernetes namespace or object name may contain, so two different
+// clusters can never map to one key (team-a/demo vs team/a-demo). Once
+// recorded in status.encryption the stored names win, so a later change of
+// this scheme cannot detach a cluster from its key.
 func kmsObjectName(cluster *ubuntuv1alpha1.UbuntuCluster) string {
-	return cluster.Namespace + "-" + cluster.Name
+	return cluster.Namespace + "_" + cluster.Name
 }
 
-// beginEncryption validates the operator configuration, logs in and makes
-// sure the cluster's key and role exist. A nil result means proceed; a
-// non-nil result is the reconcile's answer (the cluster was marked Failed).
+// kmsNames returns the key and role names for the cluster: the recorded
+// ones when present, otherwise the deterministic default.
+func kmsNames(cluster *ubuntuv1alpha1.UbuntuCluster) (key, role string) {
+	key, role = kmsObjectName(cluster), kmsObjectName(cluster)
+	if st := cluster.Status.Encryption; st != nil {
+		if st.KeyName != "" {
+			key = st.KeyName
+		}
+		if st.RoleName != "" {
+			role = st.RoleName
+		}
+	}
+	return key, role
+}
+
+// beginEncryption validates the operator configuration, logs in, records
+// the cluster's object names in status and then makes sure its key and role
+// exist. A nil result means proceed; a non-nil result is the reconcile's
+// answer (the cluster was marked Failed or Pending).
 func (r *UbuntuClusterReconciler) beginEncryption(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) (*encryptionSession, *ctrl.Result, error) {
 	if cluster.Spec.Encryption.Provider.Type != ubuntuv1alpha1.EncryptionProviderOpenBao {
-		res, err := r.fail(ctx, cluster, "EncryptionUnsupported",
+		res, err := r.failEncryption(ctx, cluster, "EncryptionUnsupported",
 			fmt.Sprintf("encryption provider %q is not supported by this operator", cluster.Spec.Encryption.Provider.Type))
 		return nil, &res, err
 	}
 	if !r.OpenBao.Enabled() {
-		res, err := r.fail(ctx, cluster, "EncryptionUnsupported",
+		res, err := r.failEncryption(ctx, cluster, "EncryptionUnsupported",
 			"this operator has no OpenBao configuration (--openbao-address); refusing to provision an unencrypted cluster")
 		return nil, &res, err
 	}
 	cl, err := openbao.New(r.OpenBao)
 	if err != nil {
-		res, ferr := r.fail(ctx, cluster, "EncryptionConfigError", err.Error())
+		res, ferr := r.failEncryption(ctx, cluster, "EncryptionConfigError", err.Error())
 		return nil, &res, ferr
 	}
 	if err := cl.Login(ctx); err != nil {
@@ -117,11 +146,22 @@ func (r *UbuntuClusterReconciler) beginEncryption(ctx context.Context, cluster *
 		res, perr := r.encryptionPending(ctx, cluster, "OpenBaoLoginFailed", err.Error())
 		return nil, &res, perr
 	}
-	s := &encryptionSession{client: cl, keyName: kmsObjectName(cluster), roleName: kmsObjectName(cluster),
-		hosts: map[string]ubuntuv1alpha1.HostEncryptionStatus{}}
+	key, role := kmsNames(cluster)
+	s := &encryptionSession{client: cl, keyName: key, roleName: role,
+		hosts: map[string]ubuntuv1alpha1.HostEncryptionStatus{}, now: time.Now}
 	if cluster.Status.Encryption != nil {
+		s.keyVersion = cluster.Status.Encryption.KeyVersion
 		for _, h := range cluster.Status.Encryption.Hosts {
 			s.hosts[h.Name] = h
+		}
+	}
+	// Persist the names before anything exists in OpenBao (cleanup invariant).
+	if cluster.Status.Encryption == nil || cluster.Status.Encryption.KeyName != key || cluster.Status.Encryption.RoleName != role {
+		patch := client.MergeFrom(cluster.DeepCopy())
+		s.applyStatus(cluster, false)
+		if err := r.Status().Patch(ctx, cluster, patch); err != nil {
+			s.close(ctx)
+			return nil, &ctrl.Result{}, err
 		}
 	}
 	var rotate time.Duration
@@ -131,8 +171,8 @@ func (r *UbuntuClusterReconciler) beginEncryption(ctx context.Context, cluster *
 	ver, err := cl.EnsureTransitKey(ctx, s.keyName, rotate)
 	if err != nil {
 		s.close(ctx)
-		if openbao.IsNotFound(err) || isPermanentKeyError(err) {
-			res, ferr := r.fail(ctx, cluster, "EncryptionKeyError", err.Error())
+		if isPermanentKeyError(err) {
+			res, ferr := r.failEncryption(ctx, cluster, "EncryptionKeyError", err.Error())
 			return nil, &res, ferr
 		}
 		res, perr := r.encryptionPending(ctx, cluster, "OpenBaoError", err.Error())
@@ -151,8 +191,6 @@ func (r *UbuntuClusterReconciler) beginEncryption(ctx context.Context, cluster *
 		return nil, &res, perr
 	}
 	s.roleID = rid
-	// Record the objects early so an operator looking at the CR sees them
-	// even while hosts are still installing.
 	patch := client.MergeFrom(cluster.DeepCopy())
 	s.applyStatus(cluster, false)
 	if err := r.Status().Patch(ctx, cluster, patch); err != nil {
@@ -166,6 +204,15 @@ func (r *UbuntuClusterReconciler) beginEncryption(ctx context.Context, cluster *
 func isPermanentKeyError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "soft-deleted") || strings.Contains(msg, "exportable")
+}
+
+// failEncryption is fail with the EncryptionReady condition set to False
+// for the same reason, so no stale "Encrypted" survives a failure.
+func (r *UbuntuClusterReconciler) failEncryption(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, reason, msg string) (ctrl.Result, error) {
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: ubuntuv1alpha1.ConditionEncryptionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg,
+	})
+	return r.fail(ctx, cluster, reason, msg)
 }
 
 // encryptionPending keeps the cluster Provisioning with an explicit
@@ -187,31 +234,10 @@ func (r *UbuntuClusterReconciler) encryptionPending(ctx context.Context, cluster
 	return ctrl.Result{RequeueAfter: requeueWorking}, nil
 }
 
-// prepareHost gets one control-plane host ready for an encrypted k3s
-// install. running tells whether k3s already runs there.
-//
-//   - running and prepared: fine, verified later;
-//   - running and not prepared: errEncryptionMismatch, the cluster fails;
-//   - not running and prepared: nothing to do, the existing secret ID stays;
-//   - not running and not prepared: mint a wrapped secret ID for this host
-//     and run install.sh, which unwraps it and installs the plugin.
-func (s *encryptionSession) prepareHost(ctx context.Context, c *sshpkg.Client, host ubuntuv1alpha1.Host, running bool) error {
-	prepared, err := kms.IsPrepared(ctx, c)
-	if err != nil {
-		return fmt.Errorf("probe KMS plugin on %s: %w", host.Name, err)
-	}
-	if prepared {
-		return nil
-	}
-	if running {
-		return fmt.Errorf("%w: k3s already runs on %s without the KMS plugin; its Secrets would be plaintext. Use a fresh host", errEncryptionMismatch, host.Name)
-	}
-	wrapped, err := s.client.MintWrappedSecretID(ctx, s.roleName, map[string]string{"host": host.Name, "cluster": s.roleName})
-	if err != nil {
-		return err
-	}
+// hostInput is the connection data for one host of this cluster.
+func (s *encryptionSession) hostInput(wrapped string) kms.Input {
 	cfg := s.client.Config()
-	accessor, _, err := kms.Prepare(ctx, c, kms.Input{
+	return kms.Input{
 		Address:         cfg.Address,
 		Namespace:       cfg.Namespace,
 		TransitMount:    cfg.TransitMount,
@@ -221,22 +247,94 @@ func (s *encryptionSession) prepareHost(ctx context.Context, c *sshpkg.Client, h
 		RoleID:          s.roleID,
 		SecretIDWrapped: wrapped,
 		CACert:          s.client.CAPEM(),
-	})
+	}
+}
+
+// renewalDue reports whether the host's secret ID is old enough to replace.
+// A recorded accessor without an issue time (older status) is stamped now
+// rather than renewed at once.
+func (s *encryptionSession) renewalDue(h *ubuntuv1alpha1.HostEncryptionStatus) bool {
+	if h.SecretIDAccessor == "" {
+		return false
+	}
+	if h.SecretIDIssuedAt == nil {
+		t := metav1.NewTime(s.now())
+		h.SecretIDIssuedAt = &t
+		return false
+	}
+	ttl := s.client.Config().SecretIDTTL
+	if ttl <= 0 {
+		return false
+	}
+	return s.now().After(h.SecretIDIssuedAt.Time.Add(time.Duration(float64(ttl) * renewalFraction)))
+}
+
+// prepareHost gets one control-plane host ready for an encrypted k3s
+// install, or keeps it ready. running tells whether k3s already runs there.
+//
+//   - not prepared, running: errEncryptionMismatch (its Secrets would be
+//     plaintext);
+//   - prepared for ANOTHER cluster (reused host): running ->
+//     errEncryptionMismatch; not running -> re-prepare for this cluster;
+//   - prepared for this cluster: nothing, unless the secret ID is due for
+//     renewal, then install.sh runs again with a fresh wrapped secret ID
+//     (it restarts the plugin only) and the old accessor is destroyed;
+//   - not prepared, not running: mint a wrapped secret ID for this host and
+//     run install.sh, which unwraps it and installs the plugin.
+func (s *encryptionSession) prepareHost(ctx context.Context, c *sshpkg.Client, host ubuntuv1alpha1.Host, running bool) error {
+	prepared, err := kms.IsPrepared(ctx, c)
 	if err != nil {
-		return fmt.Errorf("prepare KMS plugin on %s: %w", host.Name, err)
+		return fmt.Errorf("probe KMS plugin on %s: %w", host.Name, err)
 	}
 	h := s.hosts[host.Name]
 	h.Name = host.Name
+	defer func() { s.hosts[host.Name] = h }()
+
+	if prepared {
+		mine, merr := kms.MatchesCluster(ctx, c, s.hostInput(""))
+		if merr != nil {
+			return fmt.Errorf("probe KMS configuration on %s: %w", host.Name, merr)
+		}
+		switch {
+		case !mine && running:
+			return fmt.Errorf("%w: k3s already runs on %s with another cluster's KMS configuration; use a fresh host", errEncryptionMismatch, host.Name)
+		case mine && !s.renewalDue(&h):
+			return nil
+		}
+		// !mine && !running: reinstall for this cluster. mine && due: renew.
+	} else if running {
+		return fmt.Errorf("%w: k3s already runs on %s without the KMS plugin; its Secrets would be plaintext. Use a fresh host", errEncryptionMismatch, host.Name)
+	}
+
+	wrapped, err := s.client.MintWrappedSecretID(ctx, s.roleName, map[string]string{"host": host.Name, "cluster": s.roleName})
+	if err != nil {
+		return err
+	}
+	previous := h.SecretIDAccessor
+	accessor, _, perr := kms.Prepare(ctx, c, s.hostInput(wrapped))
+	// The accessor is known as soon as the host unwrapped, even if the
+	// script failed afterwards: record it so it is never orphaned.
 	if accessor != "" {
 		h.SecretIDAccessor = accessor
+		t := metav1.NewTime(s.now())
+		h.SecretIDIssuedAt = &t
+		h.Verified = false
+	}
+	if perr != nil {
+		return fmt.Errorf("prepare KMS plugin on %s: %w", host.Name, perr)
+	}
+	if previous != "" && previous != h.SecretIDAccessor {
+		if derr := s.client.DestroySecretIDAccessor(ctx, s.roleName, previous); derr != nil {
+			// The new secret ID is in use; the old one expires by TTL.
+			logf.FromContext(ctx).Info("could not destroy the replaced secret ID", "host", host.Name, "err", derr.Error())
+		}
 	}
 	h.Verified = false
-	s.hosts[host.Name] = h
 	return nil
 }
 
-// verifyHost is the fail-closed check once k3s runs on the host. It waits
-// for the kube-apiserver to come up, then requires kms-providers ok.
+// verifyHost is the fail-closed check once k3s runs on the host: prepared
+// for THIS cluster, plugin unit active and kms-providers ok.
 func (s *encryptionSession) verifyHost(ctx context.Context, c *sshpkg.Client, host ubuntuv1alpha1.Host) error {
 	prepared, err := kms.IsPrepared(ctx, c)
 	if err != nil {
@@ -244,6 +342,13 @@ func (s *encryptionSession) verifyHost(ctx context.Context, c *sshpkg.Client, ho
 	}
 	if !prepared {
 		return fmt.Errorf("%w: k3s runs on %s without the KMS plugin", errEncryptionMismatch, host.Name)
+	}
+	mine, err := kms.MatchesCluster(ctx, c, s.hostInput(""))
+	if err != nil {
+		return fmt.Errorf("probe KMS configuration on %s: %w", host.Name, err)
+	}
+	if !mine {
+		return fmt.Errorf("%w: k3s runs on %s with another cluster's KMS configuration", errEncryptionMismatch, host.Name)
 	}
 	var last error
 	for i := 0; i < verifyAttempts; i++ {
@@ -302,11 +407,18 @@ func verifiedCount(st *ubuntuv1alpha1.EncryptionStatus) int {
 	return n
 }
 
-// cleanupEncryption runs on delete: destroy the hosts' secret IDs and the
-// role, keep the key. Errors are returned so the finalizer retries.
+// cleanupEncryption runs on delete, before and independently of any SSH:
+// destroy the hosts' secret IDs and the role, keep the key, remember that
+// it is done. Returns an error (so the finalizer retries) whenever objects
+// may exist and cannot be removed. A cluster without status.encryption
+// never got past the names-first patch, so it owns nothing (see the
+// invariant above).
 func (r *UbuntuClusterReconciler) cleanupEncryption(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) error {
+	if !cluster.Spec.EncryptionEnabled() {
+		return nil
+	}
 	st := cluster.Status.Encryption
-	if st == nil || !cluster.Spec.EncryptionEnabled() {
+	if st == nil || st.CleanupDone {
 		return nil
 	}
 	if !r.OpenBao.Enabled() {
@@ -320,10 +432,7 @@ func (r *UbuntuClusterReconciler) cleanupEncryption(ctx context.Context, cluster
 		return err
 	}
 	defer func() { _ = cl.RevokeSelf(ctx) }()
-	role := st.RoleName
-	if role == "" {
-		role = kmsObjectName(cluster)
-	}
+	_, role := kmsNames(cluster)
 	for _, h := range st.Hosts {
 		if h.SecretIDAccessor == "" {
 			continue
@@ -333,6 +442,11 @@ func (r *UbuntuClusterReconciler) cleanupEncryption(ctx context.Context, cluster
 		}
 	}
 	if err := cl.DeleteRole(ctx, role); err != nil {
+		return err
+	}
+	patch := client.MergeFrom(cluster.DeepCopy())
+	cluster.Status.Encryption.CleanupDone = true
+	if err := r.Status().Patch(ctx, cluster, patch); err != nil {
 		return err
 	}
 	r.eventf(cluster, "Normal", "EncryptionCleanedUp",

@@ -326,6 +326,11 @@ spec:
                   Encryption reports the state of spec.encryption. Present only when
                   encryption is requested.
                 properties:
+                  cleanupDone:
+                    description: |-
+                      CleanupDone is true once the role and the hosts' secret IDs were
+                      removed from the provider during deletion. The key is kept.
+                    type: boolean
                   hosts:
                     description: Hosts lists each control-plane host's plugin state.
                     items:
@@ -339,6 +344,12 @@ spec:
                           description: |-
                             SecretIDAccessor identifies (without revealing) the AppRole secret ID
                             this host unwrapped. It is destroyed when the cluster is deleted.
+                          type: string
+                        secretIDIssuedAt:
+                          description: |-
+                            SecretIDIssuedAt is when the current secret ID was minted. The
+                            operator replaces it before the role's secret ID TTL runs out.
+                          format: date-time
                           type: string
                         verified:
                           description: |-
