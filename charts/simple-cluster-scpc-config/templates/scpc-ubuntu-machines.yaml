@@ -9,7 +9,16 @@ metadata:
 spec:
   target:
     namespace: "{{ .SC.namespace }}"
-
+` }}
+{{- if .Values.encryption.openbao }}
+  # Fail-closed promise (apeirora/showroom#470): with OpenBao listed, the
+  # cluster resource below never reports Ready unless every control-plane
+  # host runs the KMS plugin. Needs simple-cluster-operator-ubuntu deployed
+  # with openbao.enabled and a core operator that renders .SC.encryption.
+  encryptionProviders:
+    - OpenBao
+{{- end }}
+{{ `
   resources:
     - name: cp
       apiVersion: ubuntumachines.apeirora.eu/v1alpha1
@@ -66,7 +75,19 @@ spec:
               - name: worker-{{ $i }}
                 address: {{ $cl.status.machine.address }}
               {{- end }}
-
+` }}
+{{- if .Values.encryption.openbao }}
+{{ `          {{- if .SC.encryption.enabled }}
+          encryption:
+            provider:
+              type: {{ .SC.encryption.provider }}
+              {{- if .SC.encryption.keyRotationPeriod }}
+              keyRotationPeriod: {{ .SC.encryption.keyRotationPeriod }}
+              {{- end }}
+          {{- end }}
+` }}
+{{- end }}
+{{ `
   kubeconfigSource:
     resourceName: cluster
     secretRef:

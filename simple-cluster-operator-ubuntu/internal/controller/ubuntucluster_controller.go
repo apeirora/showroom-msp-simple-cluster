@@ -12,6 +12,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -30,6 +31,7 @@ import (
 
 	ubuntuv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/k3s"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/openbao"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 	sshpkg "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/ssh"
 )
@@ -56,8 +58,11 @@ type UbuntuClusterReconciler struct {
 	// used when UbuntuCluster.spec.version is empty. Empty falls back
 	// to the get.k3s.io installer default.
 	DefaultK3sVersion string
-	sshDial           func(context.Context, string, int, string, sshpkg.Credential) (*sshpkg.Client, error)
-	sshDialVia        func(context.Context, *sshpkg.Client, string, int, string, sshpkg.Credential) (*sshpkg.Client, error)
+	// OpenBao locates the platform's SimpleCluster KMS tenancy. Unset means
+	// this operator refuses every UbuntuCluster that asks for encryption.
+	OpenBao    openbao.Config
+	sshDial    func(context.Context, string, int, string, sshpkg.Credential) (*sshpkg.Client, error)
+	sshDialVia func(context.Context, *sshpkg.Client, string, int, string, sshpkg.Credential) (*sshpkg.Client, error)
 }
 
 // +kubebuilder:rbac:groups=ubuntu.apeirora.eu,resources=ubuntuclusters,verbs=get;list;watch;create;update;patch;delete
@@ -146,20 +151,42 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		allReady = false
 	}
 
+	// ----- encryption at rest (SimpleCluster #470) -----
+	// Everything OpenBao-side happens before any host is touched, so a
+	// refused or unreachable KMS leaves no half-installed cluster behind.
+	var enc *encryptionSession
+	if cluster.Spec.EncryptionEnabled() {
+		var res *ctrl.Result
+		enc, res, err = r.beginEncryption(ctx, &cluster)
+		if res != nil {
+			return *res, err
+		}
+		defer enc.close(ctx)
+	}
+
 	// ----- bootstrap control-plane -----
 	r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 		"control-plane bootstrap on %s (%s)", bootstrap.Name, bootstrap.Address)
 	bootstrapClient, err := r.dialBootstrap(ctx, &cluster, bootstrap, cred)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
-		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
+		return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
 	}
 	defer bootstrapClient.Close()
 
 	running, err := k3s.IsServerRunning(ctx, bootstrapClient)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, "probe k3s: "+err.Error())
-		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
+		return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
+	}
+	if enc != nil {
+		if perr := enc.prepareHost(ctx, bootstrapClient, bootstrap, running); perr != nil {
+			if errors.Is(perr, errEncryptionMismatch) {
+				return r.fail(ctx, &cluster, "EncryptionMismatch", perr.Error())
+			}
+			failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, perr.Error())
+			return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
+		}
 	}
 	if !running {
 		r.eventf(&cluster, corev1.EventTypeNormal, "InstallingK3s",
@@ -174,20 +201,30 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			NodeName:       bootstrap.Name,
 		}); err != nil {
 			failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, err.Error())
-			return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
+			return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
+		}
+	}
+
+	if enc != nil {
+		if verr := enc.verifyHost(ctx, bootstrapClient, bootstrap); verr != nil {
+			if errors.Is(verr, errEncryptionMismatch) {
+				return r.fail(ctx, &cluster, "EncryptionMismatch", verr.Error())
+			}
+			failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, verr.Error())
+			return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
 		}
 	}
 
 	token, err := k3s.FetchToken(ctx, bootstrapClient)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, "fetch token: "+err.Error())
-		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
+		return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
 	}
 
 	kubeconfig, err := k3s.FetchKubeconfig(ctx, bootstrapClient, endpoint)
 	if err != nil {
 		failHost(bootstrap.Name, ubuntuv1alpha1.RoleControlPlane, bootstrap.Address, "fetch kubeconfig: "+err.Error())
-		return r.partial(ctx, &cluster, endpoint, hostStatuses, ready, allReady)
+		return r.partialEnc(ctx, &cluster, enc, endpoint, hostStatuses, ready, allReady)
 	}
 	secretName, err := r.ensureKubeconfigSecret(ctx, &cluster, []byte(kubeconfig))
 	if err != nil {
@@ -215,6 +252,9 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		cluster.Status.ReadyHosts = ready
 		cluster.Status.Hosts = int32(len(hostStatuses))
 		setRoleCounts(&cluster, hostStatuses)
+		if enc != nil {
+			enc.applyStatus(&cluster, false)
+		}
 		if err := r.Status().Patch(ctx, &cluster, patch); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -224,7 +264,16 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	for _, h := range cps[1:] {
 		r.eventf(&cluster, corev1.EventTypeNormal, "PreparingHost",
 			"control-plane join %s (%s)", h.Name, h.Address)
+		var verify func(*sshpkg.Client) error
+		if enc != nil {
+			verify = func(c *sshpkg.Client) error { return enc.verifyHost(ctx, c, h) }
+		}
 		ok, ver, msg := r.installRole(ctx, &cluster, bootstrapClient, h, cred, ubuntuv1alpha1.RoleControlPlane, func(c *sshpkg.Client) error {
+			if enc != nil {
+				if perr := enc.prepareHost(ctx, c, h, false); perr != nil {
+					return perr
+				}
+			}
 			return k3s.InstallServerJoin(ctx, c, k3s.InstallOptions{
 				Version:        k3sVer,
 				ExtraArgs:      cluster.Spec.K3sServerArgs,
@@ -233,7 +282,10 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				NodeExternalIP: h.ExternalAddress,
 				NodeName:       h.Name,
 			}, internalEndpointURL, token)
-		})
+		}, verify)
+		if !ok && strings.Contains(msg, errEncryptionMismatch.Error()) {
+			return r.fail(ctx, &cluster, "EncryptionMismatch", msg)
+		}
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
 			Name: h.Name, Role: ubuntuv1alpha1.RoleControlPlane, Address: h.Address,
 			Phase: phaseFromOK(ok), Message: msg, KubeletVersion: ver,
@@ -257,7 +309,7 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				NodeExternalIP: h.ExternalAddress,
 				NodeName:       h.Name,
 			}, internalEndpointURL, token)
-		})
+		}, nil)
 		hostStatuses = append(hostStatuses, ubuntuv1alpha1.HostStatus{
 			Name: h.Name, Role: ubuntuv1alpha1.RoleWorker, Address: h.Address,
 			Phase: phaseFromOK(ok), Message: msg, KubeletVersion: ver,
@@ -280,6 +332,14 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	cluster.Status.Hosts = int32(len(hostStatuses))
 	setRoleCounts(&cluster, hostStatuses)
 	cluster.Status.ObservedGeneration = cluster.Generation
+	if enc != nil {
+		enc.applyStatus(&cluster, allReady)
+	}
+	if allReady {
+		cluster.Status.Message = "Ready"
+	} else {
+		cluster.Status.Message = fmt.Sprintf("Provisioning: %d / %d hosts Ready", ready, len(hostStatuses))
+	}
 	if allReady {
 		cluster.Status.Phase = ubuntuv1alpha1.PhaseReady
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
@@ -382,6 +442,7 @@ func (r *UbuntuClusterReconciler) partial(
 	cluster.Status.Hosts = int32(len(hostStatuses))
 	setRoleCounts(cluster, hostStatuses)
 	cluster.Status.Phase = ubuntuv1alpha1.PhaseProvisioning
+	cluster.Status.Message = "Provisioning: at least one host failed, see status.hostStatuses"
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:    ubuntuv1alpha1.ConditionReady,
 		Status:  metav1.ConditionFalse,
@@ -392,6 +453,22 @@ func (r *UbuntuClusterReconciler) partial(
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: requeueWorking}, nil
+}
+
+// partialEnc is partial with the encryption status carried along.
+func (r *UbuntuClusterReconciler) partialEnc(
+	ctx context.Context,
+	cluster *ubuntuv1alpha1.UbuntuCluster,
+	enc *encryptionSession,
+	endpoint string,
+	hostStatuses []ubuntuv1alpha1.HostStatus,
+	ready int32,
+	allReady bool,
+) (ctrl.Result, error) {
+	if enc != nil {
+		enc.applyStatus(cluster, false)
+	}
+	return r.partial(ctx, cluster, endpoint, hostStatuses, ready, allReady)
 }
 
 func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster) (ctrl.Result, error) {
@@ -423,11 +500,19 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	}
 	defer bastion.Close()
 
+	// KMS objects first: once the role and secret IDs are gone, no host can
+	// log in again, whatever happens to the hosts below. The Transit key
+	// stays (see encryption.go).
+	allOK := true
+	if err := r.cleanupEncryption(ctx, cluster); err != nil {
+		log.Error(err, "delete: OpenBao cleanup failed; will retry")
+		allOK = false
+	}
+
 	// Best effort: agents first (so workers stop calling the CP),
 	// then non-bootstrap servers, then bootstrap last. Failures are
 	// logged but do not block finalizer removal forever — the next
 	// reconcile retries.
-	allOK := true
 	for _, h := range cluster.Spec.Workers.Hosts {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"agent uninstall on %s", h.Name)
@@ -646,6 +731,7 @@ func (r *UbuntuClusterReconciler) setPhase(ctx context.Context, cluster *ubuntuv
 	}
 	patch := client.MergeFrom(cluster.DeepCopy())
 	cluster.Status.Phase = phase
+	cluster.Status.Message = string(phase) + ": " + msg
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:    ubuntuv1alpha1.ConditionReady,
 		Status:  metav1.ConditionFalse,
@@ -658,6 +744,7 @@ func (r *UbuntuClusterReconciler) setPhase(ctx context.Context, cluster *ubuntuv
 func (r *UbuntuClusterReconciler) fail(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, reason, msg string) (ctrl.Result, error) {
 	patch := client.MergeFrom(cluster.DeepCopy())
 	cluster.Status.Phase = ubuntuv1alpha1.PhaseFailed
+	cluster.Status.Message = "Failed: " + reason + ": " + msg
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:    ubuntuv1alpha1.ConditionError,
 		Status:  metav1.ConditionTrue,
@@ -689,6 +776,7 @@ func (r *UbuntuClusterReconciler) installRole(
 	cred sshpkg.Credential,
 	role string,
 	apply func(*sshpkg.Client) error,
+	verify func(*sshpkg.Client) error,
 ) (ok bool, version, message string) {
 	c, err := r.dialVia(ctx, cluster, bastion, h, cred)
 	if err != nil {
@@ -709,6 +797,13 @@ func (r *UbuntuClusterReconciler) installRole(
 		r.eventf(cluster, corev1.EventTypeNormal, "InstallingK3s",
 			"installing k3s %s on %s", role, h.Name)
 		if err := apply(c); err != nil {
+			return false, "", err.Error()
+		}
+	}
+	// verify runs whether k3s was just installed or already ran: a server
+	// that runs without the KMS plugin must never count as Ready.
+	if verify != nil {
+		if err := verify(c); err != nil {
 			return false, "", err.Error()
 		}
 	}

@@ -1,0 +1,12 @@
+{{- if and .Values.openbao.enabled .Values.openbao.caCert }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-cluster-operator-ubuntu-openbao-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+data:
+  ca.pem: |
+    {{- .Values.openbao.caCert | nindent 4 }}
+{{- end }}

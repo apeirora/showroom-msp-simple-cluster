@@ -32,6 +32,19 @@ spec:
             {{- range .Values.controllerManager.container.args }}
             - {{ . }}
             {{- end }}
+            {{- if .Values.openbao.enabled }}
+            - {{ printf "--openbao-address=%s" (required "openbao.address is required when openbao.enabled" .Values.openbao.address) | quote }}
+            - {{ printf "--openbao-namespace=%s" .Values.openbao.namespace | quote }}
+            - {{ printf "--openbao-jwt-mount=%s" .Values.openbao.jwtMount | quote }}
+            - {{ printf "--openbao-jwt-role=%s" .Values.openbao.jwtRole | quote }}
+            - {{ printf "--openbao-transit-mount=%s" .Values.openbao.transitMount | quote }}
+            - {{ printf "--openbao-approle-mount=%s" .Values.openbao.approleMount | quote }}
+            - {{ printf "--openbao-plugin-policy=%s" .Values.openbao.pluginPolicy | quote }}
+            - "--openbao-token-file=/var/run/secrets/openbao/token"
+            {{- if .Values.openbao.caCert }}
+            - "--openbao-ca-file=/etc/openbao/ca.pem"
+            {{- end }}
+            {{- end }}
           command:
             - /manager
           image: {{ .Values.controllerManager.container.image.repository }}:{{ coalesce .Values.global.imageTag .Values.controllerManager.container.image.tag .Chart.AppVersion }}
@@ -53,23 +66,47 @@ spec:
             {{- toYaml .Values.controllerManager.container.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.controllerManager.container.securityContext | nindent 12 }}
-          {{- if and .Values.certmanager.enable .Values.metrics.enable }}
+          {{- if or (and .Values.certmanager.enable .Values.metrics.enable) .Values.openbao.enabled }}
           volumeMounts:
             {{- if and .Values.metrics.enable .Values.certmanager.enable }}
             - name: metrics-certs
               mountPath: /tmp/k8s-metrics-server/metrics-certs
               readOnly: true
             {{- end }}
+            {{- if .Values.openbao.enabled }}
+            - name: openbao-token
+              mountPath: /var/run/secrets/openbao
+              readOnly: true
+            {{- if .Values.openbao.caCert }}
+            - name: openbao-ca
+              mountPath: /etc/openbao
+              readOnly: true
+            {{- end }}
+            {{- end }}
           {{- end }}
       securityContext:
         {{- toYaml .Values.controllerManager.securityContext | nindent 8 }}
       serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
       terminationGracePeriodSeconds: {{ .Values.controllerManager.terminationGracePeriodSeconds }}
-      {{- if and .Values.certmanager.enable .Values.metrics.enable }}
+      {{- if or (and .Values.certmanager.enable .Values.metrics.enable) .Values.openbao.enabled }}
       volumes:
         {{- if and .Values.metrics.enable .Values.certmanager.enable }}
         - name: metrics-certs
           secret:
             secretName: metrics-server-cert
+        {{- end }}
+        {{- if .Values.openbao.enabled }}
+        - name: openbao-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: {{ .Values.openbao.tokenAudience | quote }}
+                  expirationSeconds: {{ .Values.openbao.tokenExpirationSeconds }}
+        {{- if .Values.openbao.caCert }}
+        - name: openbao-ca
+          configMap:
+            name: simple-cluster-operator-ubuntu-openbao-ca
+        {{- end }}
         {{- end }}
       {{- end }}

@@ -41,6 +41,32 @@ controllerManager:
   terminationGracePeriodSeconds: 10
   serviceAccountName: simple-cluster-operator-ubuntu-controller-manager
 
+# [OpenBao KMS]: SimpleCluster encryption at rest (apeirora/showroom#470).
+# When enabled, the operator logs in to the platform's SimpleCluster KMS
+# tenancy with its own ServiceAccount token (projected, audience below) and
+# prepares every control-plane host of an UbuntuCluster that sets
+# spec.encryption. Disabled, such clusters are refused (Phase=Failed), never
+# provisioned unencrypted.
+openbao:
+  enabled: false
+  # https:// URL of the OpenBao serving the tenancy.
+  address: ""
+  # OpenBao namespace of the tenancy; "" is the root namespace.
+  namespace: simple-cluster
+  # Audience the JWT auth role expects in the operator's token.
+  tokenAudience: openbao
+  # Lifetime of the projected token; the kubelet rotates it well before.
+  tokenExpirationSeconds: 3600
+  # Mount and role names as created by the tenancy (showroom-infra).
+  jwtMount: simplecluster-kms-jwt
+  jwtRole: simplecluster-operator
+  transitMount: simplecluster-kms
+  approleMount: simplecluster-kms-approle
+  pluginPolicy: sc-kms-plugin
+  # Extra PEM CA bundle for the address, when its certificate is not
+  # publicly trusted. Also handed to the hosts' plugins.
+  caCert: ""
+
 # [RBAC]: To enable RBAC (Permissions) configurations
 rbac:
   enable: true
