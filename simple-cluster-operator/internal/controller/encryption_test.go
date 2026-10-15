@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,14 +30,16 @@ func TestSetEncryptionCondition(t *testing.T) {
 	scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
 	scpc.Name = "flat"
 
+	scpc.Spec.KubeconfigSource.ResourceName = "cluster"
+
 	sc := &showroomv1alpha1.SimpleCluster{}
-	setEncryptionCondition(sc, scpc)
+	setEncryptionCondition(sc, scpc, false, false)
 	if apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady) != nil {
 		t.Error("condition present without an encryption request")
 	}
 
 	sc.Spec.Encryption = openBaoEncryption()
-	setEncryptionCondition(sc, scpc)
+	setEncryptionCondition(sc, scpc, false, false)
 	cond := apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
 	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != "UnsupportedByProvider" {
 		t.Errorf("unsupported provider: got %+v", cond)
@@ -44,16 +47,45 @@ func TestSetEncryptionCondition(t *testing.T) {
 
 	scpc.Spec.EncryptionProviders = []showroomv1alpha1.EncryptionProviderType{showroomv1alpha1.EncryptionProviderOpenBao}
 	sc.Status.Phase = showroomv1alpha1.PhaseProvisioning
-	setEncryptionCondition(sc, scpc)
+	setEncryptionCondition(sc, scpc, false, false)
 	cond = apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
 	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != "Provisioning" {
 		t.Errorf("provisioning: got %+v", cond)
 	}
 
+	// The provider's resource is Ready but says nothing about encryption:
+	// the SCPC's declaration alone is not proof.
+	sc.Status.Phase = showroomv1alpha1.PhaseProvisioning
+	setEncryptionCondition(sc, scpc, true, false)
+	cond = apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != "ProviderNotVerified" {
+		t.Errorf("ready but unverified: got %+v", cond)
+	}
+
 	sc.Status.Phase = showroomv1alpha1.PhaseReady
-	setEncryptionCondition(sc, scpc)
+	setEncryptionCondition(sc, scpc, true, true)
 	if !apimeta.IsStatusConditionTrue(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady) {
-		t.Error("condition not True for a Ready cluster on a supporting SCPC")
+		t.Error("condition not True for a Ready cluster whose resource reports EncryptionReady=True")
+	}
+}
+
+func TestEncryptionReadyObserved(t *testing.T) {
+	obj := &unstructured.Unstructured{Object: map[string]any{}}
+	if encryptionReadyObserved(obj) {
+		t.Error("no status: must not count as observed")
+	}
+	obj.Object["status"] = map[string]any{"conditions": []any{
+		map[string]any{"type": "Ready", "status": "True"},
+		map[string]any{"type": "EncryptionReady", "status": "False"},
+	}}
+	if encryptionReadyObserved(obj) {
+		t.Error("EncryptionReady=False must not count")
+	}
+	obj.Object["status"] = map[string]any{"conditions": []any{
+		map[string]any{"type": "EncryptionReady", "status": "True"},
+	}}
+	if !encryptionReadyObserved(obj) {
+		t.Error("EncryptionReady=True must count")
 	}
 }
 
@@ -232,12 +264,122 @@ metadata:
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scName + "-config", Namespace: "default"}, cm)).To(Succeed())
 			Expect(cm.Data["encryption"]).To(Equal("true/OpenBao"))
 			sc = getSC(scName)
-			Expect(sc.Status.Phase).To(Equal(showroomv1alpha1.PhaseReady))
 			Expect(apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionError)).To(BeNil())
+
+			By("not going Ready on a resource that cannot prove encryption (a ConfigMap has no conditions)")
+			Expect(sc.Status.Phase).To(Equal(showroomv1alpha1.PhaseProvisioning))
+			readyCond := apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionReady)
+			Expect(readyCond).NotTo(BeNil())
+			Expect(readyCond.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCond.Reason).To(Equal("EncryptionNotVerified"))
 			encCond = apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
 			Expect(encCond).NotTo(BeNil())
+			Expect(encCond.Status).To(Equal(metav1.ConditionFalse))
+			Expect(encCond.Reason).To(Equal("ProviderNotVerified"))
+			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: scName + "-kubeconfig", Namespace: "default"}, &corev1.Secret{}))).To(BeTrue())
+		})
+	})
+
+	Context("with a resource that reports EncryptionReady itself", func() {
+		// A SimpleCluster stands in for the provider's cluster resource: it
+		// has status.phase, status.conditions and a string field to carry a
+		// kubeconfig for the inline source. The reconciler is only invoked
+		// by hand on the outer SC, so the target is never reconciled.
+		const scpcName, scName = "enc-proving", "enc-verified"
+		targetName := scName + "-cluster"
+		kubeconfigDoc := "apiVersion: v1\nkind: Config\nusers:\n- name: u\n  user:\n    token: opaque-not-a-jwt\n"
+
+		newProvingSCPC := func(providers ...showroomv1alpha1.EncryptionProviderType) *showroomv1alpha1.SimpleClusterProviderConfig {
+			return &showroomv1alpha1.SimpleClusterProviderConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: scpcName, Namespace: "default"},
+				Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{
+					Target:              showroomv1alpha1.TargetSpec{Namespace: "default"},
+					EncryptionProviders: providers,
+					Resources: []showroomv1alpha1.ResourceSpec{{
+						Name:       "cluster",
+						APIVersion: "showroom.apeirora.eu/v1alpha1",
+						Kind:       "SimpleCluster",
+						Template: `apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: ignored
+spec:
+  providerConfigRefs: ["none"]
+  workers:
+    nodes: 1
+    requested:
+      cpu: "1"
+      memory: 1Gi
+`,
+					}},
+					KubeconfigSource: showroomv1alpha1.KubeconfigSource{
+						ResourceName: "cluster",
+						Inline:       &showroomv1alpha1.KubeconfigInlineSource{KubeconfigPath: "status.targetCluster"},
+					},
+				},
+			}
+		}
+		setTargetStatus := func(encryptionReady *bool) {
+			target := &showroomv1alpha1.SimpleCluster{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: targetName, Namespace: "default"}, target)).To(Succeed())
+			target.Status.Phase = showroomv1alpha1.PhaseReady
+			target.Status.TargetCluster = kubeconfigDoc
+			target.Status.Conditions = []metav1.Condition{{Type: showroomv1alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: "Ready", LastTransitionTime: metav1.Now()}}
+			if encryptionReady != nil {
+				st := metav1.ConditionFalse
+				if *encryptionReady {
+					st = metav1.ConditionTrue
+				}
+				target.Status.Conditions = append(target.Status.Conditions, metav1.Condition{Type: showroomv1alpha1.ConditionEncryptionReady, Status: st, Reason: "Test", LastTransitionTime: metav1.Now()})
+			}
+			Expect(k8sClient.Status().Update(ctx, target)).To(Succeed())
+		}
+		AfterEach(func() {
+			cleanup([]string{scName, targetName}, []string{scpcName})
+		})
+
+		It("goes Ready and hands out the kubeconfig only once the resource says EncryptionReady=True, and fails when the SCPC withdraws the provider", func() {
+			Expect(k8sClient.Create(ctx, newProvingSCPC(showroomv1alpha1.EncryptionProviderOpenBao))).To(Succeed())
+			Expect(k8sClient.Create(ctx, newSC(scName, scpcName, openBaoEncryption()))).To(Succeed())
+			reconcileTwice(scName)
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: targetName, Namespace: "default"}, &showroomv1alpha1.SimpleCluster{})).To(Succeed())
+
+			By("staying Provisioning while the resource is Ready without the condition")
+			setTargetStatus(nil)
+			reconcileTwice(scName)
+			sc := getSC(scName)
+			Expect(sc.Status.Phase).To(Equal(showroomv1alpha1.PhaseProvisioning))
+			Expect(apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady).Reason).To(Equal("ProviderNotVerified"))
+			Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: scName + "-kubeconfig", Namespace: "default"}, &corev1.Secret{}))).To(BeTrue())
+
+			By("staying Provisioning while the condition is False")
+			setTargetStatus(ptr.To(false))
+			reconcileTwice(scName)
+			sc = getSC(scName)
+			Expect(sc.Status.Phase).To(Equal(showroomv1alpha1.PhaseProvisioning))
+
+			By("going Ready with the kubeconfig once the condition is True")
+			setTargetStatus(ptr.To(true))
+			reconcileTwice(scName)
+			sc = getSC(scName)
+			Expect(sc.Status.Phase).To(Equal(showroomv1alpha1.PhaseReady))
+			encCond := apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
 			Expect(encCond.Status).To(Equal(metav1.ConditionTrue))
 			Expect(encCond.Reason).To(Equal("Encrypted"))
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scName + "-kubeconfig", Namespace: "default"}, &corev1.Secret{})).To(Succeed())
+
+			By("failing, not staying Ready, when the SCPC withdraws the provider")
+			scpc := &showroomv1alpha1.SimpleClusterProviderConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: scpcName, Namespace: "default"}, scpc)).To(Succeed())
+			scpc.Spec.EncryptionProviders = nil
+			Expect(k8sClient.Update(ctx, scpc)).To(Succeed())
+			reconcileTwice(scName)
+			sc = getSC(scName)
+			Expect(sc.Status.Phase).To(Equal(showroomv1alpha1.PhaseFailed))
+			Expect(apimeta.IsStatusConditionFalse(sc.Status.Conditions, showroomv1alpha1.ConditionReady)).To(BeTrue())
+			errCond := apimeta.FindStatusCondition(sc.Status.Conditions, showroomv1alpha1.ConditionError)
+			Expect(errCond.Reason).To(Equal("EncryptionUnsupported"))
+			Expect(errCond.Message).To(ContainSubstring("existing resources are left untouched"))
 		})
 	})
 
