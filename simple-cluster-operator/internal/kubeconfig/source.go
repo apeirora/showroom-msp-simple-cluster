@@ -123,7 +123,11 @@ func fetchSecretRef(
 		dataKey = "kubeconfig"
 	}
 
-	ns, err = tc.SecretPolicy.Resolve(sc.Namespace, ns, name, secretpolicy.Copy)
+	ownerNamespace := sc.Namespace
+	if tc.AccountParent != nil {
+		ownerNamespace = tc.OwnerNamespace
+	}
+	ns, err = tc.SecretPolicy.Resolve(ownerNamespace, ns, name, secretpolicy.Copy)
 	if err != nil {
 		return nil, nil, err
 	}

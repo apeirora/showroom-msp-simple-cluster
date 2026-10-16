@@ -99,3 +99,12 @@ ordCatalog:
 
 # Exact operator-approved Secret references. Purposes: use, copy, write.
 secretReferenceAllowlist: []
+
+# Use the existing provider credential for account resources. No account credentials are issued.
+kcpAccount:
+  enabled: false
+  secretName: pm-kubeconfig
+  apiExportName: simpleclusters.showroom.apeirora.eu
+  # Existing account parent UIDs that keep local resources until recreation.
+  # Remove each UID after that parent and its infrastructure are deleted.
+  legacyParentUIDs: []

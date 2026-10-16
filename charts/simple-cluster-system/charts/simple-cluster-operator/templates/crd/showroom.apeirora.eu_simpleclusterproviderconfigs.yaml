@@ -407,6 +407,11 @@ spec:
                   Target describes which cluster the resources are created on plus the
                   default Namespace.
                 properties:
+                  kcpAccount:
+                    description: |-
+                      KCPAccount creates resources in the owning KCP account through the provider export.
+                      It cannot be combined with kubeconfigSecretRef or a target namespace.
+                    type: boolean
                   kubeconfigSecretRef:
                     description: |-
                       KubeconfigSecretRef points at a Secret in the management cluster
@@ -431,6 +436,10 @@ spec:
                       resources with the owning SimpleCluster).
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: kcpAccount cannot use a namespace or kubeconfigSecretRef
+                  rule: '!has(self.kcpAccount) || !self.kcpAccount || (!has(self.kubeconfigSecretRef)
+                    && (!has(self.namespace) || size(self.namespace) == 0))'
             required:
             - kubeconfigSource
             - resources

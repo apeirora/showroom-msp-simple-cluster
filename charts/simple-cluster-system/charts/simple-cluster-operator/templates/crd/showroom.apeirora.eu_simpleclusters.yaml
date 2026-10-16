@@ -530,6 +530,31 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              accountTarget:
+                description: AccountTarget pins account ownership and deletion routing.
+                properties:
+                  cluster:
+                    type: string
+                  mode:
+                    description: Mode is Account or LegacyLocal. It remains fixed
+                      for this parent.
+                    enum:
+                    - Account
+                    - LegacyLocal
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  uid:
+                    type: string
+                required:
+                - cluster
+                - mode
+                - name
+                - namespace
+                - uid
+                type: object
               targetCluster:
                 description: |-
                   TargetCluster identifies where the resources live: SCPC name (for remote)

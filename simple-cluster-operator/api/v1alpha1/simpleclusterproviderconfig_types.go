@@ -118,7 +118,13 @@ type InputDeclaration struct {
 // and the default namespace for namespaced resources. Per-resource overrides
 // (apiVersion/kind, namespace, namePrefix, deletionAnnotations) live on
 // each ResourceSpec.
+// +kubebuilder:validation:XValidation:rule="!has(self.kcpAccount) || !self.kcpAccount || (!has(self.kubeconfigSecretRef) && (!has(self.namespace) || size(self.namespace) == 0))",message="kcpAccount cannot use a namespace or kubeconfigSecretRef"
 type TargetSpec struct {
+	// KCPAccount creates resources in the owning KCP account through the provider export.
+	// It cannot be combined with kubeconfigSecretRef or a target namespace.
+	// +optional
+	KCPAccount bool `json:"kcpAccount,omitempty"`
+
 	// Namespace used by default for namespaced resources. Each ResourceSpec
 	// may override this via its own Namespace. May be a Go template evaluated
 	// against .SC and .Inputs (e.g. `.SC.namespace` to co-locate

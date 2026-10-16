@@ -140,3 +140,64 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+
+
+## KCP account targets
+
+Set `SimpleClusterProviderConfig.spec.target.kcpAccount: true` to create the provider child in the request's KCP account.
+This target currently supports cluster-scoped `sap.eu/v1alpha1` IronCoreShoots.
+Keep `target.namespace` empty and omit `target.kubeconfigSecretRef`.
+Set `kubeconfigSource.secretRef.namespace: default`.
+
+The operator uses the existing SimpleCluster provider credential and discovers its own APIExport endpoint.
+It scopes each client to the account recorded by api-syncagent on the physical SimpleCluster.
+It reads the account parent UID before it creates the child.
+It records the account route and child name in status before each external create.
+A retry uses the same child name.
+An existing child with different parent metadata causes an error.
+The child has explicit parent annotations and no Kubernetes ownerReference.
+
+The SimpleCluster APIExport needs an identity-bound permission claim for `sap.eu/ironcoreshoots`.
+The account must bind the SAP export and accept the SimpleCluster export's claim.
+The provider role needs `get`, `list`, `watch`, `create`, `patch`, and `delete` on `ironcoreshoots`.
+It does not need SAP status writes or a credential for each account.
+The patch permission supports the existing child delete guard.
+
+Enable the operator chart with these values (inside `simple-cluster-operator` for the system chart):
+
+```yaml
+kcpAccount:
+  enabled: true
+  secretName: pm-kubeconfig
+  apiExportName: simpleclusters.showroom.apeirora.eu
+  legacyParentUIDs: []
+```
+
+The chart mounts the complete provider Secret under `/etc/kcp`, without `subPath`.
+Its kubeconfig must use the mounted certificate files so certificate renewal remains effective.
+The equivalent flags are `--kcp-kubeconfig`, `--kcp-api-export`, and `--kcp-legacy-parent-uids`.
+The last flag accepts a comma-separated list and defaults to empty.
+
+SAP Hosting remains responsible for the physical child and Garden Shoot.
+Its sync agent returns child status and mirrors the generated access Secret to account namespace `default`.
+Configure that related Secret with explicit service-to-account namespace mapping.
+SimpleCluster reads this account Secret and retains its existing `<request>-kubeconfig` consumer Secret.
+
+Deletion starts at the account child.
+The parent finalizer waits until the SAP sync agent completes physical child cleanup.
+SAP Hosting must finish Garden Shoot deletion before that cleanup can finish.
+The operator checks parent ownership before it patches or deletes the account child.
+It does not remove that child's finalizers by force.
+
+### Temporary local compatibility
+
+Use `legacyParentUIDs` only for existing account parent UIDs that must retain their local resources.
+The operator reads the account UID, not the physical object's UID.
+It records `LegacyLocal` mode and retains that route for deletion, including after configuration changes.
+A recreated account parent has a different UID and uses the account target.
+This feature does not adopt or migrate existing resources.
+
+Remove each compatibility UID after the user deletes its old request and the Garden Shoot is absent.
+Then recreate the request through GitOps.
+Do not remove the old infrastructure by deleting an account child that SAP has already synchronized.
+That deletion can delete the physical shoot.

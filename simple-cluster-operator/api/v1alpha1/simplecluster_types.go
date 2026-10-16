@@ -277,8 +277,23 @@ type NodeStatus struct {
 	Ready bool `json:"ready"`
 }
 
+// AccountTargetStatus records the account and route before a child is created.
+type AccountTargetStatus struct {
+	Cluster   string `json:"cluster"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	UID       string `json:"uid"`
+	// Mode is Account or LegacyLocal. It remains fixed for this parent.
+	// +kubebuilder:validation:Enum=Account;LegacyLocal
+	Mode string `json:"mode"`
+}
+
 // SimpleClusterStatus defines the observed state of SimpleCluster.
 type SimpleClusterStatus struct {
+	// AccountTarget pins account ownership and deletion routing.
+	// +optional
+	AccountTarget *AccountTargetStatus `json:"accountTarget,omitempty"`
+
 	// ProviderConfigRef is locked at first reconcile so SCPC changes do not
 	// migrate resources mid-flight.
 	// +optional

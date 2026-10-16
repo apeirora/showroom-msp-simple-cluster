@@ -62,6 +62,8 @@ const (
 // SimpleClusterReconciler walks the SCPC's DAG of ResourceSpecs and
 // mirrors per-resource state into SC.Status.Resources. See DESIGN.md §5.
 type SimpleClusterReconciler struct {
+	AccountProvider *target.AccountProvider
+
 	client.Client
 	SecretPolicy secretpolicy.Policy
 	Scheme       *runtime.Scheme
@@ -157,7 +159,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.failSC(ctx, &sc, "InputError", err.Error())
 	}
 
-	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef, sc.Namespace, r.SecretPolicy)
+	tc, err := r.targetClient(ctx, &sc, &scpc)
 	if err != nil {
 		return r.failSC(ctx, &sc, "TargetClientError", err.Error())
 	}
@@ -219,6 +221,9 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		var gvkStr string
 
 		for idx, desired := range rendered {
+			if err := tc.StampParent(desired); err != nil {
+				return r.failSC(ctx, &sc, "InvalidAccountChild", err.Error())
+			}
 			gvk := desired.GroupVersionKind()
 			gvkStr = gvk.String()
 			mapping, mperr := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
@@ -245,8 +250,16 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				if !allowed {
 					return ctrl.Result{}, nil
 				}
+				if allowed, err := accountCreationAllowed(ctx, tc); err != nil {
+					return ctrl.Result{}, err
+				} else if !allowed {
+					return ctrl.Result{}, nil
+				}
 				if _, referenceErr := tc.ResourceFor(mapping, desired.GetNamespace(), desired.GetName(), secretpolicy.Write); referenceErr != nil {
 					return ctrl.Result{}, referenceErr
+				}
+				if err := r.recordAccountChild(ctx, &sc, rs, desired, idx); err != nil {
+					return ctrl.Result{}, err
 				}
 				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
 				if cerr != nil {
@@ -259,6 +272,9 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			case gerr != nil:
 				return r.failSC(ctx, &sc, "GetTargetError",
 					fmt.Sprintf("resource %q[%d]: %v", name, idx, gerr))
+			}
+			if err := target.ValidateParent(existing, tc.AccountParent); err != nil {
+				return r.failSC(ctx, &sc, "ChildOwnershipConflict", err.Error())
 			}
 			// v0.x: do not patch existing R. Drift requires user to delete R.
 
@@ -285,6 +301,9 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
 	}
 	sc.Status.TargetCluster = "local"
+	if tc.AccountParent != nil {
+		sc.Status.TargetCluster = "kcp:" + tc.AccountParent.Cluster
+	}
 	if scpc.Spec.Target.KubeconfigSecretRef != nil {
 		sc.Status.TargetCluster = scpc.Name
 	}
@@ -653,6 +672,9 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 	scpcFound, err := r.getSCPC(ctx, sc, scpcName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			if sc.Status.AccountTarget != nil {
+				return false, fmt.Errorf("account target configuration is missing; retain parent for cleanup")
+			}
 			log.Info("SCPC no longer present; skipping remote delete", "scpc", scpcName)
 			return true, nil
 		}
@@ -667,7 +689,7 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		order = orderFromStatus(sc)
 	}
 
-	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef, sc.Namespace, r.SecretPolicy)
+	tc, err := r.targetClient(ctx, sc, &scpc)
 	if err != nil {
 		return false, fmt.Errorf("build target client: %w", err)
 	}
@@ -694,12 +716,22 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 		}
 
 		targets, err := deletionReferences(&scpc, sc, rs)
+		if tc.AccountParent != nil && len(trackedSecretReferences(sc, rs.Name)) == 0 {
+			renderContext, renderErr := rendertpl.BuildContext(&scpc, sc, rs, nil)
+			if renderErr != nil {
+				return false, renderErr
+			}
+			targets = []secretReference{{name: renderContext["Target"].(map[string]any)["name"].(string)}}
+		}
 		if err != nil {
 			return false, fmt.Errorf("resource %q: resolve deletion references: %w", name, err)
 		}
 
 		levelDone := true
 		for _, t := range targets {
+			if tc.AccountParent != nil && t.namespace != "" {
+				return false, fmt.Errorf("recorded account child must be cluster-scoped")
+			}
 			if _, err := tc.ResourceFor(mapping, t.namespace, t.name, secretpolicy.Copy); err != nil {
 				return false, err
 			}
@@ -707,7 +739,7 @@ func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc 
 			if err != nil {
 				return false, err
 			}
-			exists, derr := r.deleteOneTarget(ctx, ri, rs, gvk, name, t.name)
+			exists, derr := r.deleteOneTarget(ctx, ri, rs, gvk, name, t.name, tc.AccountParent)
 			if derr != nil {
 				return false, derr
 			}
@@ -734,6 +766,7 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	rs *showroomv1alpha1.ResourceSpec,
 	gvk schema.GroupVersionKind,
 	resourceName, targetName string,
+	accountParents ...*showroomv1alpha1.AccountTargetStatus,
 ) (bool, error) {
 	log := logf.FromContext(ctx)
 
@@ -743,6 +776,12 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 	}
 	if err != nil {
 		return false, fmt.Errorf("resource %q: get %s: %w", resourceName, targetName, err)
+	}
+
+	if len(accountParents) > 0 {
+		if err := target.ValidateParent(existing, accountParents[0]); err != nil {
+			return false, err
+		}
 	}
 
 	// First time we see this target after SC was marked for deletion: announce that this
@@ -756,16 +795,25 @@ func (r *SimpleClusterReconciler) deleteOneTarget(
 		for k, v := range rs.DeletionAnnotations {
 			annotations[k] = v
 		}
-		patchBytes, perr := json.Marshal(map[string]any{
-			"metadata": map[string]any{"annotations": annotations},
-		})
+		metadata := map[string]any{"annotations": annotations}
+		deleteOptions := metav1.DeleteOptions{}
+		if len(accountParents) > 0 && accountParents[0] != nil {
+			uid := existing.GetUID()
+			if uid == "" {
+				return true, fmt.Errorf("account child has no UID")
+			}
+			metadata["uid"] = uid
+			metadata["resourceVersion"] = existing.GetResourceVersion()
+			deleteOptions.Preconditions = &metav1.Preconditions{UID: &uid}
+		}
+		patchBytes, perr := json.Marshal(map[string]any{"metadata": metadata})
 		if perr != nil {
 			return true, fmt.Errorf("resource %q: marshal deletion annotations: %w", resourceName, perr)
 		}
 		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
 			return true, fmt.Errorf("resource %q: patch deletion annotations: %w", resourceName, perr)
 		}
-		if derr := ri.Delete(ctx, targetName, metav1.DeleteOptions{}); derr != nil && !apierrors.IsNotFound(derr) {
+		if derr := ri.Delete(ctx, targetName, deleteOptions); derr != nil && !apierrors.IsNotFound(derr) {
 			return true, fmt.Errorf("resource %q: delete %s: %w", resourceName, targetName, derr)
 		}
 		log.Info("target resource delete requested",

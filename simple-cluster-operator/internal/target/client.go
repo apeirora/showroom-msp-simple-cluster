@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 )
 
@@ -35,6 +36,8 @@ const KubeconfigKey = "kubeconfig"
 // underlying *rest.Config (needed for raw subresource POSTs that
 // dynamic.Interface does not expose).
 type Client struct {
+	AccountParent *showroomv1alpha1.AccountTargetStatus
+
 	Dynamic        dynamic.Interface
 	Mapper         apimeta.RESTMapper
 	RESTConfig     *rest.Config
