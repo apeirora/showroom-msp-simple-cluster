@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.42.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.41.1...v0.42.0) (2026-10-16)
+
+
+### Features
+
+* **controller:** Create IronCoreShoot children in KCP accounts ([#220](https://github.com/apeirora/showroom-msp-simple-cluster/issues/220)) ([29a8dba](https://github.com/apeirora/showroom-msp-simple-cluster/commit/29a8dba27eec008f8ab74020e49cbbfb89711aee))
+
 ## [0.41.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.41.0...v0.41.1) (2026-10-14)
 
 
