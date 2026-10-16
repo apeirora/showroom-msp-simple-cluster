@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -39,6 +41,7 @@ import (
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/controller"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -73,6 +76,12 @@ func main() {
 	var ordCatalogSystemVersion string
 	var ordCatalogInterval time.Duration
 	var tlsOpts []func(*tls.Config)
+	var kcpKubeconfig, kcpAPIExport, legacyParentUIDs string
+	flag.StringVar(&kcpKubeconfig, "kcp-kubeconfig", "", "Provider kubeconfig file for KCP account targets.")
+	flag.StringVar(&kcpAPIExport, "kcp-api-export", "simpleclusters.showroom.apeirora.eu",
+		"Provider APIExport used for account targets.")
+	flag.StringVar(&legacyParentUIDs, "kcp-legacy-parent-uids", "",
+		"Existing account parent UIDs that retain local targets until recreation (comma-separated).")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -217,15 +226,37 @@ func main() {
 		os.Exit(1)
 	}
 
+	var accountProvider *target.AccountProvider
+	if kcpKubeconfig != "" {
+		cfg, err := clientcmd.BuildConfigFromFlags("", kcpKubeconfig)
+		if err != nil {
+			setupLog.Error(err, "cannot load provider kubeconfig")
+			os.Exit(1)
+		}
+		accountProvider = &target.AccountProvider{
+			Config: cfg, APIExportName: kcpAPIExport, LegacyParentUIDs: map[string]bool{},
+		}
+		for _, uid := range strings.Split(legacyParentUIDs, ",") {
+			if uid = strings.TrimSpace(uid); uid != "" {
+				accountProvider.LegacyParentUIDs[uid] = true
+			}
+		}
+	} else if legacyParentUIDs != "" {
+		setupLog.Error(nil, "kcp-legacy-parent-uids requires kcp-kubeconfig")
+		os.Exit(1)
+	}
+
 	if err := (&controller.SimpleClusterProviderConfigReconciler{
-		SecretPolicy: secretPolicy,
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
+		AccountProvider: accountProvider,
+		SecretPolicy:    secretPolicy,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SimpleClusterProviderConfig")
 		os.Exit(1)
 	}
 	if err := (&controller.SimpleClusterReconciler{
+		AccountProvider:       accountProvider,
 		SecretPolicy:          secretPolicy,
 		Client:                mgr.GetClient(),
 		APIReader:             mgr.GetAPIReader(),

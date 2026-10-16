@@ -38,6 +38,7 @@ import (
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 )
 
 const (
@@ -50,6 +51,8 @@ const (
 // reachability. It does not create the downstream resources R — that lives
 // on the SimpleCluster reconciler.
 type SimpleClusterProviderConfigReconciler struct {
+	AccountProvider *target.AccountProvider
+
 	client.Client
 	SecretPolicy secretpolicy.Policy
 	Scheme       *runtime.Scheme
@@ -138,6 +141,14 @@ func (r *SimpleClusterProviderConfigReconciler) probe(
 func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 	ctx context.Context, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
 ) (apimeta.RESTMapper, *metav1.Condition, error) {
+	if scpc.Spec.Target.KCPAccount {
+		mapper, err := accountMapper(ctx, r.AccountProvider, scpc)
+		if err != nil {
+			c := readyCond(metav1.ConditionFalse, "AccountTargetUnavailable", err.Error())
+			return nil, &c, nil
+		}
+		return mapper, nil, nil
+	}
 	if scpc.Spec.Target.KubeconfigSecretRef == nil {
 		return r.RESTMapper(), nil, nil
 	}

@@ -248,6 +248,31 @@ spec:
           status:
             description: SimpleClusterStatus defines the observed state of SimpleCluster.
             properties:
+              accountTarget:
+                description: AccountTarget pins account ownership and deletion routing.
+                properties:
+                  cluster:
+                    type: string
+                  mode:
+                    description: Mode is Account or LegacyLocal. It remains fixed
+                      for this parent.
+                    enum:
+                    - Account
+                    - LegacyLocal
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  uid:
+                    type: string
+                required:
+                - cluster
+                - mode
+                - name
+                - namespace
+                - uid
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current

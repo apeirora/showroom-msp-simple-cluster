@@ -28,6 +28,11 @@ spec:
       containers:
         - name: manager
           args:
+            {{- if .Values.kcpAccount.enabled }}
+            - --kcp-kubeconfig=/etc/kcp/kubeconfig
+            - --kcp-api-export={{ .Values.kcpAccount.apiExportName }}
+            - {{ printf "--kcp-legacy-parent-uids=%s" (join "," .Values.kcpAccount.legacyParentUIDs) | quote }}
+            {{- end }}
             - {{ printf "--secret-reference-allowlist=%s" (.Values.secretReferenceAllowlist | default list | toJson) | quote }}
             {{- range .Values.controllerManager.container.args }}
             - {{ . }}
@@ -68,8 +73,13 @@ spec:
             {{- toYaml .Values.controllerManager.container.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.controllerManager.container.securityContext | nindent 12 }}
-          {{- if and .Values.certmanager.enable .Values.metrics.enable }}
+          {{- if or .Values.kcpAccount.enabled (and .Values.certmanager.enable .Values.metrics.enable) }}
           volumeMounts:
+            {{- if .Values.kcpAccount.enabled }}
+            - name: kcp-credentials
+              mountPath: /etc/kcp
+              readOnly: true
+            {{- end }}
             {{- if and .Values.metrics.enable .Values.certmanager.enable }}
             - name: metrics-certs
               mountPath: /tmp/k8s-metrics-server/metrics-certs
@@ -80,8 +90,14 @@ spec:
         {{- toYaml .Values.controllerManager.securityContext | nindent 8 }}
       serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
       terminationGracePeriodSeconds: {{ .Values.controllerManager.terminationGracePeriodSeconds }}
-      {{- if and .Values.certmanager.enable .Values.metrics.enable }}
+      {{- if or .Values.kcpAccount.enabled (and .Values.certmanager.enable .Values.metrics.enable) }}
       volumes:
+        {{- if .Values.kcpAccount.enabled }}
+        - name: kcp-credentials
+          secret:
+            secretName: {{ .Values.kcpAccount.secretName }}
+            defaultMode: 0444
+        {{- end }}
         {{- if and .Values.metrics.enable .Values.certmanager.enable }}
         - name: metrics-certs
           secret:
