@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.42.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.42.0...v0.42.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **controller:** keep legacy credential refresh independent of KCP ([#222](https://github.com/apeirora/showroom-msp-simple-cluster/issues/222)) ([dd72588](https://github.com/apeirora/showroom-msp-simple-cluster/commit/dd725884a97c375ab54393ddc93ff4043df9475c))
+
 ## [0.42.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.41.1...v0.42.0) (2026-10-16)
 
 
