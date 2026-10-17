@@ -45,6 +45,26 @@ func (r *SimpleClusterReconciler) targetClient(ctx context.Context, sc *showroom
 	if err != nil {
 		return nil, err
 	}
+
+	// A stored legacy route must remain usable when KCP is unavailable.
+	if recorded := sc.Status.AccountTarget; recorded != nil && recorded.Mode == target.LegacyLocalMode {
+		if recorded.Cluster != ref.Cluster || recorded.Namespace != ref.Namespace || recorded.Name != ref.Name || recorded.UID == "" {
+			return nil, fmt.Errorf("legacy parent identity differs from the recorded target")
+		}
+		return r.legacyLocalClient(ctx, sc, scpc)
+	}
+	// A physical UID entry bootstraps an old local request without looking up its account UID.
+	if sc.Status.AccountTarget == nil && r.AccountProvider != nil &&
+		r.AccountProvider.LegacyParentUIDs[string(sc.UID)] && recordedLocalTargets(sc, scpc.Name) {
+		ref.UID = string(sc.UID)
+		ref.Mode = target.LegacyLocalMode
+		patch := client.MergeFrom(sc.DeepCopy())
+		sc.Status.AccountTarget = ref
+		if err := r.Status().Patch(ctx, sc, patch); err != nil {
+			return nil, fmt.Errorf("record legacy target before resource writes: %w", err)
+		}
+		return r.legacyLocalClient(ctx, sc, scpc)
+	}
 	tc, err := r.AccountProvider.ForAccount(ctx, ref.Cluster)
 	if err != nil {
 		return nil, err
@@ -77,10 +97,7 @@ func (r *SimpleClusterReconciler) targetClient(ctx context.Context, sc *showroom
 		}
 	}
 	if ref.Mode == target.LegacyLocalMode {
-		// Only the configured old account UID enters this mode. New UIDs use KCP.
-		scpc.Spec.Target.Namespace = sc.Namespace
-		scpc.Spec.KubeconfigSource.SecretRef.Namespace = sc.Namespace
-		return target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), nil, sc.Namespace, r.SecretPolicy)
+		return r.legacyLocalClient(ctx, sc, scpc)
 	}
 	tc.AccountParent = ref
 	tc.OwnerNamespace = ref.Namespace
@@ -152,4 +169,23 @@ func (r *SimpleClusterReconciler) recordAccountChild(ctx context.Context, sc *sh
 		return fmt.Errorf("record account child before create: %w", err)
 	}
 	return nil
+}
+
+func recordedLocalTargets(sc *showroomv1alpha1.SimpleCluster, provider string) bool {
+	if sc.Status.TargetCluster != "local" || sc.Status.ProviderConfigRef == nil || sc.Status.ProviderConfigRef.Name != provider || len(sc.Status.Resources) == 0 {
+		return false
+	}
+	for _, resource := range sc.Status.Resources {
+		if resource.TargetName == "" || resource.TargetNamespace != sc.Namespace {
+			return false
+		}
+	}
+	return true
+}
+
+func (r *SimpleClusterReconciler) legacyLocalClient(ctx context.Context, sc *showroomv1alpha1.SimpleCluster,
+	scpc *showroomv1alpha1.SimpleClusterProviderConfig) (*target.Client, error) {
+	scpc.Spec.Target.Namespace = sc.Namespace
+	scpc.Spec.KubeconfigSource.SecretRef.Namespace = sc.Namespace
+	return target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), nil, sc.Namespace, r.SecretPolicy)
 }

@@ -3,12 +3,14 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
@@ -57,7 +59,11 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var obj any
 	base := "/services/apiexport/provider/simpleclusters.showroom.apeirora.eu/clusters/account-a"
-	if r.URL.Path == "/clusters/provider/apis/apis.kcp.io/v1alpha1/apiexportendpointslices" {
+	if r.URL.Path == "/physical/apis/sap.eu/v1alpha1/namespaces/account-a/ironcoreshoots/sc-child" {
+		obj = f.child
+	} else if r.URL.Path == "/physical/api/v1/namespaces/account-a/secrets/sc-child-ironcoreshoot-kubeconfig" {
+		obj = &corev1.Secret{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"}, ObjectMeta: metav1.ObjectMeta{Name: "sc-child-ironcoreshoot-kubeconfig", Namespace: "account-a"}, Data: map[string][]byte{"kubeconfig": f.credential}}
+	} else if r.URL.Path == "/clusters/provider/apis/apis.kcp.io/v1alpha1/apiexportendpointslices" {
 		obj = map[string]any{"apiVersion": "apis.kcp.io/v1alpha1", "kind": "APIExportEndpointSliceList", "items": []any{map[string]any{"spec": map[string]any{"export": map[string]any{"name": "simpleclusters.showroom.apeirora.eu"}}, "status": map[string]any{"endpoints": []any{map[string]any{"url": f.server.URL + "/services/apiexport/provider/simpleclusters.showroom.apeirora.eu"}}}}}}
 	} else if !strings.HasPrefix(r.URL.Path, base+"/") {
 		w.WriteHeader(http.StatusForbidden)
@@ -466,5 +472,75 @@ func TestAccountStatusAndCredentialReachExistingConsumerSecret(t *testing.T) {
 	}
 	if string(secret.Data["kubeconfig"]) != string(f.credential) {
 		t.Fatal("consumer credential did not match source")
+	}
+}
+
+func TestAccountLegacyRenewalDoesNotUseAccountClient(t *testing.T) {
+	for _, recorded := range []bool{false, true} {
+		t.Run(fmt.Sprintf("recorded_%v", recorded), func(t *testing.T) {
+			f := newAccountFixture(t)
+			r, sc, _ := accountReconciler(t, f)
+			// No provider REST config exists. Legacy renewal must use only the local client.
+			r.AccountProvider.Config = nil
+			r.AccountProvider.LegacyParentUIDs[string(sc.UID)] = true
+			sc.Status.TargetCluster = "local"
+			sc.Status.KubeconfigSecretRef = &corev1.LocalObjectReference{Name: "demo-kubeconfig"}
+			expiredAt := metav1.NewTime(time.Now().Add(-time.Hour))
+			sc.Status.KubeconfigExpiresAt = &expiredAt
+			apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{Type: showroomv1alpha1.ConditionError, Status: metav1.ConditionTrue, Reason: "TargetClientError", Message: "endpoint unavailable"})
+			sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: "provider"}
+			sc.Status.Resources = []showroomv1alpha1.ResourceStatus{{Name: "shoot", TargetName: "sc-child", TargetNamespace: sc.Namespace, Phase: showroomv1alpha1.PhaseReady}}
+			if recorded {
+				sc.Status.AccountTarget = &showroomv1alpha1.AccountTargetStatus{Cluster: sc.Namespace, Namespace: "default", Name: sc.Name, UID: "account-parent", Mode: target.LegacyLocalMode}
+				r.AccountProvider = nil
+			}
+			if err := r.Status().Update(context.Background(), sc); err != nil {
+				t.Fatal(err)
+			}
+			f.child = &unstructured.Unstructured{Object: map[string]any{"apiVersion": "sap.eu/v1alpha1", "kind": "IronCoreShoot", "metadata": map[string]any{"name": "sc-child", "namespace": sc.Namespace}, "status": map[string]any{"phase": "Ready"}}}
+			f.credential = []byte("apiVersion: v1\nkind: Config\nclusters:\n- name: workload\n  cluster:\n    server: " + f.server.URL + "/workload\ncontexts:\n- name: workload\n  context: {cluster: workload, user: workload}\ncurrent-context: workload\nusers:\n- name: workload\n  user: {}\n")
+			expired := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "demo-kubeconfig", Namespace: sc.Namespace}, Data: map[string][]byte{"kubeconfig": []byte("expired-fixture")}}
+			if err := r.Create(context.Background(), expired); err != nil {
+				t.Fatal(err)
+			}
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			renewed := &corev1.Secret{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(expired), renewed); err != nil {
+				t.Fatal(err)
+			}
+			if string(renewed.Data["kubeconfig"]) != string(f.credential) {
+				t.Fatal("legacy consumer credential was not renewed")
+			}
+			current := &showroomv1alpha1.SimpleCluster{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal(err)
+			}
+			if current.Status.AccountTarget == nil || current.Status.AccountTarget.Mode != target.LegacyLocalMode || current.Status.TargetCluster != "local" {
+				t.Fatal("legacy route was not preserved")
+			}
+			if accountErrorReason(current) != "" {
+				t.Fatal("stale endpoint error remained after credential renewal")
+			}
+			for _, path := range f.paths {
+				if strings.Contains(path, "/clusters/") || strings.Contains(path, "/services/apiexport/") {
+					t.Fatal("legacy renewal called KCP")
+				}
+			}
+		})
+	}
+}
+
+func TestAccountPhysicalUIDWithoutLocalRecordsStillRequiresKCP(t *testing.T) {
+	f := newAccountFixture(t)
+	r, sc, pc := accountReconciler(t, f)
+	r.AccountProvider.Config = nil
+	r.AccountProvider.LegacyParentUIDs[string(sc.UID)] = true
+	if _, err := r.targetClient(context.Background(), sc, pc); err == nil {
+		t.Fatal("new request bypassed account client")
+	}
+	if sc.Status.AccountTarget != nil {
+		t.Fatal("new request was marked as legacy")
 	}
 }

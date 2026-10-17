@@ -105,6 +105,7 @@ kcpAccount:
   enabled: false
   secretName: pm-kubeconfig
   apiExportName: simpleclusters.showroom.apeirora.eu
-  # Existing account parent UIDs that keep local resources until recreation.
+  # Existing account parent UIDs, or physical parent UIDs with recorded local targets.
+  # Physical UID entries avoid an account lookup during legacy recovery.
   # Remove each UID after that parent and its infrastructure are deleted.
   legacyParentUIDs: []

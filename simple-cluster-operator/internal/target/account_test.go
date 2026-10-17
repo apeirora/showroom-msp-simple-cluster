@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -63,7 +64,12 @@ func TestAccountProviderScopesDiscoveryAndRequests(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	provider := &AccountProvider{Config: &rest.Config{Host: server.URL + "/clusters/provider"}, APIExportName: "simpleclusters"}
+	providerURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerURL.Host = "localhost:" + providerURL.Port()
+	provider := &AccountProvider{Config: &rest.Config{Host: providerURL.String() + "/clusters/provider"}, APIExportName: "simpleclusters"}
 	for _, cluster := range []string{"account-a", "account-b"} {
 		tc, err := provider.ForAccount(context.Background(), cluster)
 		if err != nil {
@@ -89,7 +95,7 @@ func TestAccountProviderScopesDiscoveryAndRequests(t *testing.T) {
 	}
 }
 
-func TestAccountProviderRejectsForeignEndpoint(t *testing.T) {
+func TestAccountProviderRejectsInvalidEndpoint(t *testing.T) {
 	for _, endpoint := range []string{"https://other.invalid/services/apiexport/provider/simpleclusters", "/services/apiexport/provider/simpleclusters", "https://other.invalid/clusters/account"} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -123,5 +129,26 @@ func TestAccountParentOwnershipRejectsReplacement(t *testing.T) {
 	obj.SetAnnotations(nil)
 	if err := ValidateParent(obj, ref); err == nil {
 		t.Fatal("implicitly adopted an unowned object")
+	}
+}
+
+func TestAccountProviderRejectsForeignExportSlice(t *testing.T) {
+	var server *httptest.Server
+	var calls int
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		body := map[string]any{"apiVersion": "apis.kcp.io/v1alpha1", "kind": "APIExportEndpointSliceList", "items": []any{map[string]any{"spec": map[string]any{"export": map[string]any{"name": "foreign-export"}}, "status": map[string]any{"endpoints": []any{map[string]any{"url": server.URL + "/services/apiexport/provider/simpleclusters"}}}}}}
+		if err := json.NewEncoder(w).Encode(body); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	p := &AccountProvider{Config: &rest.Config{Host: server.URL + "/clusters/provider"}, APIExportName: "simpleclusters"}
+	if _, err := p.ForAccount(context.Background(), "account"); err == nil {
+		t.Fatal("accepted foreign export endpoint")
+	}
+	if calls != 1 {
+		t.Fatal("followed endpoint from foreign export")
 	}
 }
