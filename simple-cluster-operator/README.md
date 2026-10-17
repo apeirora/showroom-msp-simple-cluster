@@ -209,4 +209,5 @@ That deletion can delete the physical shoot.
 
 The provider endpoint slice can advertise a shard host that differs from the credential's front-proxy host.
 The operator uses the matching export's advertised endpoint with the existing provider credential and TLS configuration.
+The shard host certificate must pass validation with the certificate authority (CA) from the provider credential.
 It retains the URL scheme check and rejects relative URLs, embedded credentials, queries, and fragments.
