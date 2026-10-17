@@ -192,7 +192,11 @@ It does not remove that child's finalizers by force.
 ### Temporary local compatibility
 
 Use `legacyParentUIDs` only for existing account parent UIDs that must retain their local resources.
-The operator reads the account UID, not the physical object's UID.
+An existing account UID requires an account lookup on its first use.
+To recover an existing local request without KCP, add its physical SimpleCluster UID instead.
+This entry applies only when status records the local route, provider, and child targets in that physical namespace.
+Requests without those local records still use KCP.
+After a local route is recorded, reconciliation and credential renewal do not use the account client.
 It records `LegacyLocal` mode and retains that route for deletion, including after configuration changes.
 A recreated account parent has a different UID and uses the account target.
 This feature does not adopt or migrate existing resources.
@@ -201,3 +205,9 @@ Remove each compatibility UID after the user deletes its old request and the Gar
 Then recreate the request through GitOps.
 Do not remove the old infrastructure by deleting an account child that SAP has already synchronized.
 That deletion can delete the physical shoot.
+
+
+The provider endpoint slice can advertise a shard host that differs from the credential's front-proxy host.
+The operator uses the matching export's advertised endpoint with the existing provider credential and TLS configuration.
+The shard host certificate must pass validation with the certificate authority (CA) from the provider credential.
+It retains the URL scheme check and rejects relative URLs, embedded credentials, queries, and fragments.

@@ -81,9 +81,10 @@ func (p *AccountProvider) ForAccount(ctx context.Context, cluster string) (*Clie
 			if !ok {
 				continue
 			}
+			// The provider-owned slice advertises the shard endpoint. Its host can differ from the front proxy.
 			raw, _ := entry["url"].(string)
 			u, err := url.Parse(raw)
-			if err != nil || u.Scheme != base.Scheme || u.Host != base.Host || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			if err != nil || u.Scheme != base.Scheme || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 				continue
 			}
 			suffix := "/" + p.APIExportName
@@ -98,7 +99,7 @@ func (p *AccountProvider) ForAccount(ctx context.Context, cluster string) (*Clie
 		}
 	}
 	if endpoint == "" {
-		return nil, fmt.Errorf("no same-server endpoint for provider APIExport %q", p.APIExportName)
+		return nil, fmt.Errorf("no usable endpoint for provider APIExport %q", p.APIExportName)
 	}
 	cfg.Host = endpoint + "/clusters/" + cluster
 	cfg.Timeout = 30 * time.Second
