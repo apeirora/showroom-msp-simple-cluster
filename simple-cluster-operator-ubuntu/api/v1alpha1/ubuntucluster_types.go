@@ -90,12 +90,17 @@ type UbuntuClusterSpec struct {
 	Workers HostPool `json:"workers,omitempty,omitzero"`
 
 	// K3sServerArgs are passed verbatim to `k3s server` (e.g.
-	// `--disable=traefik`, `--cluster-cidr=10.42.0.0/16`).
+	// `--disable=traefik`, `--cluster-cidr=10.42.0.0/16`). Bounded so the
+	// CEL rules on the spec stay within the apiserver's cost budget.
 	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=512
 	K3sServerArgs []string `json:"k3sServerArgs,omitempty"`
 
 	// K3sAgentArgs are passed verbatim to `k3s agent` on every worker.
 	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=512
 	K3sAgentArgs []string `json:"k3sAgentArgs,omitempty"`
 
 	// Encryption opts the cluster into encryption at rest of its Kubernetes
