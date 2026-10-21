@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.43.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.42.1...v0.43.0) (2026-10-21)
+
+
+### Features
+
+* **api:** Add SimpleCluster encryption opt-in ([#216](https://github.com/apeirora/showroom-msp-simple-cluster/issues/216)) ([5b515f6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5b515f639662370762b283db05b6674fc38db27b))
+* **controller:** Provision OpenBao KMS encryption for UbuntuClusters ([#219](https://github.com/apeirora/showroom-msp-simple-cluster/issues/219)) ([eea8be2](https://github.com/apeirora/showroom-msp-simple-cluster/commit/eea8be2272def2342b9d56777ccc53933db19e1b))
+
+
+### Bug Fixes
+
+* bump the Go toolchain to 1.27.3 for GO-2026-6809 ([#226](https://github.com/apeirora/showroom-msp-simple-cluster/issues/226)) ([527e534](https://github.com/apeirora/showroom-msp-simple-cluster/commit/527e534847a543d67b9c4366369b9baa6af5e83e))
+
 ## [0.42.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.42.0...v0.42.1) (2026-10-17)
 
 
