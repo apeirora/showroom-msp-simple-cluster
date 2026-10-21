@@ -179,10 +179,53 @@ spec:
                 items:
                   type: string
                 type: array
+              encryption:
+                description: |-
+                  Encryption opts the cluster into encryption at rest of its Kubernetes
+                  Secrets with an external KMS provider, from the first write. Every
+                  control-plane host gets the KMS v2 plugin before k3s is installed on
+                  it; a host that already runs k3s without the plugin is refused, never
+                  silently accepted. Immutable: it can be neither added, removed nor
+                  changed after creation. Mirrors SimpleCluster.spec.encryption.
+                properties:
+                  provider:
+                    description: |-
+                      Provider is the key management provider the kube-apiserver uses through
+                      a KMS v2 plugin. Only Secrets are encrypted.
+                    properties:
+                      keyRotationPeriod:
+                        description: |-
+                          KeyRotationPeriod rotates the cluster's key automatically at this
+                          interval (at least 1h). Unset means no automatic rotation. Data written
+                          under older key versions stays readable.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: keyRotationPeriod must be at least 1h
+                          rule: duration(self) >= duration('1h')
+                      type:
+                        description: Type of the provider.
+                        enum:
+                        - OpenBao
+                        type: string
+                    required:
+                    - type
+                    type: object
+                required:
+                - provider
+                type: object
+                x-kubernetes-validations:
+                - message: encryption is immutable
+                  rule: self == oldSelf
             required:
             - controlPlane
             - ssh
             type: object
+            x-kubernetes-validations:
+            - message: encryption cannot be added or removed after creation
+              rule: has(self.encryption) == has(oldSelf.encryption)
+            - message: k3s --secrets-encryption cannot be combined with spec.encryption
+              rule: '!has(self.encryption) || !has(self.k3sServerArgs) || !self.k3sServerArgs.exists(a,
+                a == ''--secrets-encryption'' || a.startsWith(''--secrets-encryption=''))'
           status:
             description: UbuntuClusterStatus is the observed state.
             properties:
@@ -278,6 +321,77 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              encryption:
+                description: |-
+                  Encryption reports the state of spec.encryption. Present only when
+                  encryption is requested.
+                properties:
+                  cleanupDone:
+                    description: |-
+                      CleanupDone is true once the role and the hosts' secret IDs were
+                      removed from the provider during deletion. The key is kept.
+                    type: boolean
+                  hosts:
+                    description: Hosts lists each control-plane host's plugin state.
+                    items:
+                      description: HostEncryptionStatus is one control-plane host's
+                        KMS plugin state.
+                      properties:
+                        name:
+                          description: Name is the host name from spec.
+                          type: string
+                        secretIDAccessor:
+                          description: |-
+                            SecretIDAccessor identifies (without revealing) the AppRole secret ID
+                            this host unwrapped. It is destroyed when the cluster is deleted.
+                          type: string
+                        secretIDIssuedAt:
+                          description: |-
+                            SecretIDIssuedAt is when the current secret ID was minted. The
+                            operator replaces it before the role's secret ID TTL runs out.
+                          format: date-time
+                          type: string
+                        verified:
+                          description: |-
+                            Verified is true once the host's kube-apiserver reported the
+                            kms-providers check healthy with the plugin active.
+                          type: boolean
+                      required:
+                      - name
+                      - verified
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  keyName:
+                    description: |-
+                      KeyName is the Transit key the cluster encrypts with (the cluster's
+                      own name). The key is kept when the cluster is deleted so that etcd
+                      snapshots stay restorable; removing it is an OpenBao admin action.
+                    type: string
+                  keyVersion:
+                    description: KeyVersion is the latest key version the provider
+                      reported.
+                    format: int64
+                    type: integer
+                  provider:
+                    description: Provider echoes spec.encryption.provider.type.
+                    enum:
+                    - OpenBao
+                    type: string
+                  roleName:
+                    description: RoleName is the AppRole role the hosts' plugins log
+                      in with.
+                    type: string
+                required:
+                - provider
+                type: object
+              message:
+                description: |-
+                  Message is a one-line summary of Phase for consumers that read a
+                  scalar (the SimpleCluster default readiness check does).
+                type: string
             type: object
         required:
         - spec

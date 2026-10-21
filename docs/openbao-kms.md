@@ -36,6 +36,52 @@ wrapped seed is stored in etcd. The Transit key never leaves OpenBao.
 k3s runs the kube-apiserver inside its own process rather than as a static pod,
 so the plugin runs as a systemd unit that starts before `k3s.service`.
 
+## Two ways to get there
+
+**Through SimpleCluster (the normal way).** A `SimpleCluster` with
+`spec.encryption.provider.type: OpenBao` on a provider config that lists
+`encryptionProviders: [OpenBao]` renders an `UbuntuCluster` with the same
+`spec.encryption`. `simple-cluster-operator-ubuntu` then does everything below by
+itself, before k3s is installed on each control-plane host:
+
+1. logs in to the platform's SimpleCluster KMS tenancy with its own projected
+   ServiceAccount token (JWT auth, audience `openbao`); the tenancy (namespace,
+   Transit and AppRole mounts, the JWT role and two fixed policies) is platform
+   configuration owned by showroom-infra, not by this repository;
+2. creates the cluster's Transit key and AppRole role, both named
+   `<namespace>-<name>`, pinned by policy to the plugin's capabilities;
+3. mints one response-wrapped, single-use secret ID per control-plane host and
+   streams [install.sh](../hack/openbao-kms/install.sh) with the connection data to
+   the host over SSH stdin; the host unwraps the secret ID itself and the operator
+   records only its accessor in `status.encryption.hosts`;
+4. installs k3s, then requires the plugin unit to be active and the kube-apiserver
+   to report `kms-providers ok`. Only then does the host count as Ready, and only
+   when every control-plane host did does the cluster, and with it the kubeconfig
+   the SimpleCluster hands out.
+
+Fail-closed: an operator without `--openbao-address`, a key that is soft-deleted,
+or a host that already runs k3s without the plugin or with another cluster's plugin
+configuration puts the `UbuntuCluster` in `Phase=Failed` with `Error`/`EncryptionReady`
+conditions saying why. Nothing is provisioned unencrypted. Key and role are named
+`<namespace>_<name>` and recorded in `status.encryption` before anything is created
+in OpenBao. A reused pool host whose plugin still points at an earlier cluster is
+re-prepared when k3s is not running on it. Each host's secret ID is replaced through
+the same script after 75% of the role's secret ID TTL (default 90 days), the plugin
+restarts, k3s does not, and the previous accessor is destroyed. On delete the
+operator first destroys the hosts' secret IDs and the role, independently of SSH
+access to the hosts; the Transit key stays so etcd snapshots remain restorable
+(removing it is an OpenBao admin action, see [Removing a cluster](#removing-a-cluster)).
+
+The operator is configured through the `openbao.*` values of its Helm chart
+(`charts/simple-cluster-system/charts/simple-cluster-operator-ubuntu`), and the
+`ubuntu-machines` provider config gains the passthrough with
+`encryption.openbao: true` in `charts/simple-cluster-scpc-config`.
+
+**By hand (what follows).** The scripts in `hack/openbao-kms` do the same steps
+with your own `bao` login, for a standalone `UbuntuCluster`, a lab, or to understand
+what the operator does. Steps 1 to 3 below are the manual equivalents of the
+operator's steps 1 to 3.
+
 ## Prerequisites
 
 | What | Detail |
@@ -274,7 +320,13 @@ It runs in CI when `hack/openbao-kms/` changes.
 
 - k3s-based providers only (`UbuntuCluster`: OpenStack, IronCore VMs, Ubuntu
   machines). Gardener and KinD clusters are not covered.
-- No migration or re-encryption of existing clusters.
-- Host preparation is manual until the `SimpleCluster` opt-in lands.
+- No migration or re-encryption of existing clusters. An existing cluster is not
+  onboarded in place; recreate it with the opt-in.
+- Only the `ubuntu-machines` provider config carries the opt-in in this repository;
+  branded providers (cloudferro, arsys, dati) live in their own repositories and need
+  the same two template lines.
+- The operator path is covered by unit tests (OpenBao client against a fake, host
+  input encoding, embedded script identity); the end-to-end test still drives the
+  scripts, not the operator.
 - The plugin release is pinned by SHA-256; its Sigstore signature is not
   verified.

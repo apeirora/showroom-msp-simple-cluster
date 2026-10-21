@@ -20,6 +20,10 @@ const (
 
 	ConditionReady = "Ready"
 	ConditionError = "Error"
+	// ConditionEncryptionReady is set only when spec.encryption is requested:
+	// True once every control-plane host runs the KMS plugin and its
+	// kube-apiserver reports the kms-providers check healthy.
+	ConditionEncryptionReady = "EncryptionReady"
 
 	// SSHSecretPrivateKeyKey is the data key the operator reads to
 	// authenticate against each host. Matches the
@@ -56,6 +60,8 @@ const (
 
 // UbuntuClusterSpec is the user request: a list of hosts already running
 // Ubuntu plus the SSH key and k3s knobs.
+// +kubebuilder:validation:XValidation:rule="has(self.encryption) == has(oldSelf.encryption)",message="encryption cannot be added or removed after creation"
+// +kubebuilder:validation:XValidation:rule="!has(self.encryption) || !has(self.k3sServerArgs) || !self.k3sServerArgs.exists(a, a == '--secrets-encryption' || a.startsWith('--secrets-encryption='))",message="k3s --secrets-encryption cannot be combined with spec.encryption"
 type UbuntuClusterSpec struct {
 	// Version is the k3s release tag (e.g. "v1.31.4+k3s1"). Empty falls
 	// back to the get.k3s.io installer's default (latest stable).
@@ -91,6 +97,16 @@ type UbuntuClusterSpec struct {
 	// K3sAgentArgs are passed verbatim to `k3s agent` on every worker.
 	// +optional
 	K3sAgentArgs []string `json:"k3sAgentArgs,omitempty"`
+
+	// Encryption opts the cluster into encryption at rest of its Kubernetes
+	// Secrets with an external KMS provider, from the first write. Every
+	// control-plane host gets the KMS v2 plugin before k3s is installed on
+	// it; a host that already runs k3s without the plugin is refused, never
+	// silently accepted. Immutable: it can be neither added, removed nor
+	// changed after creation. Mirrors SimpleCluster.spec.encryption.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="encryption is immutable"
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 // SSHAuth describes how the operator logs in. Exactly one of
@@ -220,6 +236,99 @@ type UbuntuClusterStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Message is a one-line summary of Phase for consumers that read a
+	// scalar (the SimpleCluster default readiness check does).
+	// +optional
+	Message string `json:"message,omitempty"`
+
+	// Encryption reports the state of spec.encryption. Present only when
+	// encryption is requested.
+	// +optional
+	Encryption *EncryptionStatus `json:"encryption,omitempty"`
+}
+
+// EncryptionSpec selects how the cluster's Secrets are encrypted in etcd.
+// The shape follows Gardener's encryptionConfig.provider and
+// SimpleCluster.spec.encryption.
+type EncryptionSpec struct {
+	// Provider is the key management provider the kube-apiserver uses through
+	// a KMS v2 plugin. Only Secrets are encrypted.
+	Provider EncryptionProvider `json:"provider"`
+}
+
+// EncryptionProviderType names an external key management provider.
+// +kubebuilder:validation:Enum=OpenBao
+type EncryptionProviderType string
+
+const (
+	// EncryptionProviderOpenBao encrypts with a per-cluster OpenBao Transit
+	// key through the vault-kubernetes-kms plugin.
+	EncryptionProviderOpenBao EncryptionProviderType = "OpenBao"
+)
+
+// EncryptionProvider is the key management provider and its key settings.
+type EncryptionProvider struct {
+	// Type of the provider.
+	Type EncryptionProviderType `json:"type"`
+
+	// KeyRotationPeriod rotates the cluster's key automatically at this
+	// interval (at least 1h). Unset means no automatic rotation. Data written
+	// under older key versions stays readable.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1h')",message="keyRotationPeriod must be at least 1h"
+	KeyRotationPeriod *metav1.Duration `json:"keyRotationPeriod,omitempty"`
+}
+
+// EncryptionEnabled reports whether the cluster asked for encryption at rest.
+func (s *UbuntuClusterSpec) EncryptionEnabled() bool {
+	return s.Encryption != nil
+}
+
+// EncryptionStatus is what the operator set up in the KMS provider for this
+// cluster and how far each control-plane host got. It names objects, never
+// credentials.
+type EncryptionStatus struct {
+	// Provider echoes spec.encryption.provider.type.
+	Provider EncryptionProviderType `json:"provider"`
+	// KeyName is the Transit key the cluster encrypts with (the cluster's
+	// own name). The key is kept when the cluster is deleted so that etcd
+	// snapshots stay restorable; removing it is an OpenBao admin action.
+	// +optional
+	KeyName string `json:"keyName,omitempty"`
+	// KeyVersion is the latest key version the provider reported.
+	// +optional
+	KeyVersion int64 `json:"keyVersion,omitempty"`
+	// RoleName is the AppRole role the hosts' plugins log in with.
+	// +optional
+	RoleName string `json:"roleName,omitempty"`
+	// Hosts lists each control-plane host's plugin state.
+	// +optional
+	// +listType=map
+	// +listMapKey=name
+	Hosts []HostEncryptionStatus `json:"hosts,omitempty"`
+	// CleanupDone is true once the role and the hosts' secret IDs were
+	// removed from the provider during deletion. The key is kept.
+	// +optional
+	CleanupDone bool `json:"cleanupDone,omitempty"`
+}
+
+// HostEncryptionStatus is one control-plane host's KMS plugin state.
+type HostEncryptionStatus struct {
+	// Name is the host name from spec.
+	Name string `json:"name"`
+	// SecretIDAccessor identifies (without revealing) the AppRole secret ID
+	// this host unwrapped. It is destroyed when the cluster is deleted or
+	// when the secret ID is replaced.
+	// +optional
+	SecretIDAccessor string `json:"secretIDAccessor,omitempty"`
+	// SecretIDIssuedAt is when the current secret ID was minted. The
+	// operator replaces it before the role's secret ID TTL runs out.
+	// +optional
+	SecretIDIssuedAt *metav1.Time `json:"secretIDIssuedAt,omitempty"`
+	// Verified is true once the host's kube-apiserver reported the
+	// kms-providers check healthy with the plugin active.
+	Verified bool `json:"verified"`
 }
 
 // HostStatus mirrors the install lifecycle of a single host.

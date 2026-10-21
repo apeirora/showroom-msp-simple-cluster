@@ -26,6 +26,7 @@ import (
 
 	ubuntuv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/controller"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/openbao"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/secretpolicy"
 )
 
@@ -52,7 +53,32 @@ func main() {
 	var secretReferenceAllowlist string
 	flag.StringVar(&secretReferenceAllowlist, "secret-reference-allowlist", "[]",
 		"Exact operator-approved reference exceptions as a JSON list.")
+	// OpenBao KMS tenancy (SimpleCluster #470). Unset address = encryption
+	// requests are refused, never silently ignored.
+	var bao openbao.Config
+	flag.StringVar(&bao.Address, "openbao-address", "",
+		"OpenBao URL (https://...) of the SimpleCluster KMS tenancy. Empty refuses every UbuntuCluster with spec.encryption.")
+	flag.StringVar(&bao.Namespace, "openbao-namespace", "",
+		"OpenBao namespace of the tenancy (X-Vault-Namespace); empty is the root namespace.")
+	flag.StringVar(&bao.CAFile, "openbao-ca-file", "",
+		"PEM file with extra CA certificates for the OpenBao address; also handed to the hosts' plugins.")
+	flag.StringVar(&bao.TokenFile, "openbao-token-file", openbao.DefaultTokenFile,
+		"Projected ServiceAccount token (audience bound to the JWT mount) used to log in.")
+	flag.StringVar(&bao.JWTMount, "openbao-jwt-mount", openbao.DefaultJWTMount, "JWT auth mount path in the tenancy.")
+	flag.StringVar(&bao.JWTRole, "openbao-jwt-role", openbao.DefaultJWTRole, "JWT auth role this operator logs in with.")
+	flag.StringVar(&bao.TransitMount, "openbao-transit-mount", openbao.DefaultTransitMount, "Transit mount holding the per-cluster keys.")
+	flag.StringVar(&bao.ApproleMount, "openbao-approle-mount", openbao.DefaultApproleMount, "AppRole mount holding the per-cluster host roles.")
+	flag.StringVar(&bao.PluginPolicy, "openbao-plugin-policy", openbao.DefaultPluginPolicy, "The only policy host roles may carry.")
+	flag.DurationVar(&bao.TokenPeriod, "openbao-token-period", openbao.DefaultTokenPeriod, "Periodic token lifetime for the hosts' plugins.")
+	flag.DurationVar(&bao.SecretIDTTL, "openbao-secret-id-ttl", openbao.DefaultSecretIDTTL, "Validity of a host's AppRole secret ID.")
+	flag.DurationVar(&bao.WrapTTL, "openbao-wrap-ttl", openbao.DefaultWrapTTL, "How long a host has to unwrap its secret ID.")
 	flag.Parse()
+	if bao.Enabled() {
+		if _, err := openbao.New(bao); err != nil {
+			setupLog.Error(err, "invalid OpenBao configuration")
+			os.Exit(1)
+		}
+	}
 	secretPolicy, err := secretpolicy.Parse(secretReferenceAllowlist)
 	if err != nil {
 		setupLog.Error(err, "invalid Secret reference configuration")
@@ -79,6 +105,7 @@ func main() {
 		Scheme:            mgr.GetScheme(),
 		Recorder:          mgr.GetEventRecorderFor("ubuntucluster"),
 		DefaultK3sVersion: defaultK3sVersion,
+		OpenBao:           bao,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UbuntuCluster")
 		os.Exit(1)

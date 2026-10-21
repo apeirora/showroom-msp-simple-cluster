@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -175,6 +176,13 @@ type Result struct {
 // what to do with ExitCode (e.g. probing for missing binaries).
 // Network / SSH-level failures are returned as err.
 func (c *Client) Run(ctx context.Context, command string) (*Result, error) {
+	return c.RunWithStdin(ctx, command, nil)
+}
+
+// RunWithStdin is Run with the remote command's stdin fed from stdin
+// (nil means no stdin). Used to stream a script and its input to a host
+// without writing them to the host's disk or exposing them in argv.
+func (c *Client) RunWithStdin(ctx context.Context, command string, stdin io.Reader) (*Result, error) {
 	sess, err := c.conn.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("ssh session: %w", err)
@@ -184,6 +192,9 @@ func (c *Client) Run(ctx context.Context, command string) (*Result, error) {
 	var stdout, stderr bytes.Buffer
 	sess.Stdout = &stdout
 	sess.Stderr = &stderr
+	if stdin != nil {
+		sess.Stdin = stdin
+	}
 
 	done := make(chan error, 1)
 	go func() { done <- sess.Run(command) }()

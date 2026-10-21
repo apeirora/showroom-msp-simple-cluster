@@ -9,3 +9,11 @@ enable:
   arsys:
     virtual: true
     dedicated: false
+
+# Encryption at rest for k3s-based providers (apeirora/showroom#470).
+# openbao: true lists OpenBao in the ubuntu-machines SCPC and passes
+# SimpleCluster.spec.encryption through to the UbuntuCluster. Requires the
+# core operator to expose .SC.encryption and simple-cluster-operator-ubuntu
+# to run with openbao.enabled; otherwise leave it false.
+encryption:
+  openbao: false
