@@ -14,8 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
@@ -524,5 +526,57 @@ data:
 	data, _, _ = unstructured.NestedStringMap(objs[0].Object, "data")
 	if data["nodes"] != "2" || data["min"] != "2" || data["max"] != "5" || data["autoscaling"] != "true" {
 		t.Errorf("autoscaled workers context mismatch: %v", data)
+	}
+}
+
+func TestRender_Encryption(t *testing.T) {
+	scpc := minimalSCPC(nil)
+	r := &showroomv1alpha1.ResourceSpec{
+		Name:       "config",
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Template: `apiVersion: v1
+kind: ConfigMap
+data:
+  enabled: "{{ .SC.encryption.enabled }}"
+  provider: "{{ .SC.encryption.provider }}"
+  keyRotationPeriod: "{{ .SC.encryption.keyRotationPeriod }}"
+`,
+	}
+
+	// Not requested: the map is still populated, so templates that read it
+	// render under missingkey=error.
+	sc := minimalSC(1, nil)
+	objs, err := Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render (no encryption): %v", err)
+	}
+	data, _, _ := unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["enabled"] != "false" || data["provider"] != "" || data["keyRotationPeriod"] != "" {
+		t.Errorf("unencrypted context mismatch: %v", data)
+	}
+
+	// Requested without rotation.
+	sc.Spec.Encryption = &showroomv1alpha1.EncryptionSpec{
+		Provider: showroomv1alpha1.EncryptionProvider{Type: showroomv1alpha1.EncryptionProviderOpenBao},
+	}
+	objs, err = Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render (encryption): %v", err)
+	}
+	data, _, _ = unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["enabled"] != "true" || data["provider"] != "OpenBao" || data["keyRotationPeriod"] != "" {
+		t.Errorf("encrypted context mismatch: %v", data)
+	}
+
+	// Requested with rotation: a Go duration string OpenBao accepts as is.
+	sc.Spec.Encryption.Provider.KeyRotationPeriod = &metav1.Duration{Duration: 720 * time.Hour}
+	objs, err = Render(scpc, sc, r, nil)
+	if err != nil {
+		t.Fatalf("Render (rotation): %v", err)
+	}
+	data, _, _ = unstructured.NestedStringMap(objs[0].Object, "data")
+	if data["keyRotationPeriod"] != "720h0m0s" {
+		t.Errorf("keyRotationPeriod: got %q, want %q", data["keyRotationPeriod"], "720h0m0s")
 	}
 }

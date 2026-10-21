@@ -159,6 +159,21 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.failSC(ctx, &sc, "InputError", err.Error())
 	}
 
+	// Refuse an encryption request the SCPC cannot honor before any resource R
+	// is created: provisioning anyway would store the cluster's Secrets in
+	// plaintext from the first write.
+	if sc.Spec.EncryptionEnabled() && !scpc.Spec.SupportsEncryption(sc.Spec.Encryption.Provider.Type) {
+		return r.encryptionUnsupportedSC(ctx, &sc, &scpc)
+	}
+
+	// With encryption requested, an outdated target CRD must not prune fields
+	// such as spec.encryption with only a warning: strict validation turns the
+	// create into a visible CreateError instead of an unencrypted cluster.
+	createOpts := metav1.CreateOptions{}
+	if sc.Spec.EncryptionEnabled() {
+		createOpts.FieldValidation = metav1.FieldValidationStrict
+	}
+
 	tc, err := r.targetClient(ctx, &sc, &scpc)
 	if err != nil {
 		return r.failSC(ctx, &sc, "TargetClientError", err.Error())
@@ -261,7 +276,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				if err := r.recordAccountChild(ctx, &sc, rs, desired, idx); err != nil {
 					return ctrl.Result{}, err
 				}
-				created, cerr := ri.Create(ctx, desired, metav1.CreateOptions{})
+				created, cerr := ri.Create(ctx, desired, createOpts)
 				if cerr != nil {
 					return r.failSC(ctx, &sc, "CreateError",
 						fmt.Sprintf("resource %q[%d]: %v", name, idx, cerr))
@@ -296,6 +311,23 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	aggregate := aggregatePhase(order, statuses)
 
+	// Encryption: the SCPC's declaration admits the request; it is not proof.
+	// The kubeconfig resource itself must report EncryptionReady=True before
+	// the cluster counts as Ready and before any kubeconfig leaves here.
+	kcName := scpc.Spec.KubeconfigSource.ResourceName
+	encTargetReady, encObserved := false, false
+	if sc.Spec.EncryptionEnabled() {
+		if kcStatus := statuses[kcName]; kcStatus != nil && kcStatus.Phase == showroomv1alpha1.PhaseReady {
+			encTargetReady = true
+		}
+		if kcLive, ok := live[kcName]; ok && len(kcLive) > 0 {
+			encObserved = encryptionReadyObserved(kcLive[0])
+		}
+		if aggregate == showroomv1alpha1.PhaseReady && !encObserved {
+			aggregate = showroomv1alpha1.PhaseProvisioning
+		}
+	}
+
 	patch := client.MergeFrom(sc.DeepCopy())
 	if sc.Status.ProviderConfigRef == nil {
 		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
@@ -321,17 +353,22 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if aggregate == showroomv1alpha1.PhaseReady {
 		cond.Status = metav1.ConditionTrue
 	}
+	if sc.Spec.EncryptionEnabled() && encTargetReady && !encObserved {
+		cond.Reason = "EncryptionNotVerified"
+		cond.Message = fmt.Sprintf("%s reports Ready without an EncryptionReady=True condition", kcName)
+	}
 	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
 	apimeta.RemoveStatusCondition(&sc.Status.Conditions, showroomv1alpha1.ConditionError)
 	setAutoscalingCondition(&sc, &scpc)
+	setEncryptionCondition(&sc, &scpc, encTargetReady, encObserved)
 
 	// Kubeconfig propagation: once the named source resource is Ready,
 	// fetch its kubeconfig and mirror it into a Secret in SC.Namespace.
 	// For SubResource the renewal-before window gates re-issuance so we
 	// don't request a fresh credential every reconcile.
-	kcName := scpc.Spec.KubeconfigSource.ResourceName
 	if kcLive, ok := live[kcName]; ok && len(kcLive) > 0 {
-		if kcStatus := statuses[kcName]; kcStatus != nil && kcStatus.Phase == showroomv1alpha1.PhaseReady {
+		if kcStatus := statuses[kcName]; kcStatus != nil && kcStatus.Phase == showroomv1alpha1.PhaseReady &&
+			(!sc.Spec.EncryptionEnabled() || encObserved) {
 			if kubeconfig.NeedsRefresh(&sc, &scpc) {
 				r.syncKubeconfig(ctx, &sc, &scpc, resourceByName[kcName], kcLive[0], tc)
 			}
@@ -987,6 +1024,98 @@ func setAutoscalingCondition(
 			scpc.Name, sc.Spec.Workers.MinNodes())
 	}
 	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
+}
+
+// encryptionUnsupportedSC refuses an SC whose spec.encryption provider the
+// chosen SCPC does not list in spec.encryptionProviders. No resource R is
+// created and providerConfigRef is not locked, so the SC recovers by itself
+// once the SCPC declares the provider.
+func (r *SimpleClusterReconciler) encryptionUnsupportedSC(
+	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+) (ctrl.Result, error) {
+	patch := client.MergeFrom(sc.DeepCopy())
+	setEncryptionCondition(sc, scpc, false, false)
+	msg := fmt.Sprintf("SCPC %q does not support %s encryption; nothing was created",
+		scpc.Name, sc.Spec.Encryption.Provider.Type)
+	// A cluster that already has resources (the SCPC withdrew the provider
+	// after creation) is not Ready any more: its encryption promise is gone.
+	if len(sc.Status.Resources) > 0 {
+		msg = fmt.Sprintf("SCPC %q no longer supports %s encryption; existing resources are left untouched",
+			scpc.Name, sc.Spec.Encryption.Provider.Type)
+		sc.Status.Phase = showroomv1alpha1.PhaseFailed
+	} else if sc.Status.Phase == "" || sc.Status.Phase == showroomv1alpha1.PhaseReady {
+		sc.Status.Phase = showroomv1alpha1.PhasePending
+	}
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type: showroomv1alpha1.ConditionError, Status: metav1.ConditionTrue, Reason: "EncryptionUnsupported", Message: msg,
+	})
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type: showroomv1alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: "EncryptionUnsupported", Message: msg,
+	})
+	setRoleCounts(sc)
+	if err := r.Status().Patch(ctx, sc, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+}
+
+// setEncryptionCondition reports the state of the SC's spec.encryption
+// request. The condition exists only while encryption is requested. It turns
+// True only when the SC is Ready AND the kubeconfig resource itself carries
+// EncryptionReady=True (observed): the SCPC's declaration admits the request,
+// the provider's resource proves it. targetReady says the kubeconfig
+// resource reports Ready, so "Ready but not verified" can be named.
+func setEncryptionCondition(
+	sc *showroomv1alpha1.SimpleCluster, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	targetReady, observed bool,
+) {
+	if !sc.Spec.EncryptionEnabled() {
+		apimeta.RemoveStatusCondition(&sc.Status.Conditions, showroomv1alpha1.ConditionEncryptionReady)
+		return
+	}
+	provider := sc.Spec.Encryption.Provider.Type
+	cond := metav1.Condition{
+		Type:    showroomv1alpha1.ConditionEncryptionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  "Provisioning",
+		Message: fmt.Sprintf("waiting for the cluster to become Ready with %s encryption", provider),
+	}
+	switch {
+	case !scpc.Spec.SupportsEncryption(provider):
+		cond.Reason = "UnsupportedByProvider"
+		cond.Message = fmt.Sprintf("SCPC %q does not support %s encryption", scpc.Name, provider)
+	case targetReady && !observed:
+		cond.Reason = "ProviderNotVerified"
+		cond.Message = fmt.Sprintf("%s reports Ready without an EncryptionReady=True condition; not handing out its kubeconfig",
+			scpc.Spec.KubeconfigSource.ResourceName)
+	case sc.Status.Phase == showroomv1alpha1.PhaseReady && observed:
+		cond.Status = metav1.ConditionTrue
+		cond.Reason = "Encrypted"
+		cond.Message = fmt.Sprintf("Secrets are encrypted at rest with %s (verified on %s)", provider,
+			scpc.Spec.KubeconfigSource.ResourceName)
+	}
+	apimeta.SetStatusCondition(&sc.Status.Conditions, cond)
+}
+
+// encryptionReadyObserved reports whether a live target object carries a
+// status condition EncryptionReady with status True. It is the provider's
+// own statement that every control-plane host encrypts; a resource without
+// conditions (a ConfigMap, an older operator) never qualifies.
+func encryptionReadyObserved(obj *unstructured.Unstructured) bool {
+	conds, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil || !found {
+		return false
+	}
+	for _, c := range conds {
+		m, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["type"] == showroomv1alpha1.ConditionEncryptionReady && m["status"] == string(metav1.ConditionTrue) {
+			return true
+		}
+	}
+	return false
 }
 
 // validateAndTopoSort validates the SCPC DAG and returns a topological

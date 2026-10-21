@@ -303,7 +303,27 @@ func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 			ctxKeyRequested: nodeResourcesContext(sc.Spec.Workers.Requested),
 		}
 	}
+	scCtx["encryption"] = encryptionContext(sc.Spec.Encryption)
 	return scCtx
+}
+
+// encryptionContext builds the .SC.encryption template map. It is always
+// populated (templates render with missingkey=error), so a template can gate
+// its KMS parts on .SC.encryption.enabled. keyRotationPeriod is a Go duration
+// string ("720h0m0s"), or "" when the key is not rotated automatically.
+func encryptionContext(enc *showroomv1alpha1.EncryptionSpec) map[string]any {
+	if enc == nil {
+		return map[string]any{"enabled": false, "provider": "", "keyRotationPeriod": ""}
+	}
+	period := ""
+	if enc.Provider.KeyRotationPeriod != nil {
+		period = enc.Provider.KeyRotationPeriod.Duration.String()
+	}
+	return map[string]any{
+		"enabled":           true,
+		"provider":          string(enc.Provider.Type),
+		"keyRotationPeriod": period,
+	}
 }
 
 // renderNamespace expands a configured namespace (which may be a template) to a

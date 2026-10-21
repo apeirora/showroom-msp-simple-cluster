@@ -66,6 +66,21 @@ spec:
                   autoscaling is provisioned at the fixed size .SC.workers.min and its
                   AutoscalingSupported condition is set to False.
                 type: boolean
+              encryptionProviders:
+                description: |-
+                  EncryptionProviders lists the providers whose .SC.encryption request
+                  this SCPC's templates honor. An SC asking for a provider not listed here
+                  is refused before any resource is created. Listing a provider is a
+                  fail-closed promise: the resource named by kubeconfigSource never reports
+                  Ready unless the cluster encrypts its Secrets with that provider.
+                items:
+                  description: EncryptionProviderType names an external key management
+                    provider.
+                  enum:
+                  - OpenBao
+                  type: string
+                type: array
+                x-kubernetes-list-type: set
               inputs:
                 description: |-
                   Inputs is the closed set of keys a SimpleCluster may override via

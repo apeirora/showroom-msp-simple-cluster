@@ -23,6 +23,7 @@ import (
 )
 
 // SimpleClusterSpec defines the desired state of SimpleCluster.
+// +kubebuilder:validation:XValidation:rule="has(self.encryption) == has(oldSelf.encryption)",message="encryption cannot be added or removed after creation"
 type SimpleClusterSpec struct {
 	// ControlPlane describes the control-plane pool. Optional: providers like
 	// Gardener manage the CP themselves and ignore this. When set, exposed as
@@ -64,6 +65,53 @@ type SimpleClusterSpec struct {
 	// +listType=map
 	// +listMapKey=name
 	Resources []ClusterResource `json:"resources,omitempty"`
+
+	// Encryption opts the cluster into encryption at rest of its Kubernetes
+	// Secrets with an external key management provider, from the first write.
+	// The chosen SCPC must list the provider in spec.encryptionProviders,
+	// otherwise the request is refused before anything is created. Immutable:
+	// it can be neither added, removed nor changed after creation. Surfaced as
+	// .SC.encryption.{enabled,provider,keyRotationPeriod} in templates.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="encryption is immutable"
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
+}
+
+// EncryptionSpec selects how the cluster's Secrets are encrypted in etcd.
+// The shape follows Gardener's encryptionConfig.provider.
+type EncryptionSpec struct {
+	// Provider is the key management provider the kube-apiserver uses through
+	// a KMS v2 plugin. Only Secrets are encrypted.
+	Provider EncryptionProvider `json:"provider"`
+}
+
+// EncryptionProviderType names an external key management provider.
+// +kubebuilder:validation:Enum=OpenBao
+type EncryptionProviderType string
+
+const (
+	// EncryptionProviderOpenBao encrypts with a per-cluster OpenBao Transit
+	// key through the vault-kubernetes-kms plugin.
+	EncryptionProviderOpenBao EncryptionProviderType = "OpenBao"
+)
+
+// EncryptionProvider is the key management provider and its key settings.
+type EncryptionProvider struct {
+	// Type of the provider.
+	Type EncryptionProviderType `json:"type"`
+
+	// KeyRotationPeriod rotates the cluster's key automatically at this
+	// interval (at least 1h). Unset means no automatic rotation. Data written
+	// under older key versions stays readable; rewriting it under the new
+	// version is a separate step.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1h')",message="keyRotationPeriod must be at least 1h"
+	KeyRotationPeriod *metav1.Duration `json:"keyRotationPeriod,omitempty"`
+}
+
+// EncryptionEnabled reports whether the SC asked for encryption at rest.
+func (s *SimpleClusterSpec) EncryptionEnabled() bool {
+	return s.Encryption != nil
 }
 
 // ClusterResource is a raw manifest applied to the cluster a SimpleCluster
