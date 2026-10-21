@@ -2,7 +2,7 @@ module github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-u
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	golang.org/x/crypto v0.57.0
