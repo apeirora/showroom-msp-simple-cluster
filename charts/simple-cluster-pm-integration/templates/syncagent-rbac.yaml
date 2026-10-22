@@ -5,6 +5,9 @@ kind: ClusterRole
 metadata:
   name: syncagent-resources-access
 rules:
+  - apiGroups: [apis.kcp.io]
+    resources: [apibindings]
+    verbs: [get, list, watch]
   - apiGroups:
       - showroom.apeirora.eu
     resources:
@@ -19,6 +22,18 @@ rules:
       - patch
       - delete
   - apiGroups:
+      - sshkeys.apeirora.eu
+    resources:
+      - sshkeys
+      - sshkeys/status
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups:
+      - ubuntu.apeirora.eu
+    resources:
+      - ubuntuclusters
+      - ubuntuclusters/status
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups:
       - ""
     resources:
       - namespaces
@@ -31,6 +46,7 @@ rules:
       - create
       - update
       - patch
+      - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

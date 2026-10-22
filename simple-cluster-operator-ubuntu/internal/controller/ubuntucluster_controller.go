@@ -597,7 +597,7 @@ func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster
 	auth := cluster.Spec.SSH
 	switch {
 	case auth.PrivateKeySecretRef != nil:
-		ns, err := r.SecretPolicy.Resolve(cluster.Namespace, auth.PrivateKeySecretRef.Namespace, auth.PrivateKeySecretRef.Name, secretpolicy.Use)
+		ns, err := r.SecretPolicy.ResolveForObject(cluster, auth.PrivateKeySecretRef.Namespace, auth.PrivateKeySecretRef.Name, secretpolicy.Use)
 		if err != nil {
 			return sshpkg.Credential{}, err
 		}
@@ -607,7 +607,7 @@ func (r *UbuntuClusterReconciler) readSSHCredential(ctx context.Context, cluster
 		}
 		return sshpkg.Credential{PrivateKeyPEM: data}, nil
 	case auth.PasswordSecretRef != nil:
-		ns, err := r.SecretPolicy.Resolve(cluster.Namespace, auth.PasswordSecretRef.Namespace, auth.PasswordSecretRef.Name, secretpolicy.Use)
+		ns, err := r.SecretPolicy.ResolveForObject(cluster, auth.PasswordSecretRef.Namespace, auth.PasswordSecretRef.Name, secretpolicy.Use)
 		if err != nil {
 			return sshpkg.Credential{}, err
 		}
@@ -633,7 +633,7 @@ func (r *UbuntuClusterReconciler) hostCredential(ctx context.Context, cluster *u
 	if h.PasswordSecretRef == nil {
 		return cluster.Spec.SSH.User, clusterCred, nil
 	}
-	ns, err := r.SecretPolicy.Resolve(cluster.Namespace, h.PasswordSecretRef.Namespace, h.PasswordSecretRef.Name, secretpolicy.Use)
+	ns, err := r.SecretPolicy.ResolveForObject(cluster, h.PasswordSecretRef.Namespace, h.PasswordSecretRef.Name, secretpolicy.Use)
 	if err != nil {
 		return "", sshpkg.Credential{}, err
 	}
@@ -669,7 +669,7 @@ func (r *UbuntuClusterReconciler) validateSecretReferences(cluster *ubuntuv1alph
 		if ref == nil {
 			continue
 		}
-		if _, err := r.SecretPolicy.Resolve(cluster.Namespace, ref.Namespace, ref.Name, secretpolicy.Use); err != nil {
+		if _, err := r.SecretPolicy.ResolveForObject(cluster, ref.Namespace, ref.Name, secretpolicy.Use); err != nil {
 			return err
 		}
 	}
@@ -722,6 +722,11 @@ func (r *UbuntuClusterReconciler) ensureKubeconfigSecret(ctx context.Context, cl
 	}
 	if err != nil {
 		return "", fmt.Errorf("get Secret %s/%s: %w", cluster.Namespace, name, err)
+	}
+	owner := metav1.GetControllerOf(&existing)
+	if owner == nil || owner.UID != cluster.UID || owner.Name != cluster.Name ||
+		owner.Kind != "UbuntuCluster" || owner.APIVersion != ubuntuv1alpha1.GroupVersion.String() {
+		return "", fmt.Errorf("Secret %s/%s does not belong to this UbuntuCluster", cluster.Namespace, name)
 	}
 	if string(existing.Data[ubuntuv1alpha1.KubeconfigSecretKey]) == string(kubeconfig) {
 		return name, nil

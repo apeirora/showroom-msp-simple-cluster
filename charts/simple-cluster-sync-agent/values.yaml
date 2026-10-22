@@ -1,6 +1,9 @@
 syncAgentOperator:
   enabled: true
-  apiExportName: simpleclusters.showroom.apeirora.eu
+  image:
+    repository: ghcr.io/kcp-dev/api-syncagent
+    tag: v0.7.0@sha256:22835bea348eaae5820afdcbbf601000967ae84197a4449243d3336866239301
+  apiExportEndpointSliceName: simpleclusters.showroom.apeirora.eu
   agentName: simple-cluster-agent
   kcpKubeconfig: pm-kubeconfig
   replicas: 1

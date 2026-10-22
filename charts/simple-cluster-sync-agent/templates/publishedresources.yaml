@@ -24,4 +24,79 @@ spec:
       object:
         reference:
           path: status.kubeconfigSecretRef.name
+        namespace:
+          reference:
+            path: metadata.namespace
+{{- range $resource := list (dict "name" "sshkeys" "kind" "SSHKey" "group" "sshkeys.apeirora.eu" "prefix" "sk") (dict "name" "ubuntuclusters" "kind" "UbuntuCluster" "group" "ubuntu.apeirora.eu" "prefix" "uc") }}
+---
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: publish-{{ $resource.name }}
+  namespace: {{ $.Values.publishedResources.namespace | default $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: simple-cluster-sync-agent
+    app.kubernetes.io/component: portal-integration
+spec:
+  resource:
+    kind: {{ $resource.kind }}
+    apiGroup: {{ $resource.group }}
+    versions: [v1alpha1]
+  projection:
+    scope: Namespaced
+  naming:
+    # Isolate each API and account namespace. Keep object and Secret names.
+    namespace: '{{ $resource.prefix }}-{{`{{ printf "%s/%s" .ClusterName .Object.metadata.namespace | sha256sum | trunc 40 }}`}}'
+    name: '{{`{{ .Object.metadata.name }}`}}'
+{{- if eq $resource.kind "SSHKey" }}
+  mutation:
+    spec:
+      - delete:
+          path: privateKey
+      - delete:
+          path: publicKey
+{{- end }}
+  related:
+{{- if eq $resource.kind "SSHKey" }}
+    - identifier: ssh-key-secret
+      origin: service
+      kind: Secret
+      object:
+        reference:
+          path: spec.exportToSecret.name
+        namespace:
+          reference:
+            path: metadata.namespace
+    - identifier: passphrase-secret
+      origin: kcp
+      kind: Secret
+      object:
+        reference:
+          path: spec.passPhaseSecret.name
+        namespace:
+          reference:
+            path: metadata.namespace
+{{- else }}
+    - identifier: kubeconfig-secret
+      origin: service
+      kind: Secret
+      object:
+        reference:
+          path: status.kubeconfigSecretRef.name
+        namespace:
+          reference:
+            path: metadata.namespace
+{{- range $ref := list "spec.ssh.privateKeySecretRef.name" "spec.ssh.passwordSecretRef.name" "spec.controlPlane.hosts.#.passwordSecretRef.name" "spec.workers.hosts.#.passwordSecretRef.name" }}
+    - identifier: {{ $ref | replace "." "-" | replace "#" "all" }}
+      origin: kcp
+      kind: Secret
+      object:
+        reference:
+          path: {{ $ref }}
+        namespace:
+          reference:
+            path: metadata.namespace
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end }}
