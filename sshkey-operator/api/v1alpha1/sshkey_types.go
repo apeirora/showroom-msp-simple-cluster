@@ -76,6 +76,11 @@ type SSHKeySpec struct {
 
 // SSHKeyStatus defines the observed state of SSHKey.
 type SSHKeyStatus struct {
+	// PublicKey is the generated public key. Sync Agent returns it to the account.
+	// The private key remains in the related Secret.
+	// +optional
+	PublicKey string `json:"publicKey,omitempty"`
+
 	// Expires is the time the key expires, set when spec.expire is provided.
 	// +optional
 	Expires metav1.Time `json:"expires,omitempty"`

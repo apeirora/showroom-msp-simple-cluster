@@ -21,6 +21,18 @@ rules:
       - patch
       - delete
   - apiGroups:
+      - sshkeys.apeirora.eu
+    resources:
+      - sshkeys
+      - sshkeys/status
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups:
+      - ubuntu.apeirora.eu
+    resources:
+      - ubuntuclusters
+      - ubuntuclusters/status
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups:
       - ""
     resources:
       - secrets
@@ -28,6 +40,10 @@ rules:
       - get
       - list
       - watch
+      - create
+      - update
+      - patch
+      - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

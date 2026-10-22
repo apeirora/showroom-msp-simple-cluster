@@ -1,17 +1,29 @@
-apiVersion: apis.kcp.io/v1alpha1
+apiVersion: apis.kcp.io/v1alpha2
 kind: APIExport
 metadata:
   name: simpleclusters.showroom.apeirora.eu
+  annotations:
+    # Preserve legacy claim selectors when Sync Agent uses v1alpha1.
+    apis.v1alpha2.kcp.io/v1alpha1-permission-claims: >-
+      [{"group":"","resource":"namespaces","all":true},
+       {"group":"","resource":"events","all":true},
+       {"group":"","resource":"secrets","all":true},
+       {"group":"apis.kcp.io","resource":"apibindings","all":true}]
   labels:
     ui.platform-mesh.io/content-for: simpleclusters.showroom.apeirora.eu
 spec:
+  # Sync Agent manages the resource schemas from all three PublishedResources:
+  # SimpleCluster, SSHKey, and UbuntuCluster. Do not pin generated schema names.
   permissionClaims:
     - group: ""
       resource: namespaces
-      all: true
+      verbs: ["*"]
     - group: ""
       resource: events
-      all: true
+      verbs: ["*"]
     - group: ""
       resource: secrets
-      all: true
+      verbs: ["*"]
+    - group: apis.kcp.io
+      resource: apibindings
+      verbs: [get, list, watch]

@@ -118,6 +118,7 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		meta.RemoveStatusCondition(&key.Status.Conditions, sshkeysv1alpha1.ConditionExportSynced)
 	}
 
+	key.Status.PublicKey = key.PublicKey
 	key.Status.Ready = true
 	key.Status.Message = "key ready"
 	key.Status.Expires = expires
@@ -135,7 +136,7 @@ func (r *SSHKeyReconciler) resolvePassphrase(ctx context.Context, key *sshkeysv1
 	if !hasRef(ref.Name) && ref.Namespace == "" {
 		return nil, nil
 	}
-	ns, err := r.SecretPolicy.Resolve(key.Namespace, ref.Namespace, ref.Name, secretpolicy.Use)
+	ns, err := r.SecretPolicy.ResolveForObject(key, ref.Namespace, ref.Name, secretpolicy.Use)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +174,8 @@ func (r *SSHKeyReconciler) markNotReady(ctx context.Context, key *sshkeysv1alpha
 	if err := r.Status().Update(ctx, key); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, nil
+	// A related Secret can arrive after the primary object through Sync Agent.
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 // generateKeyPair creates a new key pair, sets the name@namespace comment, and stores it on the object.
