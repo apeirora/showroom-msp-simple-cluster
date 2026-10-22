@@ -172,12 +172,16 @@ spec:
               k3sServerArgs:
                 description: Extra args appended to `k3s server`.
                 items:
+                  maxLength: 512
                   type: string
+                maxItems: 64
                 type: array
               k3sAgentArgs:
                 description: Extra args appended to `k3s agent`.
                 items:
+                  maxLength: 512
                   type: string
+                maxItems: 64
                 type: array
               encryption:
                 description: |-
