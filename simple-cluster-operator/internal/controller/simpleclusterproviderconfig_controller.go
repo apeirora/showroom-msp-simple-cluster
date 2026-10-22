@@ -21,17 +21,10 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
-	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -42,8 +35,7 @@ import (
 )
 
 const (
-	scpcRequeue         = 5 * time.Minute
-	kubeconfigSecretKey = "kubeconfig"
+	scpcRequeue = 5 * time.Minute
 )
 
 // SimpleClusterProviderConfigReconciler validates the SCPC DAG, resolves
@@ -71,7 +63,7 @@ func (r *SimpleClusterProviderConfigReconciler) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	resolved, reachable, cond, retryErr := r.probe(ctx, &scpc)
+	resolved, reachable, cond := r.probe(ctx, &scpc)
 
 	patch := client.MergeFrom(scpc.DeepCopy())
 	scpc.Status.Resources = resolved
@@ -83,27 +75,21 @@ func (r *SimpleClusterProviderConfigReconciler) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, err
 	}
 
-	if retryErr != nil {
-		return ctrl.Result{}, retryErr
-	}
 	return ctrl.Result{RequeueAfter: scpcRequeue}, nil
 }
 
-// probe validates the SCPC DAG, then resolves each ResourceSpec's GVK
-// against the target cluster. Returns the resolved entries, the
-// reachability flag, the Ready condition, and an error that should
-// trigger an immediate retry (transient only — terminal errors live in
-// the condition and return nil).
+// probe validates the graph and discovers every resource kind in the account.
+// Failures remain visible in the condition and retry on the regular interval.
 func (r *SimpleClusterProviderConfigReconciler) probe(
 	ctx context.Context, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
-) ([]showroomv1alpha1.ResolvedResource, bool, metav1.Condition, error) {
+) ([]showroomv1alpha1.ResolvedResource, bool, metav1.Condition) {
 	if _, err := validateAndTopoSort(scpc); err != nil {
-		return nil, false, readyCond(metav1.ConditionFalse, "InvalidSCPC", err.Error()), nil
+		return nil, false, readyCond(metav1.ConditionFalse, "InvalidSCPC", err.Error())
 	}
 
-	mapper, condErr, retryErr := r.targetMapper(ctx, scpc)
+	mapper, condErr := r.targetMapper(ctx, scpc)
 	if condErr != nil {
-		return nil, false, *condErr, retryErr
+		return nil, false, *condErr
 	}
 
 	resolved := make([]showroomv1alpha1.ResolvedResource, 0, len(scpc.Spec.Resources))
@@ -111,12 +97,12 @@ func (r *SimpleClusterProviderConfigReconciler) probe(
 		gv, err := schema.ParseGroupVersion(rs.APIVersion)
 		if err != nil {
 			return nil, false, readyCond(metav1.ConditionFalse, "InvalidTarget",
-				fmt.Sprintf("resource %q: %v", rs.Name, err)), nil
+				fmt.Sprintf("resource %q: %v", rs.Name, err))
 		}
 		gvk := gv.WithKind(rs.Kind)
 		if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			return nil, false, readyCond(metav1.ConditionFalse, "GVKNotFound",
-				fmt.Sprintf("resource %q: RESTMapping %s: %v", rs.Name, gvk, err)), nil
+				fmt.Sprintf("resource %q: RESTMapping %s: %v", rs.Name, gvk, err))
 		}
 		resolved = append(resolved, showroomv1alpha1.ResolvedResource{
 			Name: rs.Name,
@@ -124,83 +110,19 @@ func (r *SimpleClusterProviderConfigReconciler) probe(
 		})
 	}
 
-	location := "management cluster"
-	if scpc.Spec.Target.KubeconfigSecretRef != nil {
-		location = "remote cluster"
-	}
-	return resolved, true,
-		readyCond(metav1.ConditionTrue, "Reachable",
-			fmt.Sprintf("%d resource(s) resolved on %s", len(resolved), location)),
-		nil
+	return resolved, true, readyCond(metav1.ConditionTrue, "Reachable", fmt.Sprintf("%d resource(s) resolved in account %s", len(resolved), scpc.Namespace))
 }
 
-// targetMapper returns a RESTMapper for the SCPC's target cluster. Local
-// (no kubeconfigSecretRef) reuses the manager's own RESTMapper. The optional
-// *metav1.Condition signals a terminal status outcome to the caller; the
-// error is for transient retry.
+// targetMapper discovers APIs only through the consumer account virtual workspace.
 func (r *SimpleClusterProviderConfigReconciler) targetMapper(
 	ctx context.Context, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
-) (apimeta.RESTMapper, *metav1.Condition, error) {
-	if scpc.Spec.Target.KCPAccount {
-		mapper, err := accountMapper(ctx, r.AccountProvider, scpc)
-		if err != nil {
-			c := readyCond(metav1.ConditionFalse, "AccountTargetUnavailable", err.Error())
-			return nil, &c, nil
-		}
-		return mapper, nil, nil
-	}
-	if scpc.Spec.Target.KubeconfigSecretRef == nil {
-		return r.RESTMapper(), nil, nil
-	}
-
-	ref := scpc.Spec.Target.KubeconfigSecretRef
-	namespace, err := r.SecretPolicy.Resolve(scpc.Namespace, ref.Namespace, ref.Name, secretpolicy.Use)
+) (apimeta.RESTMapper, *metav1.Condition) {
+	mapper, err := accountMapper(ctx, r.AccountProvider, scpc)
 	if err != nil {
-		c := readyCond(metav1.ConditionFalse, "SecretReferenceDenied", err.Error())
-		return nil, &c, nil
+		c := readyCond(metav1.ConditionFalse, "AccountTargetUnavailable", err.Error())
+		return nil, &c
 	}
-	var secret corev1.Secret
-	switch err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: namespace}, &secret); {
-	case apierrors.IsNotFound(err):
-		c := readyCond(metav1.ConditionFalse, "SecretMissing",
-			fmt.Sprintf("kubeconfig Secret %s/%s not found", namespace, ref.Name))
-		return nil, &c, nil
-	case err != nil:
-		c := readyCond(metav1.ConditionFalse, "SecretReadError", err.Error())
-		return nil, &c, err
-	}
-
-	data, ok := secret.Data[kubeconfigSecretKey]
-	if !ok || len(data) == 0 {
-		c := readyCond(metav1.ConditionFalse, "SecretKeyMissing",
-			fmt.Sprintf("Secret %s/%s has no %q key", namespace, ref.Name, kubeconfigSecretKey))
-		return nil, &c, nil
-	}
-
-	cfg, err := clientcmd.RESTConfigFromKubeConfig(data)
-	if err != nil {
-		c := readyCond(metav1.ConditionFalse, "BadKubeconfig", err.Error())
-		return nil, &c, nil
-	}
-
-	mapper, err := newDiscoveryMapper(cfg)
-	if err != nil {
-		c := readyCond(metav1.ConditionFalse, "Unreachable", err.Error())
-		return nil, &c, nil
-	}
-	return mapper, nil, nil
-}
-
-func newDiscoveryMapper(cfg *rest.Config) (apimeta.RESTMapper, error) {
-	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("discovery client: %w", err)
-	}
-	groups, err := restmapper.GetAPIGroupResources(dc)
-	if err != nil {
-		return nil, fmt.Errorf("discover API groups: %w", err)
-	}
-	return restmapper.NewDiscoveryRESTMapper(groups), nil
+	return mapper, nil
 }
 
 func readyCond(status metav1.ConditionStatus, reason, message string) metav1.Condition {

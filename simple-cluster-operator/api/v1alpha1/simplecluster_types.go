@@ -327,17 +327,46 @@ type NodeStatus struct {
 
 // AccountTargetStatus records the account and route before a child is created.
 type AccountTargetStatus struct {
-	Cluster   string `json:"cluster"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-	UID       string `json:"uid"`
+	// ResourceTrackingVersion identifies the durable child receipt contract.
+	ResourceTrackingVersion int32  `json:"resourceTrackingVersion,omitempty"`
+	Cluster                 string `json:"cluster"`
+	Namespace               string `json:"namespace"`
+	Name                    string `json:"name"`
+	UID                     string `json:"uid"`
 	// Mode is Account or LegacyLocal. It remains fixed for this parent.
 	// +kubebuilder:validation:Enum=Account;LegacyLocal
 	Mode string `json:"mode"`
 }
 
+// AccountResourceStatus records one child before its first create request.
+// Its destination and API identity remain fixed until confirmed deletion.
+type AccountResourceStatus struct {
+	ResourceName    string `json:"resourceName"`
+	Index           int32  `json:"index"`
+	Repeated        bool   `json:"repeated,omitempty"`
+	APIVersion      string `json:"apiVersion"`
+	Kind            string `json:"kind"`
+	Resource        string `json:"resource"`
+	Namespace       string `json:"namespace,omitempty"`
+	Name            string `json:"name"`
+	UID             string `json:"uid,omitempty"`
+	APIIdentityHash string `json:"apiIdentityHash,omitempty"`
+	CreationID      string `json:"creationID"`
+	// +optional
+	DependsOn []string `json:"dependsOn,omitempty"`
+	// +optional
+	DeletionAnnotations map[string]string `json:"deletionAnnotations,omitempty"`
+	// Deleting prevents a removed instance from being recreated during cleanup.
+	// +optional
+	Deleting bool `json:"deleting,omitempty"`
+}
+
 // SimpleClusterStatus defines the observed state of SimpleCluster.
 type SimpleClusterStatus struct {
+	// AccountResources is the durable create and cleanup record for provider children.
+	// +optional
+	AccountResources []AccountResourceStatus `json:"accountResources,omitempty"`
+
 	// AccountTarget pins account ownership and deletion routing.
 	// +optional
 	AccountTarget *AccountTargetStatus `json:"accountTarget,omitempty"`

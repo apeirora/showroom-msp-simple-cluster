@@ -417,15 +417,13 @@ spec:
                   default Namespace.
                 properties:
                   kcpAccount:
-                    description: |-
-                      KCPAccount creates resources in the owning KCP account through the provider export.
-                      It cannot be combined with kubeconfigSecretRef or a target namespace.
+                    description: KCPAccount is deprecated and ignored. All provider
+                      children use the account.
                     type: boolean
                   kubeconfigSecretRef:
                     description: |-
-                      KubeconfigSecretRef points at a Secret in the management cluster
-                      whose "kubeconfig" key holds credentials for the target cluster.
-                      When nil, resources are created on the management cluster.
+                      KubeconfigSecretRef is retained to detect unmigrated remote provider targets.
+                      Provider-child reconciliation refuses it. It never selects another destination.
                     properties:
                       name:
                         description: name is unique within a namespace to reference
@@ -445,10 +443,6 @@ spec:
                       resources with the owning SimpleCluster).
                     type: string
                 type: object
-                x-kubernetes-validations:
-                - message: kcpAccount cannot use a namespace or kubeconfigSecretRef
-                  rule: '!has(self.kcpAccount) || !self.kcpAccount || (!has(self.kubeconfigSecretRef)
-                    && (!has(self.namespace) || size(self.namespace) == 0))'
             required:
             - kubeconfigSource
             - resources

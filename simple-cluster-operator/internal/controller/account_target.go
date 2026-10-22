@@ -2,41 +2,39 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 )
 
+const reasonMigrationRequired = "MigrationRequired"
+
+var ErrMigrationRequired = errors.New(reasonMigrationRequired)
+
 func validateAccountTarget(scpc *showroomv1alpha1.SimpleClusterProviderConfig) error {
-	if !scpc.Spec.Target.KCPAccount {
-		return nil
+	if scpc.Spec.Target.KubeconfigSecretRef != nil {
+		return fmt.Errorf("%w: provider kubeconfig destinations require an explicit account handoff", ErrMigrationRequired)
 	}
-	if scpc.Spec.Target.KubeconfigSecretRef != nil || scpc.Spec.Target.Namespace != "" {
-		return fmt.Errorf("kcpAccount cannot be combined with a target namespace or kubeconfigSecretRef")
-	}
-	for _, rs := range scpc.Spec.Resources {
-		if !target.IsAccountIronCoreShoot(rs.APIVersion, rs.Kind) || rs.Namespace != "" || rs.ForceCleanupOnCascade {
-			return fmt.Errorf("account targets require cluster-scoped IronCoreShoots without forced cleanup")
+	for _, resource := range scpc.Spec.Resources {
+		if resource.ForceCleanupOnCascade {
+			return fmt.Errorf("account children cannot force removal of provider finalizers")
 		}
-	}
-	if scpc.Spec.KubeconfigSource.SecretRef == nil || scpc.Spec.KubeconfigSource.SecretRef.Namespace != "default" {
-		return fmt.Errorf("account target requires kubeconfigSource.secretRef.namespace default")
 	}
 	return nil
 }
 
 func (r *SimpleClusterReconciler) targetClient(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpc *showroomv1alpha1.SimpleClusterProviderConfig) (*target.Client, error) {
-	if sc.Status.AccountTarget != nil && !scpc.Spec.Target.KCPAccount {
-		return nil, fmt.Errorf("cannot change the recorded account target to another target mode")
+	if recorded := sc.Status.AccountTarget; recorded != nil && (recorded.Mode != target.AccountMode || recorded.ResourceTrackingVersion != 1) {
+		return nil, fmt.Errorf("%w: the recorded destination needs a reviewed account handoff", ErrMigrationRequired)
 	}
-	if !scpc.Spec.Target.KCPAccount {
-		return target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), scpc.Spec.Target.KubeconfigSecretRef, sc.Namespace, r.SecretPolicy)
+	if sc.Status.AccountTarget == nil && (len(sc.Status.Resources) > 0 || sc.Status.TargetCluster != "") {
+		return nil, fmt.Errorf("%w: existing children have no account identity receipts", ErrMigrationRequired)
 	}
 	if err := validateAccountTarget(scpc); err != nil {
 		return nil, err
@@ -44,26 +42,6 @@ func (r *SimpleClusterReconciler) targetClient(ctx context.Context, sc *showroom
 	ref, err := target.AccountIdentity(sc)
 	if err != nil {
 		return nil, err
-	}
-
-	// A stored legacy route must remain usable when KCP is unavailable.
-	if recorded := sc.Status.AccountTarget; recorded != nil && recorded.Mode == target.LegacyLocalMode {
-		if recorded.Cluster != ref.Cluster || recorded.Namespace != ref.Namespace || recorded.Name != ref.Name || recorded.UID == "" {
-			return nil, fmt.Errorf("legacy parent identity differs from the recorded target")
-		}
-		return r.legacyLocalClient(ctx, sc, scpc)
-	}
-	// A physical UID entry bootstraps an old local request without looking up its account UID.
-	if sc.Status.AccountTarget == nil && r.AccountProvider != nil &&
-		r.AccountProvider.LegacyParentUIDs[string(sc.UID)] && recordedLocalTargets(sc, scpc.Name) {
-		ref.UID = string(sc.UID)
-		ref.Mode = target.LegacyLocalMode
-		patch := client.MergeFrom(sc.DeepCopy())
-		sc.Status.AccountTarget = ref
-		if err := r.Status().Patch(ctx, sc, patch); err != nil {
-			return nil, fmt.Errorf("record legacy target before resource writes: %w", err)
-		}
-		return r.legacyLocalClient(ctx, sc, scpc)
 	}
 	tc, err := r.AccountProvider.ForAccount(ctx, ref.Cluster)
 	if err != nil {
@@ -75,29 +53,20 @@ func (r *SimpleClusterReconciler) targetClient(ctx context.Context, sc *showroom
 	}
 	ref.UID = string(parent.GetUID())
 	ref.Mode = target.AccountMode
+	ref.ResourceTrackingVersion = 1
 	if recorded := sc.Status.AccountTarget; recorded != nil {
-		if recorded.Cluster != ref.Cluster || recorded.Namespace != ref.Namespace || recorded.Name != ref.Name || recorded.UID != ref.UID {
+		if *recorded != *ref {
 			return nil, fmt.Errorf("account parent identity differs from the recorded target")
 		}
-		ref.Mode = recorded.Mode
-		if ref.Mode != target.AccountMode && ref.Mode != target.LegacyLocalMode {
-			return nil, fmt.Errorf("invalid recorded account target mode")
-		}
 	} else {
-		if r.AccountProvider.LegacyParentUIDs[ref.UID] {
-			ref.Mode = target.LegacyLocalMode
-		}
 		patch := client.MergeFrom(sc.DeepCopy())
 		sc.Status.AccountTarget = ref
 		if sc.Status.ProviderConfigRef == nil {
 			sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
 		}
 		if err := r.Status().Patch(ctx, sc, patch); err != nil {
-			return nil, fmt.Errorf("record account target before resource writes: %w", err)
+			return nil, fmt.Errorf("record account target: %w", err)
 		}
-	}
-	if ref.Mode == target.LegacyLocalMode {
-		return r.legacyLocalClient(ctx, sc, scpc)
 	}
 	tc.AccountParent = ref
 	tc.OwnerNamespace = ref.Namespace
@@ -129,63 +98,4 @@ func accountCreationAllowed(ctx context.Context, tc *target.Client) (bool, error
 		return false, fmt.Errorf("account parent UID changed before resource creation")
 	}
 	return parent.GetDeletionTimestamp().IsZero(), nil
-}
-
-// recordAccountChild preserves the delete identity before a create can succeed without a response.
-func (r *SimpleClusterReconciler) recordAccountChild(ctx context.Context, sc *showroomv1alpha1.SimpleCluster,
-	resource *showroomv1alpha1.ResourceSpec, desired *unstructured.Unstructured, index int) error {
-	if sc.Status.AccountTarget == nil || sc.Status.AccountTarget.Mode != target.AccountMode {
-		return nil
-	}
-	patch := client.MergeFrom(sc.DeepCopy())
-	var status *showroomv1alpha1.ResourceStatus
-	for i := range sc.Status.Resources {
-		if sc.Status.Resources[i].Name == resource.Name {
-			status = &sc.Status.Resources[i]
-			break
-		}
-	}
-	if status == nil {
-		sc.Status.Resources = append(sc.Status.Resources, showroomv1alpha1.ResourceStatus{Name: resource.Name, GVK: desired.GroupVersionKind().String(), Phase: showroomv1alpha1.PhasePending})
-		status = &sc.Status.Resources[len(sc.Status.Resources)-1]
-	}
-	if resource.Repeat == "" {
-		if status.TargetName != "" && status.TargetName != desired.GetName() {
-			return fmt.Errorf("account child name differs from recorded identity")
-		}
-		status.TargetName = desired.GetName()
-	} else {
-		for _, instance := range status.Instances {
-			if instance.Index == int32(index) {
-				if instance.TargetName != desired.GetName() {
-					return fmt.Errorf("account child name differs from recorded identity")
-				}
-				return nil
-			}
-		}
-		status.Instances = append(status.Instances, showroomv1alpha1.InstanceStatus{Index: int32(index), TargetName: desired.GetName(), Phase: showroomv1alpha1.PhasePending})
-	}
-	if err := r.Status().Patch(ctx, sc, patch); err != nil {
-		return fmt.Errorf("record account child before create: %w", err)
-	}
-	return nil
-}
-
-func recordedLocalTargets(sc *showroomv1alpha1.SimpleCluster, provider string) bool {
-	if sc.Status.TargetCluster != "local" || sc.Status.ProviderConfigRef == nil || sc.Status.ProviderConfigRef.Name != provider || len(sc.Status.Resources) == 0 {
-		return false
-	}
-	for _, resource := range sc.Status.Resources {
-		if resource.TargetName == "" || resource.TargetNamespace != sc.Namespace {
-			return false
-		}
-	}
-	return true
-}
-
-func (r *SimpleClusterReconciler) legacyLocalClient(ctx context.Context, sc *showroomv1alpha1.SimpleCluster,
-	scpc *showroomv1alpha1.SimpleClusterProviderConfig) (*target.Client, error) {
-	scpc.Spec.Target.Namespace = sc.Namespace
-	scpc.Spec.KubeconfigSource.SecretRef.Namespace = sc.Namespace
-	return target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), nil, sc.Namespace, r.SecretPolicy)
 }

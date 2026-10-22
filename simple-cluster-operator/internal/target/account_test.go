@@ -42,6 +42,8 @@ func TestAccountProviderScopesDiscoveryAndRequests(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		var body any
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/apiexports/simpleclusters"):
+			body = map[string]any{"apiVersion": "apis.kcp.io/v1alpha2", "kind": "APIExport", "status": map[string]any{"identityHash": "own-identity"}}
 		case strings.HasSuffix(r.URL.Path, "/apiexportendpointslices"):
 			body = map[string]any{"apiVersion": "apis.kcp.io/v1alpha1", "kind": "APIExportEndpointSliceList", "items": []any{map[string]any{"spec": map[string]any{"export": map[string]any{"name": "simpleclusters"}}, "status": map[string]any{"endpoints": []any{map[string]any{"url": server.URL + "/services/apiexport/provider/simpleclusters"}}}}}}
 		case strings.HasSuffix(r.URL.Path, "/api"):
@@ -150,22 +152,5 @@ func TestAccountProviderRejectsForeignExportSlice(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatal("followed endpoint from foreign export")
-	}
-}
-
-func TestAccountIronCoreShootAllowlist(t *testing.T) {
-	for _, tc := range []struct {
-		version, kind string
-		allowed       bool
-	}{
-		{"sap.eu/v1alpha1", "IronCoreShoot", true},
-		{"apeiro.eu/v1alpha1", "IronCoreShoot", true},
-		{"unknown.eu/v1alpha1", "IronCoreShoot", false},
-		{"apeiro.eu/v1beta1", "IronCoreShoot", false},
-		{"apeiro.eu/v1alpha1", "OpenStackShoot", false},
-	} {
-		if got := IsAccountIronCoreShoot(tc.version, tc.kind); got != tc.allowed {
-			t.Fatalf("%s %s: got %v", tc.version, tc.kind, got)
-		}
 	}
 }

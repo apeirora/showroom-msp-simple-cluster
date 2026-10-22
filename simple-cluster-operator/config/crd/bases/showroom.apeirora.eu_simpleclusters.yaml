@@ -289,6 +289,59 @@ spec:
           status:
             description: SimpleClusterStatus defines the observed state of SimpleCluster.
             properties:
+              accountResources:
+                description: AccountResources is the durable create and cleanup record
+                  for provider children.
+                items:
+                  description: |-
+                    AccountResourceStatus records one child before its first create request.
+                    Its destination and API identity remain fixed until confirmed deletion.
+                  properties:
+                    apiIdentityHash:
+                      type: string
+                    apiVersion:
+                      type: string
+                    creationID:
+                      type: string
+                    deleting:
+                      description: Deleting prevents a removed instance from being
+                        recreated during cleanup.
+                      type: boolean
+                    deletionAnnotations:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    dependsOn:
+                      items:
+                        type: string
+                      type: array
+                    index:
+                      format: int32
+                      type: integer
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    repeated:
+                      type: boolean
+                    resource:
+                      type: string
+                    resourceName:
+                      type: string
+                    uid:
+                      type: string
+                  required:
+                  - apiVersion
+                  - creationID
+                  - index
+                  - kind
+                  - name
+                  - resource
+                  - resourceName
+                  type: object
+                type: array
               accountTarget:
                 description: AccountTarget pins account ownership and deletion routing.
                 properties:
@@ -305,6 +358,11 @@ spec:
                     type: string
                   namespace:
                     type: string
+                  resourceTrackingVersion:
+                    description: ResourceTrackingVersion identifies the durable child
+                      receipt contract.
+                    format: int32
+                    type: integer
                   uid:
                     type: string
                 required:

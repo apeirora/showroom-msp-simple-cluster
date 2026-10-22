@@ -12,9 +12,9 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,12 +50,6 @@ const (
 	// fieldManager owns server-side applies the operator makes onto
 	// provisioned clusters for spec.resources.
 	fieldManager = "simple-cluster-operator"
-
-	// forceCleanupGrace is how long the operator waits after a target
-	// resource enters Terminating before forcibly stripping its
-	// finalizers. Only honoured when ResourceSpec.ForceCleanupOnCascade
-	// is set.
-	forceCleanupGrace = 30 * time.Second
 )
 
 // SimpleClusterReconciler walks the SCPC's DAG of ResourceSpecs and
@@ -176,9 +169,31 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	tc, err := r.targetClient(ctx, &sc, &scpc)
 	if err != nil {
-		return r.failSC(ctx, &sc, "TargetClientError", err.Error())
+		reason := "TargetClientError"
+		if errors.Is(err, ErrMigrationRequired) {
+			reason = reasonMigrationRequired
+		}
+		return r.failSC(ctx, &sc, reason, err.Error())
 	}
 
+	authorizations, err := authorizeAccountGraph(ctx, tc, &scpc)
+	if err != nil {
+		return r.failSC(ctx, &sc, "AccountAuthorizationDenied", err.Error())
+	}
+	for _, receipt := range sc.Status.AccountResources {
+		found := false
+		for _, rs := range scpc.Spec.Resources {
+			if rs.Name == receipt.ResourceName {
+				if rs.APIVersion != receipt.APIVersion || rs.Kind != receipt.Kind || (rs.Repeat != "") != receipt.Repeated || !slices.Equal(rs.DependsOn, receipt.DependsOn) {
+					return r.failSC(ctx, &sc, reasonMigrationRequired, "the graph changed a recorded resource identity or dependencies")
+				}
+				found = true
+			}
+		}
+		if !found {
+			return r.failSC(ctx, &sc, reasonMigrationRequired, "the graph removed a recorded resource; an explicit handoff is required")
+		}
+	}
 	resourceByName := make(map[string]*showroomv1alpha1.ResourceSpec, len(scpc.Spec.Resources))
 	for i := range scpc.Spec.Resources {
 		rs := &scpc.Spec.Resources[i]
@@ -220,6 +235,13 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return r.failSC(ctx, &sc, "RenderError",
 				fmt.Sprintf("resource %q: %v", name, rerr))
 		}
+		done, scaleErr := r.accountScaleDown(ctx, &sc, tc, rs.Name, len(rendered))
+		if scaleErr != nil {
+			return r.failSC(ctx, &sc, "ScaleDownBlocked", scaleErr.Error())
+		}
+		if !done {
+			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+		}
 		repeated := rs.Repeat != ""
 		if len(rendered) == 0 {
 			statuses[name] = &showroomv1alpha1.ResourceStatus{
@@ -239,21 +261,31 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			if err := tc.StampParent(desired); err != nil {
 				return r.failSC(ctx, &sc, "InvalidAccountChild", err.Error())
 			}
+			authorization := authorizations[name]
+			if err := authorization.CheckObject(desired); err != nil {
+				return r.failSC(ctx, &sc, "AccountAuthorizationDenied", err.Error())
+			}
 			gvk := desired.GroupVersionKind()
 			gvkStr = gvk.String()
-			mapping, mperr := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-			if mperr != nil {
-				return r.failSC(ctx, &sc, "GVKNotFound",
-					fmt.Sprintf("resource %q[%d]: RESTMapping %s: %v", name, idx, gvk, mperr))
-			}
+			mapping := authorization.Mapping
 			ri, referenceErr := tc.ResourceFor(mapping, desired.GetNamespace(), desired.GetName(), secretpolicy.Copy)
 			if referenceErr != nil {
 				return ctrl.Result{}, referenceErr
+			}
+			receiptIdx := receiptIndex(&sc, rs.Name, idx)
+			if receiptIdx >= 0 {
+				if err := validateReceipt(&sc.Status.AccountResources[receiptIdx], desired, authorization); err != nil {
+					return r.failSC(ctx, &sc, reasonMigrationRequired, err.Error())
+				}
+				stampCreationID(desired, sc.Status.AccountResources[receiptIdx].CreationID)
 			}
 
 			existing, gerr := ri.Get(ctx, desired.GetName(), metav1.GetOptions{})
 			switch {
 			case apierrors.IsNotFound(gerr):
+				if receiptIdx >= 0 && sc.Status.AccountResources[receiptIdx].UID != "" {
+					return r.failSC(ctx, &sc, "ChildIdentityLost", "the recorded account child disappeared; an explicit handoff is required")
+				}
 				// Re-check deletion straight from the API server right before
 				// creating: a target Create can order real infrastructure, so a
 				// pass that started before the user deleted the SC must not
@@ -273,8 +305,13 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				if _, referenceErr := tc.ResourceFor(mapping, desired.GetNamespace(), desired.GetName(), secretpolicy.Write); referenceErr != nil {
 					return ctrl.Result{}, referenceErr
 				}
-				if err := r.recordAccountChild(ctx, &sc, rs, desired, idx); err != nil {
-					return ctrl.Result{}, err
+				var recordErr error
+				receiptIdx, recordErr = r.recordAccountChild(ctx, &sc, rs, desired, idx, authorization)
+				if recordErr != nil {
+					return ctrl.Result{}, recordErr
+				}
+				if err := reauthorizeAccountWrite(ctx, tc, desired, authorization.IdentityHash, "create"); err != nil {
+					return r.failSC(ctx, &sc, "AccountAuthorizationDenied", err.Error())
 				}
 				created, cerr := ri.Create(ctx, desired, createOpts)
 				if cerr != nil {
@@ -288,7 +325,10 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return r.failSC(ctx, &sc, "GetTargetError",
 					fmt.Sprintf("resource %q[%d]: %v", name, idx, gerr))
 			}
-			if err := target.ValidateParent(existing, tc.AccountParent); err != nil {
+			if err := authorization.CheckObject(existing); err != nil {
+				return r.failSC(ctx, &sc, "AccountAuthorizationDenied", err.Error())
+			}
+			if err := r.acceptAccountChild(ctx, &sc, tc, existing, receiptIdx, authorization); err != nil {
 				return r.failSC(ctx, &sc, "ChildOwnershipConflict", err.Error())
 			}
 			// v0.x: do not patch existing R. Drift requires user to delete R.
@@ -332,13 +372,7 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if sc.Status.ProviderConfigRef == nil {
 		sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: scpc.Name}
 	}
-	sc.Status.TargetCluster = "local"
-	if tc.AccountParent != nil {
-		sc.Status.TargetCluster = "kcp:" + tc.AccountParent.Cluster
-	}
-	if scpc.Spec.Target.KubeconfigSecretRef != nil {
-		sc.Status.TargetCluster = scpc.Name
-	}
+	sc.Status.TargetCluster = "kcp:" + tc.AccountParent.Cluster
 	sc.Status.Resources = orderedStatuses(order, statuses)
 	sc.Status.Phase = aggregate
 	sc.Status.ObservedGeneration = sc.Generation
@@ -641,9 +675,6 @@ func setResourceCondition(sc *showroomv1alpha1.SimpleCluster, name string, statu
 // and deleting R, then removing the finalizer. The kubeconfig Secret is
 // garbage-collected by Kubernetes via its OwnerReference on SC.
 func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) (ctrl.Result, error) {
-	if err := r.preflightSecretReferences(ctx, sc); err != nil {
-		return ctrl.Result{}, err
-	}
 	log := logf.FromContext(ctx)
 
 	if sc.Status.Phase != showroomv1alpha1.PhaseDeleting {
@@ -672,8 +703,12 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 	if scpcRef != nil && scpcRef.Name != "" {
 		done, err := r.deleteTargetResources(ctx, sc, scpcRef.Name)
 		if err != nil {
-			log.Error(err, "delete target resources failed; will retry")
-			return ctrl.Result{RequeueAfter: scRequeueWorking}, nil
+			log.Error(err, "delete account children failed; retain parent finalizer")
+			reason := "AccountCleanupBlocked"
+			if errors.Is(err, ErrMigrationRequired) {
+				reason = reasonMigrationRequired
+			}
+			return r.failSC(ctx, sc, reason, err.Error())
 		}
 		if !done {
 			// At least one resource at the current reverse-topo level is
@@ -703,183 +738,12 @@ func (r *SimpleClusterReconciler) reconcileDelete(ctx context.Context, sc *showr
 // finish their own cleanup (e.g. UbuntuCluster SSHing into a VM to
 // uninstall k3s) BEFORE the resources they depend on disappear.
 // Returns (true, nil) once all levels are clear.
-func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, scpcName string) (bool, error) {
-	log := logf.FromContext(ctx)
-
-	scpcFound, err := r.getSCPC(ctx, sc, scpcName)
+func (r *SimpleClusterReconciler) deleteTargetResources(ctx context.Context, sc *showroomv1alpha1.SimpleCluster, _ string) (bool, error) {
+	tc, err := r.targetClient(ctx, sc, &showroomv1alpha1.SimpleClusterProviderConfig{})
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if sc.Status.AccountTarget != nil {
-				return false, fmt.Errorf("account target configuration is missing; retain parent for cleanup")
-			}
-			log.Info("SCPC no longer present; skipping remote delete", "scpc", scpcName)
-			return true, nil
-		}
-		return false, fmt.Errorf("get SCPC %s: %w", scpcName, err)
+		return false, err
 	}
-	scpc := *scpcFound
-
-	order, err := validateAndTopoSort(&scpc)
-	if err != nil {
-		// SCPC has gone invalid since creation; best-effort delete by status.
-		log.Error(err, "SCPC invalid during delete; falling back to status-tracked order")
-		order = orderFromStatus(sc)
-	}
-
-	tc, err := r.targetClient(ctx, sc, &scpc)
-	if err != nil {
-		return false, fmt.Errorf("build target client: %w", err)
-	}
-
-	resourceByName := make(map[string]*showroomv1alpha1.ResourceSpec, len(scpc.Spec.Resources))
-	for i := range scpc.Spec.Resources {
-		rs := &scpc.Spec.Resources[i]
-		resourceByName[rs.Name] = rs
-	}
-	for i := len(order) - 1; i >= 0; i-- {
-		name := order[i]
-		rs := resourceByName[name]
-		if rs == nil {
-			continue
-		}
-		gv, gerr := schema.ParseGroupVersion(rs.APIVersion)
-		if gerr != nil {
-			return false, fmt.Errorf("resource %q: parse apiVersion: %w", name, gerr)
-		}
-		gvk := gv.WithKind(rs.Kind)
-		mapping, mperr := tc.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if mperr != nil {
-			return false, fmt.Errorf("resource %q: RESTMapping %s: %w", name, gvk, mperr)
-		}
-
-		targets, err := deletionReferences(&scpc, sc, rs)
-		if tc.AccountParent != nil && len(trackedSecretReferences(sc, rs.Name)) == 0 {
-			renderContext, renderErr := rendertpl.BuildContext(&scpc, sc, rs, nil)
-			if renderErr != nil {
-				return false, renderErr
-			}
-			targets = []secretReference{{name: renderContext["Target"].(map[string]any)["name"].(string)}}
-		}
-		if err != nil {
-			return false, fmt.Errorf("resource %q: resolve deletion references: %w", name, err)
-		}
-
-		levelDone := true
-		for _, t := range targets {
-			if tc.AccountParent != nil && t.namespace != "" {
-				return false, fmt.Errorf("recorded account child must be cluster-scoped")
-			}
-			if _, err := tc.ResourceFor(mapping, t.namespace, t.name, secretpolicy.Copy); err != nil {
-				return false, err
-			}
-			ri, err := tc.ResourceFor(mapping, t.namespace, t.name, secretpolicy.Write)
-			if err != nil {
-				return false, err
-			}
-			exists, derr := r.deleteOneTarget(ctx, ri, rs, gvk, name, t.name, tc.AccountParent)
-			if derr != nil {
-				return false, derr
-			}
-			if exists {
-				levelDone = false
-			}
-		}
-		if !levelDone {
-			log.Info("waiting for level to terminate before deleting predecessors",
-				"resource", name)
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-// deleteOneTarget issues (or progresses) the deletion of a single target
-// object. It reports whether the object still exists — i.e. whether the caller
-// must keep waiting before deleting this level's predecessors. On error the
-// returned bool is meaningless; the caller bails out on err.
-func (r *SimpleClusterReconciler) deleteOneTarget(
-	ctx context.Context,
-	ri dynamic.ResourceInterface,
-	rs *showroomv1alpha1.ResourceSpec,
-	gvk schema.GroupVersionKind,
-	resourceName, targetName string,
-	accountParents ...*showroomv1alpha1.AccountTargetStatus,
-) (bool, error) {
-	log := logf.FromContext(ctx)
-
-	existing, err := ri.Get(ctx, targetName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("resource %q: get %s: %w", resourceName, targetName, err)
-	}
-
-	if len(accountParents) > 0 {
-		if err := target.ValidateParent(existing, accountParents[0]); err != nil {
-			return false, err
-		}
-	}
-
-	// First time we see this target after SC was marked for deletion: announce that this
-	// child may go (the admission guard refuses deletes of labelled children otherwise, and
-	// the sync-agent carries the annotation to the object's KCP mirror), patch
-	// deletionAnnotations (Gardener-style opt-in) and issue Delete. Subsequent
-	// reconciles skip the work — a non-zero deletionTimestamp means our prior
-	// Delete already landed.
-	if existing.GetDeletionTimestamp().IsZero() {
-		annotations := map[string]any{rendertpl.AnnoAllowDelete: "true"}
-		for k, v := range rs.DeletionAnnotations {
-			annotations[k] = v
-		}
-		metadata := map[string]any{"annotations": annotations}
-		deleteOptions := metav1.DeleteOptions{}
-		if len(accountParents) > 0 && accountParents[0] != nil {
-			uid := existing.GetUID()
-			if uid == "" {
-				return true, fmt.Errorf("account child has no UID")
-			}
-			metadata["uid"] = uid
-			metadata["resourceVersion"] = existing.GetResourceVersion()
-			deleteOptions.Preconditions = &metav1.Preconditions{UID: &uid}
-		}
-		patchBytes, perr := json.Marshal(map[string]any{"metadata": metadata})
-		if perr != nil {
-			return true, fmt.Errorf("resource %q: marshal deletion annotations: %w", resourceName, perr)
-		}
-		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
-			return true, fmt.Errorf("resource %q: patch deletion annotations: %w", resourceName, perr)
-		}
-		if derr := ri.Delete(ctx, targetName, deleteOptions); derr != nil && !apierrors.IsNotFound(derr) {
-			return true, fmt.Errorf("resource %q: delete %s: %w", resourceName, targetName, derr)
-		}
-		log.Info("target resource delete requested",
-			"resource", resourceName, "name", targetName, "gvk", gvk.String())
-		return true, nil
-	}
-
-	// Force-cleanup escape hatch: R is opted in via SCPC and has been
-	// Terminating long enough that we no longer expect the downstream
-	// controller to make progress on its own (typically because the
-	// infrastructure it relied on is also gone). Strip all finalizers so K8s GC
-	// removes R immediately.
-	if rs.ForceCleanupOnCascade && len(existing.GetFinalizers()) > 0 &&
-		time.Since(existing.GetDeletionTimestamp().Time) >= forceCleanupGrace {
-		patchBytes, perr := json.Marshal(map[string]any{
-			"metadata": map[string]any{"finalizers": []string{}},
-		})
-		if perr != nil {
-			return true, fmt.Errorf("resource %q: marshal finalizer strip: %w", resourceName, perr)
-		}
-		if _, perr := ri.Patch(ctx, targetName, types.MergePatchType, patchBytes, metav1.PatchOptions{}); perr != nil && !apierrors.IsNotFound(perr) {
-			return true, fmt.Errorf("resource %q: force-strip finalizers: %w", resourceName, perr)
-		}
-		log.Info("force-stripped finalizers after grace window",
-			"resource", resourceName, "name", targetName, "gvk", gvk.String(),
-			"grace", forceCleanupGrace)
-	}
-
-	return true, nil
+	return r.cleanupAccountReceipts(ctx, sc, tc, func(showroomv1alpha1.AccountResourceStatus) bool { return true })
 }
 
 // getSCPC resolves an SCPC name for the given SimpleCluster: the SC's own
@@ -914,18 +778,6 @@ func selectProvider(refs []string) string {
 	return ""
 }
 
-// orderFromStatus reconstructs a best-effort ordering when the live SCPC
-// is no longer valid for sorting: use whatever order the status records.
-func orderFromStatus(sc *showroomv1alpha1.SimpleCluster) []string {
-	out := make([]string, 0, len(sc.Status.Resources))
-	for _, s := range sc.Status.Resources {
-		out = append(out, s.Name)
-	}
-	return out
-}
-
-// failSC patches an Error condition on the SC and stops the reconcile.
-// Returns a result that re-queues on the working cadence.
 func (r *SimpleClusterReconciler) failSC(
 	ctx context.Context, sc *showroomv1alpha1.SimpleCluster, reason, msg string,
 ) (ctrl.Result, error) {
@@ -936,7 +788,10 @@ func (r *SimpleClusterReconciler) failSC(
 		Reason:  reason,
 		Message: msg,
 	})
-	if sc.Status.Phase == "" {
+	apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{
+		Type: showroomv1alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg,
+	})
+	if sc.Status.Phase == "" || reason == reasonMigrationRequired {
 		sc.Status.Phase = showroomv1alpha1.PhasePending
 	}
 	setRoleCounts(sc)

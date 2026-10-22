@@ -83,6 +83,10 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+	k8sClient = accountProjectionClient{Client: k8sClient}
+	server, err := startEnvtestAccountProvider(cfg)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(server.Close)
 })
 
 var _ = AfterSuite(func() {

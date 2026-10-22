@@ -3,14 +3,13 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
@@ -28,8 +27,13 @@ import (
 )
 
 type accountFixture struct {
-	group      string
-	credential []byte
+	group        string
+	kind         string
+	resource     string
+	namespaced   bool
+	bindingReads int
+	revokeAt     int
+	credential   []byte
 
 	loseCreateResponse bool
 
@@ -51,12 +55,13 @@ func newAccountFixture(t *testing.T, groups ...string) *accountFixture {
 	if len(groups) > 0 {
 		group = groups[0]
 	}
-	f := &accountFixture{parentUID: "account-parent", group: group}
+	f := &accountFixture{parentUID: "account-parent", group: group, kind: "IronCoreShoot", resource: "ironcoreshoots"}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.server.Close)
 	return f
 }
 
+//nolint:gocyclo // HTTP fixture covers discovery, authorization and resource operations.
 func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -68,6 +73,8 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 		obj = f.child
 	} else if r.URL.Path == "/physical/api/v1/namespaces/account-a/secrets/sc-child-ironcoreshoot-kubeconfig" {
 		obj = &corev1.Secret{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"}, ObjectMeta: metav1.ObjectMeta{Name: "sc-child-ironcoreshoot-kubeconfig", Namespace: "account-a"}, Data: map[string][]byte{"kubeconfig": f.credential}}
+	} else if r.URL.Path == "/clusters/provider/apis/apis.kcp.io/v1alpha2/apiexports/simpleclusters.showroom.apeirora.eu" {
+		obj = map[string]any{"apiVersion": "apis.kcp.io/v1alpha2", "kind": "APIExport", "metadata": map[string]any{"name": "simpleclusters.showroom.apeirora.eu"}, "status": map[string]any{"identityHash": "own-identity"}}
 	} else if r.URL.Path == "/clusters/provider/apis/apis.kcp.io/v1alpha1/apiexportendpointslices" {
 		obj = map[string]any{"apiVersion": "apis.kcp.io/v1alpha1", "kind": "APIExportEndpointSliceList", "items": []any{map[string]any{"spec": map[string]any{"export": map[string]any{"name": "simpleclusters.showroom.apeirora.eu"}}, "status": map[string]any{"endpoints": []any{map[string]any{"url": f.server.URL + "/services/apiexport/provider/simpleclusters.showroom.apeirora.eu"}}}}}}
 	} else if !strings.HasPrefix(r.URL.Path, base+"/") {
@@ -82,13 +89,29 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			obj = metav1.APIResourceList{GroupVersion: "v1", APIResources: []metav1.APIResource{{Name: "secrets", Kind: "Secret", Namespaced: true}}}
 		case "/apis":
 			groups := make([]metav1.APIGroup, 0, 2)
-			for _, group := range []string{f.group, "showroom.apeirora.eu"} {
+			for _, group := range []string{f.group, "showroom.apeirora.eu", "apis.kcp.io"} {
 				gv := metav1.GroupVersionForDiscovery{GroupVersion: group + "/v1alpha1", Version: "v1alpha1"}
 				groups = append(groups, metav1.APIGroup{Name: group, Versions: []metav1.GroupVersionForDiscovery{gv}, PreferredVersion: gv})
 			}
 			obj = metav1.APIGroupList{Groups: groups}
+		case "/apis/apis.kcp.io/v1alpha1":
+			obj = metav1.APIResourceList{GroupVersion: "apis.kcp.io/v1alpha1", APIResources: []metav1.APIResource{{Name: "apibindings", Kind: "APIBinding", Namespaced: false}}}
+		case "/apis/apis.kcp.io/v1alpha1/apibindings":
+			f.bindingReads++
+			list := accountBindingList(f.group)
+			items := list["items"].([]any)
+			own := items[0].(map[string]any)
+			child := items[1].(map[string]any)
+			child["status"].(map[string]any)["boundResources"].([]any)[0].(map[string]any)["resource"] = f.resource
+			for _, claims := range []any{own["spec"].(map[string]any)["permissionClaims"], own["status"].(map[string]any)["exportPermissionClaims"], own["status"].(map[string]any)["appliedPermissionClaims"]} {
+				claims.([]any)[0].(map[string]any)["resource"] = f.resource
+			}
+			if f.revokeAt > 0 && f.bindingReads >= f.revokeAt {
+				own["spec"].(map[string]any)["permissionClaims"].([]any)[0].(map[string]any)["state"] = "Rejected"
+			}
+			obj = list
 		case "/apis/" + f.group + "/v1alpha1":
-			obj = metav1.APIResourceList{GroupVersion: f.group + "/v1alpha1", APIResources: []metav1.APIResource{{Name: "ironcoreshoots", Kind: "IronCoreShoot", Namespaced: false}}}
+			obj = metav1.APIResourceList{GroupVersion: f.group + "/v1alpha1", APIResources: []metav1.APIResource{{Name: f.resource, Kind: f.kind, Namespaced: f.namespaced}}}
 		case "/apis/showroom.apeirora.eu/v1alpha1":
 			obj = metav1.APIResourceList{GroupVersion: "showroom.apeirora.eu/v1alpha1", APIResources: []metav1.APIResource{{Name: "simpleclusters", Kind: "SimpleCluster", Namespaced: true}}}
 		case "/api/v1/namespaces/default/secrets/sc-child-ironcoreshoot-kubeconfig":
@@ -100,7 +123,7 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 				parent.SetDeletionTimestamp(&now)
 			}
 			obj = parent
-		case "/apis/" + f.group + "/v1alpha1/ironcoreshoots":
+		case f.childPath():
 			if r.Method != "POST" {
 				w.WriteHeader(405)
 				return
@@ -127,7 +150,7 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			w.WriteHeader(http.StatusCreated)
 			obj = f.child
-		case "/apis/" + f.group + "/v1alpha1/ironcoreshoots/sc-child":
+		case f.childPath() + "/sc-child":
 			if f.child == nil || f.deletedChild {
 				w.WriteHeader(http.StatusNotFound)
 				obj = metav1.Status{Status: "Failure", Reason: metav1.StatusReasonNotFound, Code: http.StatusNotFound}
@@ -137,8 +160,19 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			case "GET":
 				obj = f.child
 			case "PATCH":
-				f.patches++
 				patch, _ := io.ReadAll(r.Body)
+				var body map[string]any
+				if err := json.Unmarshal(patch, &body); err != nil {
+					w.WriteHeader(400)
+					return
+				}
+				metadata, _ := body["metadata"].(map[string]any)
+				if metadata["uid"] != string(f.child.GetUID()) || metadata["resourceVersion"] != f.child.GetResourceVersion() {
+					w.WriteHeader(http.StatusConflict)
+					obj = metav1.Status{Status: "Failure", Reason: metav1.StatusReasonConflict, Code: http.StatusConflict}
+					break
+				}
+				f.patches++
 				if strings.Contains(string(patch), "allow-delete") {
 					annotations := f.child.GetAnnotations()
 					annotations["showroom.apeirora.eu/allow-delete"] = "true"
@@ -146,6 +180,16 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 				}
 				obj = f.child
 			case "DELETE":
+				var options metav1.DeleteOptions
+				if err := json.NewDecoder(r.Body).Decode(&options); err != nil {
+					w.WriteHeader(400)
+					return
+				}
+				if options.Preconditions == nil || options.Preconditions.UID == nil || *options.Preconditions.UID != f.child.GetUID() {
+					w.WriteHeader(http.StatusConflict)
+					obj = metav1.Status{Status: "Failure", Reason: metav1.StatusReasonConflict, Code: http.StatusConflict}
+					break
+				}
 				f.deletes++
 				now := metav1.Now()
 				f.child.SetDeletionTimestamp(&now)
@@ -172,11 +216,11 @@ func accountReconciler(t *testing.T, f *accountFixture) (*SimpleClusterReconcile
 		t.Fatal(err)
 	}
 	sc := &showroomv1alpha1.SimpleCluster{ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "account-a", UID: "physical-parent", Labels: map[string]string{target.RemoteClusterLabel: "account-a"}, Annotations: map[string]string{target.RemoteNamespaceAnnotation: "default", target.RemoteNameAnnotation: "demo"}}, Spec: showroomv1alpha1.SimpleClusterSpec{ProviderConfigRefs: []string{"provider"}}}
-	pc := &showroomv1alpha1.SimpleClusterProviderConfig{ObjectMeta: metav1.ObjectMeta{Name: "provider", Namespace: "account-a"}, Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{Target: showroomv1alpha1.TargetSpec{KCPAccount: true}, Resources: []showroomv1alpha1.ResourceSpec{{Name: "shoot", APIVersion: f.group + "/v1alpha1", Kind: "IronCoreShoot", NameTemplate: "sc-child", Readiness: &showroomv1alpha1.ReadinessCheck{PhasePath: "status.phase", PhaseReadyValue: "Ready"}, Template: "apiVersion: " + f.group + "/v1alpha1\nkind: IronCoreShoot\nmetadata: {}\nspec: plain-gardener-spec\n"}}, KubeconfigSource: showroomv1alpha1.KubeconfigSource{ResourceName: "shoot", SecretRef: &showroomv1alpha1.KubeconfigSecretSource{Name: "{{ .Target.name }}-ironcoreshoot-kubeconfig", Namespace: "default"}}}}
+	pc := &showroomv1alpha1.SimpleClusterProviderConfig{ObjectMeta: metav1.ObjectMeta{Name: "provider", Namespace: "account-a"}, Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{Target: showroomv1alpha1.TargetSpec{KCPAccount: true}, Resources: []showroomv1alpha1.ResourceSpec{{Name: "shoot", APIVersion: f.group + "/v1alpha1", Kind: f.kind, NameTemplate: "sc-child", Readiness: &showroomv1alpha1.ReadinessCheck{PhasePath: "status.phase", PhaseReadyValue: "Ready"}, Template: "apiVersion: " + f.group + "/v1alpha1\nkind: " + f.kind + "\nmetadata: {}\nspec: plain-gardener-spec\n"}}, KubeconfigSource: showroomv1alpha1.KubeconfigSource{ResourceName: "shoot", SecretRef: &showroomv1alpha1.KubeconfigSecretSource{Name: "{{ .Target.name }}-ironcoreshoot-kubeconfig", Namespace: "default"}}}}
 	mapper := apimeta.NewDefaultRESTMapper([]schema.GroupVersion{{Group: f.group, Version: "v1alpha1"}})
 	mapper.Add(schema.GroupVersionKind{Group: f.group, Version: "v1alpha1", Kind: "IronCoreShoot"}, apimeta.RESTScopeNamespace)
 	physical := fake.NewClientBuilder().WithScheme(scheme).WithRESTMapper(mapper).WithStatusSubresource(sc, pc).WithObjects(sc, pc).Build()
-	return &SimpleClusterReconciler{Client: physical, APIReader: physical, Scheme: scheme, RESTConfig: &rest.Config{Host: f.server.URL + "/physical"}, AccountProvider: &target.AccountProvider{Config: &rest.Config{Host: f.server.URL + "/clusters/provider"}, APIExportName: "simpleclusters.showroom.apeirora.eu", LegacyParentUIDs: map[string]bool{}}}, sc, pc
+	return &SimpleClusterReconciler{Client: physical, APIReader: physical, Scheme: scheme, RESTConfig: &rest.Config{Host: f.server.URL + "/physical"}, AccountProvider: &target.AccountProvider{Config: &rest.Config{Host: f.server.URL + "/clusters/provider"}, APIExportName: "simpleclusters.showroom.apeirora.eu"}}, sc, pc
 }
 
 func reconcileAccount(t *testing.T, r *SimpleClusterReconciler, sc *showroomv1alpha1.SimpleCluster) error {
@@ -346,37 +390,27 @@ func accountErrorReason(sc *showroomv1alpha1.SimpleCluster) string {
 	return condition.Reason
 }
 
-func TestAccountLegacyUIDKeepsLocalRouteAndSecretNamespace(t *testing.T) {
-	f := newAccountFixture(t)
-	r, sc, pc := accountReconciler(t, f)
-	r.AccountProvider.LegacyParentUIDs[f.parentUID] = true
-	tc, err := r.targetClient(context.Background(), sc, pc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if tc.AccountParent != nil || tc.RESTConfig.Host != f.server.URL+"/physical" {
-		t.Fatal("old parent changed route")
-	}
-	if pc.Spec.Target.Namespace != sc.Namespace || pc.Spec.KubeconfigSource.SecretRef.Namespace != sc.Namespace {
-		t.Fatal("old parent changed source namespace")
-	}
-	if sc.Status.AccountTarget == nil || sc.Status.AccountTarget.Mode != target.LegacyLocalMode {
-		t.Fatal("legacy route was not recorded")
-	}
-	// Removing the compatibility entry cannot redirect deletion of an existing request.
-	delete(r.AccountProvider.LegacyParentUIDs, f.parentUID)
-	pc.Spec.Target.Namespace = ""
-	pc.Spec.KubeconfigSource.SecretRef.Namespace = "default"
-	tc, err = r.targetClient(context.Background(), sc, pc)
-	if err != nil || tc.AccountParent != nil {
-		t.Fatal("recorded local route changed after configuration edit")
+func TestAccountUnmigratedRecordsRequireMigration(t *testing.T) {
+	for _, mode := range []string{"local", "remote", target.LegacyLocalMode, target.AccountMode} {
+		f := newAccountFixture(t)
+		r, sc, pc := accountReconciler(t, f)
+		sc.Status.TargetCluster = mode
+		sc.Status.Resources = []showroomv1alpha1.ResourceStatus{{Name: "shoot", TargetName: "sc-child"}}
+		if mode == target.LegacyLocalMode || mode == target.AccountMode {
+			sc.Status.AccountTarget = &showroomv1alpha1.AccountTargetStatus{Mode: mode}
+		}
+		if _, err := r.targetClient(context.Background(), sc, pc); !errors.Is(err, ErrMigrationRequired) {
+			t.Fatalf("mode=%s error=%v", mode, err)
+		}
+		if f.creates+f.deletes+f.patches != 0 || len(f.paths) != 0 {
+			t.Fatal("migration guard accessed account or provider child")
+		}
 	}
 }
 
 func TestAccountRecreatedParentUsesKCPWithDefaultEmptyLegacyList(t *testing.T) {
 	f := newAccountFixture(t)
 	r, sc, pc := accountReconciler(t, f)
-	r.AccountProvider.LegacyParentUIDs["old-parent"] = true
 	tc, err := r.targetClient(context.Background(), sc, pc)
 	if err != nil {
 		t.Fatal(err)
@@ -399,19 +433,10 @@ func TestAccountMissingProviderAndInvalidConfigurationFailClosed(t *testing.T) {
 	}
 	for _, mutate := range []func(*showroomv1alpha1.SimpleClusterProviderConfig){
 		func(p *showroomv1alpha1.SimpleClusterProviderConfig) {
-			p.Spec.Resources[0].APIVersion = "unknown.eu/v1alpha1"
-		},
-		func(p *showroomv1alpha1.SimpleClusterProviderConfig) { p.Spec.Resources[0].Kind = "OpenStackShoot" },
-		func(p *showroomv1alpha1.SimpleClusterProviderConfig) { p.Spec.Target.Namespace = "foreign" },
-		func(p *showroomv1alpha1.SimpleClusterProviderConfig) {
 			p.Spec.Target.KubeconfigSecretRef = &corev1.SecretReference{Name: "secret"}
 		},
 		func(p *showroomv1alpha1.SimpleClusterProviderConfig) {
 			p.Spec.Resources[0].ForceCleanupOnCascade = true
-		},
-		func(p *showroomv1alpha1.SimpleClusterProviderConfig) { p.Spec.Resources[0].Namespace = "other" },
-		func(p *showroomv1alpha1.SimpleClusterProviderConfig) {
-			p.Spec.KubeconfigSource.SecretRef.Namespace = "foreign"
 		},
 	} {
 		candidate := pc.DeepCopy()
@@ -472,7 +497,7 @@ func TestAccountLostCreateResponseRetainsDeletionIdentity(t *testing.T) {
 	if accountErrorReason(current) != "CreateError" {
 		t.Fatal("fixture did not simulate lost creation response")
 	}
-	if len(current.Status.Resources) != 1 || current.Status.Resources[0].TargetName != "sc-child" {
+	if len(current.Status.AccountResources) != 1 || current.Status.AccountResources[0].Name != "sc-child" {
 		t.Fatal("lost child identity after failed response")
 	}
 	if err := r.Delete(context.Background(), current); err != nil {
@@ -514,72 +539,127 @@ func TestAccountStatusAndCredentialReachExistingConsumerSecret(t *testing.T) {
 	}
 }
 
-func TestAccountLegacyRenewalDoesNotUseAccountClient(t *testing.T) {
-	for _, recorded := range []bool{false, true} {
-		t.Run(fmt.Sprintf("recorded_%v", recorded), func(t *testing.T) {
-			f := newAccountFixture(t)
-			r, sc, _ := accountReconciler(t, f)
-			// No provider REST config exists. Legacy renewal must use only the local client.
-			r.AccountProvider.Config = nil
-			r.AccountProvider.LegacyParentUIDs[string(sc.UID)] = true
-			sc.Status.TargetCluster = "local"
-			sc.Status.KubeconfigSecretRef = &corev1.LocalObjectReference{Name: "demo-kubeconfig"}
-			expiredAt := metav1.NewTime(time.Now().Add(-time.Hour))
-			sc.Status.KubeconfigExpiresAt = &expiredAt
-			apimeta.SetStatusCondition(&sc.Status.Conditions, metav1.Condition{Type: showroomv1alpha1.ConditionError, Status: metav1.ConditionTrue, Reason: "TargetClientError", Message: "endpoint unavailable"})
-			sc.Status.ProviderConfigRef = &corev1.LocalObjectReference{Name: "provider"}
-			sc.Status.Resources = []showroomv1alpha1.ResourceStatus{{Name: "shoot", TargetName: "sc-child", TargetNamespace: sc.Namespace, Phase: showroomv1alpha1.PhaseReady}}
-			if recorded {
-				sc.Status.AccountTarget = &showroomv1alpha1.AccountTargetStatus{Cluster: sc.Namespace, Namespace: "default", Name: sc.Name, UID: "account-parent", Mode: target.LegacyLocalMode}
-				r.AccountProvider = nil
-			}
-			if err := r.Status().Update(context.Background(), sc); err != nil {
-				t.Fatal(err)
-			}
-			f.child = &unstructured.Unstructured{Object: map[string]any{"apiVersion": "sap.eu/v1alpha1", "kind": "IronCoreShoot", "metadata": map[string]any{"name": "sc-child", "namespace": sc.Namespace}, "status": map[string]any{"phase": "Ready"}}}
-			f.credential = []byte("apiVersion: v1\nkind: Config\nclusters:\n- name: workload\n  cluster:\n    server: " + f.server.URL + "/workload\ncontexts:\n- name: workload\n  context: {cluster: workload, user: workload}\ncurrent-context: workload\nusers:\n- name: workload\n  user: {}\n")
-			expired := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "demo-kubeconfig", Namespace: sc.Namespace}, Data: map[string][]byte{"kubeconfig": []byte("expired-fixture")}}
-			if err := r.Create(context.Background(), expired); err != nil {
-				t.Fatal(err)
-			}
-			if err := reconcileAccount(t, r, sc); err != nil {
-				t.Fatal(err)
-			}
-			renewed := &corev1.Secret{}
-			if err := r.Get(context.Background(), client.ObjectKeyFromObject(expired), renewed); err != nil {
-				t.Fatal(err)
-			}
-			if string(renewed.Data["kubeconfig"]) != string(f.credential) {
-				t.Fatal("legacy consumer credential was not renewed")
-			}
-			current := &showroomv1alpha1.SimpleCluster{}
-			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-				t.Fatal(err)
-			}
-			if current.Status.AccountTarget == nil || current.Status.AccountTarget.Mode != target.LegacyLocalMode || current.Status.TargetCluster != "local" {
-				t.Fatal("legacy route was not preserved")
-			}
-			if accountErrorReason(current) != "" {
-				t.Fatal("stale endpoint error remained after credential renewal")
-			}
-			for _, path := range f.paths {
-				if strings.Contains(path, "/clusters/") || strings.Contains(path, "/services/apiexport/") {
-					t.Fatal("legacy renewal called KCP")
-				}
-			}
-		})
-	}
-}
-
 func TestAccountPhysicalUIDWithoutLocalRecordsStillRequiresKCP(t *testing.T) {
 	f := newAccountFixture(t)
 	r, sc, pc := accountReconciler(t, f)
 	r.AccountProvider.Config = nil
-	r.AccountProvider.LegacyParentUIDs[string(sc.UID)] = true
 	if _, err := r.targetClient(context.Background(), sc, pc); err == nil {
 		t.Fatal("new request bypassed account client")
 	}
 	if sc.Status.AccountTarget != nil {
 		t.Fatal("new request was marked as legacy")
+	}
+}
+
+func accountBindingList(group string) map[string]any {
+	claim := map[string]any{"group": group, "resource": "ironcoreshoots", "identityHash": "child-identity", "all": true}
+	accepted := runtime.DeepCopyJSON(claim)
+	accepted["state"] = "Accepted"
+	binding := func(name, group, resource, identity string) map[string]any {
+		return map[string]any{"apiVersion": "apis.kcp.io/v1alpha1", "kind": "APIBinding", "metadata": map[string]any{"name": name, "uid": name + "-uid"}, "status": map[string]any{"phase": "Bound", "conditions": []any{map[string]any{"type": "InitialBindingCompleted", "status": "True"}, map[string]any{"type": "BindingUpToDate", "status": "True"}}, "boundResources": []any{map[string]any{"group": group, "resource": resource, "schema": map[string]any{"identityHash": identity}}}}}
+	}
+	own := binding("own", "showroom.apeirora.eu", "simpleclusters", "own-identity")
+	own["spec"] = map[string]any{"permissionClaims": []any{accepted}}
+	own["status"].(map[string]any)["exportPermissionClaims"] = []any{claim}
+	own["status"].(map[string]any)["appliedPermissionClaims"] = []any{claim}
+	return map[string]any{"apiVersion": "apis.kcp.io/v1alpha1", "kind": "APIBindingList", "items": []any{own, binding("child", group, "ironcoreshoots", "child-identity")}}
+}
+
+func (f *accountFixture) childPath() string {
+	path := "/apis/" + f.group + "/v1alpha1"
+	if f.namespaced {
+		path += "/namespaces/default"
+	}
+	return path + "/" + f.resource
+}
+
+func TestAccountDestinationSupportsArbitraryNamespacedKind(t *testing.T) {
+	f := newAccountFixture(t, "arbitrary.example")
+	f.kind = "AnyChild"
+	f.resource = "anychildren"
+	f.namespaced = true
+	r, sc, pc := accountReconciler(t, f)
+	pc.Spec.Target.KCPAccount = false
+	if err := r.Update(context.Background(), pc); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.creates != 1 || f.child.GetKind() != "AnyChild" || f.child.GetNamespace() != "default" {
+		t.Fatalf("account child not created: %+v", f.child)
+	}
+	current := &showroomv1alpha1.SimpleCluster{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal(err)
+	}
+	if len(current.Status.AccountResources) != 1 || current.Status.AccountResources[0].Namespace != "default" || current.Status.AccountResources[0].UID != "child-uid" {
+		t.Fatal("missing durable namespaced UID receipt")
+	}
+}
+
+func TestAccountClaimRevokedBeforeCreateStopsWrite(t *testing.T) {
+	f := newAccountFixture(t)
+	f.revokeAt = 2
+	r, sc, _ := accountReconciler(t, f)
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.creates+f.deletes+f.patches != 0 {
+		t.Fatal("wrote after claim revocation")
+	}
+	current := &showroomv1alpha1.SimpleCluster{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal(err)
+	}
+	if accountErrorReason(current) != "AccountAuthorizationDenied" {
+		t.Fatal("revocation not reported")
+	}
+}
+
+func TestAccountDeletionRefusesSameNameReplacement(t *testing.T) {
+	f := newAccountFixture(t)
+	r, sc, _ := accountReconciler(t, f)
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	f.child.SetUID("replacement")
+	current := &showroomv1alpha1.SimpleCluster{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Delete(context.Background(), current); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.deletes+f.patches != 0 {
+		t.Fatal("changed same-name replacement")
+	}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal("released parent before handoff")
+	}
+}
+
+func TestAccountClaimRevokedBeforeDeleteStopsDelete(t *testing.T) {
+	f := newAccountFixture(t)
+	r, sc, _ := accountReconciler(t, f)
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	f.revokeAt = f.bindingReads + 3 // resolve cleanup, authorize patch, revoke before delete
+	current := &showroomv1alpha1.SimpleCluster{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Delete(context.Background(), current); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.patches != 1 || f.deletes != 0 {
+		t.Fatalf("patches=%d deletes=%d", f.patches, f.deletes)
 	}
 }

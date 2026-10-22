@@ -224,13 +224,15 @@ spec:
                       templates that predate the range form. Mutually exclusive with Nodes.
                     properties:
                       max:
-                        description: Max is the maximum worker count. Surfaced as .SC.workers.max.
+                        description: Max is the maximum worker count. Surfaced as
+                          .SC.workers.max.
                         format: int32
                         maximum: 100
                         minimum: 1
                         type: integer
                       min:
-                        description: Min is the minimum worker count. Surfaced as .SC.workers.min.
+                        description: Min is the minimum worker count. Surfaced as
+                          .SC.workers.min.
                         format: int32
                         maximum: 100
                         minimum: 1
@@ -293,6 +295,89 @@ spec:
           status:
             description: SimpleClusterStatus defines the observed state of SimpleCluster.
             properties:
+              accountResources:
+                description: AccountResources is the durable create and cleanup record
+                  for provider children.
+                items:
+                  description: |-
+                    AccountResourceStatus records one child before its first create request.
+                    Its destination and API identity remain fixed until confirmed deletion.
+                  properties:
+                    apiIdentityHash:
+                      type: string
+                    apiVersion:
+                      type: string
+                    creationID:
+                      type: string
+                    deleting:
+                      description: Deleting prevents a removed instance from being
+                        recreated during cleanup.
+                      type: boolean
+                    deletionAnnotations:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    dependsOn:
+                      items:
+                        type: string
+                      type: array
+                    index:
+                      format: int32
+                      type: integer
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    repeated:
+                      type: boolean
+                    resource:
+                      type: string
+                    resourceName:
+                      type: string
+                    uid:
+                      type: string
+                  required:
+                  - apiVersion
+                  - creationID
+                  - index
+                  - kind
+                  - name
+                  - resource
+                  - resourceName
+                  type: object
+                type: array
+              accountTarget:
+                description: AccountTarget pins account ownership and deletion routing.
+                properties:
+                  cluster:
+                    type: string
+                  mode:
+                    description: Mode is Account or LegacyLocal. It remains fixed
+                      for this parent.
+                    enum:
+                    - Account
+                    - LegacyLocal
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  resourceTrackingVersion:
+                    description: ResourceTrackingVersion identifies the durable child
+                      receipt contract.
+                    format: int32
+                    type: integer
+                  uid:
+                    type: string
+                required:
+                - cluster
+                - mode
+                - name
+                - namespace
+                - uid
+                type: object
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -571,31 +656,6 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
-              accountTarget:
-                description: AccountTarget pins account ownership and deletion routing.
-                properties:
-                  cluster:
-                    type: string
-                  mode:
-                    description: Mode is Account or LegacyLocal. It remains fixed
-                      for this parent.
-                    enum:
-                    - Account
-                    - LegacyLocal
-                    type: string
-                  name:
-                    type: string
-                  namespace:
-                    type: string
-                  uid:
-                    type: string
-                required:
-                - cluster
-                - mode
-                - name
-                - namespace
-                - uid
-                type: object
               targetCluster:
                 description: |-
                   TargetCluster identifies where the resources live: SCPC name (for remote)
@@ -614,4 +674,4 @@ spec:
     storage: true
     subresources:
       status: {}
-{{- end -}}
+{{- end }}

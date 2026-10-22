@@ -580,3 +580,20 @@ data:
 		t.Errorf("keyRotationPeriod: got %q, want %q", data["keyRotationPeriod"], "720h0m0s")
 	}
 }
+
+func TestAccountContextKeepsPhysicalNamespaceForStableNames(t *testing.T) {
+	sc := &showroomv1alpha1.SimpleCluster{ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "account-a"}, Status: showroomv1alpha1.SimpleClusterStatus{AccountTarget: &showroomv1alpha1.AccountTargetStatus{Cluster: "account-a", Namespace: "team-a"}}}
+	spec := showroomv1alpha1.ResourceSpec{Name: "child", APIVersion: "v1", Kind: "ConfigMap", NameTemplate: "{{ .SC.namespace }}-{{ .Account.namespace }}", Namespace: "{{ .Account.namespace }}", Template: "apiVersion: v1\nkind: ConfigMap\nmetadata: {}\ndata:\n  account: '{{ .Account.cluster }}'\n"}
+	pc := &showroomv1alpha1.SimpleClusterProviderConfig{}
+	rendered, err := Render(pc, sc, &spec, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rendered) != 1 || rendered[0].GetName() != "account-a-team-a" || rendered[0].GetNamespace() != "team-a" {
+		t.Fatalf("unexpected account render: %+v", rendered)
+	}
+	value, _, _ := unstructured.NestedString(rendered[0].Object, "data", "account")
+	if value != "account-a" {
+		t.Fatal("account cluster context missing")
+	}
+}

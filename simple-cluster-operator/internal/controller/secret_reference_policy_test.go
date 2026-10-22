@@ -128,9 +128,9 @@ func TestReferenceDeniedSCPCProbeDoesNotRead(t *testing.T) {
 	pc.Spec.Target.KubeconfigSecretRef = &corev1.SecretReference{Namespace: "foreign", Name: "key"}
 	spy := &referenceClientSpy{Client: fake.NewClientBuilder().WithScheme(scheme).Build()}
 	r := &SimpleClusterProviderConfigReconciler{Client: spy, Scheme: scheme}
-	_, condition, err := r.targetMapper(context.Background(), pc)
-	if err != nil || condition == nil || condition.Reason != "SecretReferenceDenied" {
-		t.Fatalf("missing denial condition: condition=%v error=%v", condition, err)
+	_, condition := r.targetMapper(context.Background(), pc)
+	if condition == nil || condition.Reason != "AccountTargetUnavailable" {
+		t.Fatalf("missing denial condition: condition=%v", condition)
 	}
 	if spy.secretReads != 0 || spy.writes != 0 {
 		t.Fatalf("probe accessed denied reference: reads=%d writes=%d", spy.secretReads, spy.writes)
@@ -217,7 +217,7 @@ func TestReferenceDeleteChecksTrackedCopyAndWriteBeforeMutation(t *testing.T) {
 			defer server.Close()
 			entries := append(tc.entries, secretpolicy.Entry{Namespace: "shared", Name: "demo-seed", Purpose: secretpolicy.Copy})
 			r := &SimpleClusterReconciler{Client: spy, Scheme: scheme, RESTConfig: &rest.Config{Host: server.URL}, SecretPolicy: secretpolicy.Policy{Allowlist: entries}}
-			_, err := r.reconcileDelete(context.Background(), sc)
+			err := r.preflightSecretReferences(context.Background(), sc)
 			if !errors.Is(err, secretpolicy.ErrDenied) {
 				t.Fatalf("expected preflight denial: %v", err)
 			}
@@ -287,7 +287,7 @@ func TestReferenceDeleteEnumerationBeforeMutation(t *testing.T) {
 				entries = append(entries, secretpolicy.Entry{Namespace: "shared", Name: name, Purpose: secretpolicy.Copy}, secretpolicy.Entry{Namespace: "shared", Name: name, Purpose: secretpolicy.Write})
 			}
 			r := &SimpleClusterReconciler{Client: spy, Scheme: scheme, RESTConfig: &rest.Config{Host: server.URL}, SecretPolicy: secretpolicy.Policy{Allowlist: entries}}
-			_, err := r.reconcileDelete(context.Background(), sc)
+			err := r.preflightSecretReferences(context.Background(), sc)
 			if !errors.Is(err, secretpolicy.ErrDenied) {
 				t.Fatalf("expected denial: %v", err)
 			}
