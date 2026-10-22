@@ -9,11 +9,16 @@ import (
 
 	showroomv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/target"
 	rendertpl "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/template"
 )
 
 // preflightSecretReferences rejects known references before request mutations.
 func (r *SimpleClusterReconciler) preflightSecretReferences(ctx context.Context, sc *showroomv1alpha1.SimpleCluster) error {
+	// Account cleanup authorizes durable receipts and does not depend on the current SCPC.
+	if !sc.DeletionTimestamp.IsZero() && sc.Status.AccountTarget != nil && sc.Status.AccountTarget.ResourceTrackingVersion == 1 {
+		return nil
+	}
 	name := selectProvider(sc.Spec.ProviderConfigRefs)
 	if sc.Status.ProviderConfigRef != nil {
 		name = sc.Status.ProviderConfigRef.Name
@@ -32,6 +37,12 @@ func (r *SimpleClusterReconciler) preflightSecretReferences(ctx context.Context,
 		if _, err := r.SecretPolicy.Resolve(sc.Namespace, ref.Namespace, ref.Name, secretpolicy.Use); err != nil {
 			return err
 		}
+	}
+	ownerNamespace := sc.Namespace
+	if ref := sc.Status.AccountTarget; ref != nil && ref.Mode == target.AccountMode {
+		ownerNamespace = ref.Namespace
+	} else if ref, identityErr := target.AccountIdentity(sc); identityErr == nil {
+		ownerNamespace = ref.Namespace
 	}
 	deleting := !sc.DeletionTimestamp.IsZero()
 	for i := range scpc.Spec.Resources {
@@ -72,11 +83,11 @@ func (r *SimpleClusterReconciler) preflightSecretReferences(ctx context.Context,
 			}
 		}
 		for _, ref := range references {
-			if _, err := r.SecretPolicy.Resolve(sc.Namespace, ref.namespace, ref.name, secretpolicy.Copy); err != nil {
+			if _, err := r.SecretPolicy.Resolve(ownerNamespace, ref.namespace, ref.name, secretpolicy.Copy); err != nil {
 				return err
 			}
 			if deleting {
-				if _, err := r.SecretPolicy.Resolve(sc.Namespace, ref.namespace, ref.name, secretpolicy.Write); err != nil {
+				if _, err := r.SecretPolicy.Resolve(ownerNamespace, ref.namespace, ref.name, secretpolicy.Write); err != nil {
 					return err
 				}
 			}

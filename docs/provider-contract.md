@@ -18,13 +18,12 @@ Providers come in two shapes, and both satisfy the same contract:
 
 This is the whole contract for a config-only provider. It must declare:
 
-- **`spec.target`** — where the resources are created. Omit
-  `kubeconfigSecretRef` for the management cluster; supply a Secret reference to
-  build on a remote cluster.
+- **`spec.target`** selects an optional account namespace. The account is the only child destination.
+  A target kubeconfig reference requires migration. See [Account child destination](account-destination.md).
 - **`spec.resources[]`** — at least one resource, each with `apiVersion`, `kind`
   and a `template`. The resource type does not need to be known to the core
   operator: it is applied with a dynamic client. It does, however, need to be
-  *permitted* — see [RBAC for a new API group](#rbac-for-a-new-api-group).
+  *permitted* — see [Access to a child API](#access-to-a-child-api).
 - **`spec.kubeconfigSource`** — how to obtain the finished cluster's kubeconfig.
   This is the deliverable; a provider that cannot produce a kubeconfig is not a
   provider.
@@ -39,36 +38,13 @@ and should declare:
   `.SC.workers.{min,max}` *and* the platform actually scales the pool. Claiming
   it falsely means users get a fixed pool while the status says otherwise.
 
-#### RBAC for a new API group
+#### Access to a child API
 
-The dynamic client still goes through the API server, so the manager's
-ServiceAccount must be allowed to act on the resource type. The manager
-`ClusterRole` enumerates the API groups of the in-repo providers; a resource in
-any other group is rejected with `Forbidden`, and the SimpleCluster parks in
-`Phase=Failed` with a `CreateError`.
-
-A provider grants itself that access without an operator release, by shipping a
-`ClusterRole` carrying the aggregation label:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: simple-cluster-provider-example
-  labels:
-    showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
-rules:
-- apiGroups: ["example.com"]
-  resources: ["*"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-```
-
-Kubernetes folds it into `simple-cluster-operator-provider-resources`, which is
-already bound to the manager. Nothing else is needed.
-
-This applies to resources created on the management cluster. When the SCPC points
-at a remote cluster via `spec.target.kubeconfigSecretRef`, the permissions that
-matter are the ones carried by that kubeconfig.
+Bind the child's APIExport in the account. Add and accept its permission claim on the SimpleCluster APIBinding.
+The accepted and applied claim must grant the required verbs and match the child object.
+The controller pins the API identity and checks authorization before each write.
+The API server also checks each operation.
+See [Account child destination](account-destination.md) for namespace, status and cleanup requirements.
 
 ### 2. Readiness that the operator can read
 

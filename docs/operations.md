@@ -31,8 +31,8 @@ Check a new config before announcing it:
 kubectl get scpc my-provider -o jsonpath='{.status}' | jq
 ```
 
-- `reachable: true` — the target cluster's credentials work. Absent means the
-  target is the local cluster.
+- `reachable: true`: the account virtual workspace serves each child API.
+  Permission claims are checked again before child creation.
 - `resources[]` — one entry per templated resource with its resolved
   GroupVersionKind. A missing entry means the target cluster does not serve that
   type, and every `SimpleCluster` using this config will fail.
@@ -141,7 +141,9 @@ The operator holds no state of its own. What matters is:
 - the `SimpleCluster` and `SimpleClusterProviderConfig` resources;
 - the kubeconfig Secrets in tenant namespaces, which cannot be regenerated for
   providers whose credential is not re-issuable;
-- the target-cluster credential Secrets referenced by
-  `spec.target.kubeconfigSecretRef`.
+- the provider credential Secret for the KCP account virtual workspace;
+- the migration journal and backend UID evidence for any ownership handoff.
 
-Everything else is reconstructed by reconciliation.
+Preserve `status.accountTarget` and `status.accountResources` with the SimpleCluster backup.
+These records prevent deletion or adoption of replacement objects.
+See [Account child destination](account-destination.md).

@@ -63,7 +63,7 @@ var _ = Describe("SimpleCluster Controller", func() {
 		})
 
 		It("records ConditionError(SCPCNotFound) and Phase=Pending", func() {
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				Scheme:     k8sClient.Scheme(),
 				RESTConfig: cfg,
@@ -147,7 +147,7 @@ data:
 		})
 
 		It("parks the SC in Phase=NoHardware and creates no resource", func() {
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				Scheme:     k8sClient.Scheme(),
 				RESTConfig: cfg,
@@ -242,7 +242,7 @@ data:
 		})
 
 		It("creates the target ConfigMap and mirrors a kubeconfig Secret", func() {
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				Scheme:     k8sClient.Scheme(),
 				RESTConfig: cfg,
@@ -296,7 +296,7 @@ data:
 		})
 
 		It("sets Phase=Deleting when the SC deletion is requested", func() {
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				Scheme:     k8sClient.Scheme(),
 				RESTConfig: cfg,
@@ -362,7 +362,7 @@ data:
 				},
 			})
 
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				APIReader:  apiReader,
 				Scheme:     k8sClient.Scheme(),
@@ -394,7 +394,7 @@ data:
 			})
 			Expect(k8sClient.Update(ctx, scpc)).To(Succeed())
 
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				Scheme:     k8sClient.Scheme(),
 				RESTConfig: cfg,
@@ -429,7 +429,7 @@ data:
 			scpc.Spec.Resources[0].DependsOn = []string{"config"} // self-reference
 			Expect(k8sClient.Update(ctx, scpc)).To(Succeed())
 
-			r := &SimpleClusterReconciler{
+			r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider,
 				Client:     k8sClient,
 				Scheme:     k8sClient.Scheme(),
 				RESTConfig: cfg,

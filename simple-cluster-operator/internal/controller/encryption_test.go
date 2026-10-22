@@ -143,7 +143,7 @@ metadata:
 	}
 
 	reconcileTwice := func(name string) {
-		r := &SimpleClusterReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), RESTConfig: cfg}
+		r := &SimpleClusterReconciler{AccountProvider: envtestAccountProvider, Client: k8sClient, Scheme: k8sClient.Scheme(), RESTConfig: cfg}
 		key := types.NamespacedName{Name: name, Namespace: "default"}
 		for range 2 {
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})

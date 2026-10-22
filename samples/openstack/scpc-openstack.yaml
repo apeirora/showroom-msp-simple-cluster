@@ -54,7 +54,7 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "{{ .Resources.sshkey.publicKey | trim }}"
+              - "{{ .Resources.sshkey.status.publicKey | trim }}"
 
     - name: vmworker
       apiVersion: cloudferro.eu/v1alpha1
@@ -80,7 +80,7 @@ spec:
           userData: |
             #cloud-config
             ssh_authorized_keys:
-              - "{{ .Resources.sshkey.publicKey | trim }}"
+              - "{{ .Resources.sshkey.status.publicKey | trim }}"
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
@@ -89,10 +89,6 @@ spec:
         - sshkey
         - vmcp
         - vmworker
-      # k3s lives only on the VMs below. When the SC is deleted those VMs
-      # are torn down in the same cascade, so UbuntuCluster's SSH-based
-      # uninstall has nothing to talk to. Skip its graceful cleanup.
-      forceCleanupOnCascade: true
       template: |
         apiVersion: ubuntu.apeirora.eu/v1alpha1
         kind: UbuntuCluster

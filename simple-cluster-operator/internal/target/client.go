@@ -36,7 +36,9 @@ const KubeconfigKey = "kubeconfig"
 // underlying *rest.Config (needed for raw subresource POSTs that
 // dynamic.Interface does not expose).
 type Client struct {
-	AccountParent *showroomv1alpha1.AccountTargetStatus
+	AccountParent           *showroomv1alpha1.AccountTargetStatus
+	ProviderIdentity        string
+	CredentialAuthorization *AccountAuthorization
 
 	Dynamic        dynamic.Interface
 	Mapper         apimeta.RESTMapper
@@ -45,9 +47,9 @@ type Client struct {
 	OwnerNamespace string
 }
 
-// New builds a target Client. If ref is nil, returns a client for the
-// management cluster (reusing mgmtCfg and mgmtMapper). Otherwise loads the
-// kubeconfig from the named Secret and builds a fresh dynamic+mapper pair.
+// New builds a client from an explicit workload kubeconfig Secret.
+// A nil reference never selects the provider cluster.
+// The management config and mapper parameters remain for caller compatibility.
 func New(
 	ctx context.Context,
 	mgmt client.Client,
@@ -58,11 +60,7 @@ func New(
 	policy secretpolicy.Policy,
 ) (*Client, error) {
 	if ref == nil {
-		d, err := dynamic.NewForConfig(mgmtCfg)
-		if err != nil {
-			return nil, fmt.Errorf("dynamic client (local): %w", err)
-		}
-		return &Client{Dynamic: d, Mapper: mgmtMapper, RESTConfig: mgmtCfg, SecretPolicy: policy, OwnerNamespace: ownerNamespace}, nil
+		return nil, fmt.Errorf("provider cluster child destinations are disabled; configure the account provider")
 	}
 
 	namespace, err := policy.Resolve(ownerNamespace, ref.Namespace, ref.Name, secretpolicy.Use)

@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	legacyBindingVersion      = "v1alpha1"
 	RemoteClusterLabel        = "syncagent.kcp.io/remote-object-cluster"
 	RemoteNamespaceAnnotation = "syncagent.kcp.io/remote-object-namespace"
 	RemoteNameAnnotation      = "syncagent.kcp.io/remote-object-name"
@@ -28,21 +29,21 @@ const (
 	ParentNamespaceAnnotation = "showroom.apeirora.eu/parent-namespace"
 	ParentNameAnnotation      = "showroom.apeirora.eu/parent-name"
 	ParentUIDAnnotation       = "showroom.apeirora.eu/parent-uid"
+	CreationIDAnnotation      = "showroom.apeirora.eu/creation-id"
 	AccountMode               = "Account"
 	LegacyLocalMode           = "LegacyLocal"
 )
 
 var (
-	endpointSlices = schema.GroupVersionResource{Group: "apis.kcp.io", Version: "v1alpha1", Resource: "apiexportendpointslices"}
-	simpleClusters = schema.GroupVersionResource{Group: "showroom.apeirora.eu", Version: "v1alpha1", Resource: "simpleclusters"}
+	endpointSlices = schema.GroupVersionResource{Group: bindingAPIGroup, Version: legacyBindingVersion, Resource: "apiexportendpointslices"}
+	simpleClusters = schema.GroupVersionResource{Group: "showroom.apeirora.eu", Version: legacyBindingVersion, Resource: "simpleclusters"}
 )
 
 // AccountProvider uses the existing provider credential and export endpoint.
 // It never obtains credentials from a consumer account.
 type AccountProvider struct {
-	Config           *rest.Config
-	APIExportName    string
-	LegacyParentUIDs map[string]bool
+	Config        *rest.Config
+	APIExportName string
 }
 
 // ForAccount returns a client restricted to one logical cluster.
@@ -58,6 +59,14 @@ func (p *AccountProvider) ForAccount(ctx context.Context, cluster string) (*Clie
 	dc, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("provider discovery client: %w", err)
+	}
+	export, err := dc.Resource(schema.GroupVersionResource{Group: bindingAPIGroup, Version: "v1alpha2", Resource: "apiexports"}).Get(ctx, p.APIExportName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("read provider APIExport identity: %w", err)
+	}
+	identity, _, _ := unstructured.NestedString(export.Object, "status", "identityHash")
+	if identity == "" {
+		return nil, fmt.Errorf("provider APIExport has no identity")
 	}
 	slices, err := dc.Resource(endpointSlices).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -115,7 +124,7 @@ func (p *AccountProvider) ForAccount(ctx context.Context, cluster string) (*Clie
 	if err != nil {
 		return nil, fmt.Errorf("discover account APIs: %w", err)
 	}
-	return &Client{Dynamic: dyn, Mapper: restmapper.NewDiscoveryRESTMapper(groups), RESTConfig: cfg}, nil
+	return &Client{ProviderIdentity: identity, Dynamic: dyn, Mapper: restmapper.NewDiscoveryRESTMapper(groups), RESTConfig: cfg}, nil
 }
 
 func validName(name string) bool { return name != "" && len(validation.IsDNS1123Subdomain(name)) == 0 }
@@ -148,17 +157,15 @@ func (c *Client) StampParent(obj *unstructured.Unstructured) error {
 	if c.AccountParent == nil {
 		return nil
 	}
-	if !IsAccountIronCoreShoot(obj.GetAPIVersion(), obj.GetKind()) {
-		return fmt.Errorf("KCP account target supports only sap.eu/v1alpha1 or apeiro.eu/v1alpha1 IronCoreShoot")
-	}
 	mapping, err := c.Mapper.RESTMapping(obj.GroupVersionKind().GroupKind(), obj.GroupVersionKind().Version)
 	if err != nil {
 		return err
 	}
-	if mapping.Scope.Name() != apimeta.RESTScopeNameRoot {
-		return fmt.Errorf("account IronCoreShoot must be cluster-scoped")
+	if mapping.Scope.Name() == apimeta.RESTScopeNameRoot {
+		obj.SetNamespace("")
+	} else if obj.GetNamespace() == "" {
+		obj.SetNamespace(c.AccountParent.Namespace)
 	}
-	obj.SetNamespace("")
 	obj.SetOwnerReferences(nil)
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
@@ -189,9 +196,4 @@ func ValidateParent(obj *unstructured.Unstructured, ref *showroomv1alpha1.Accoun
 		return fmt.Errorf("account child must not have ownerReferences")
 	}
 	return nil
-}
-
-// IsAccountIronCoreShoot identifies the supported account child APIs.
-func IsAccountIronCoreShoot(apiVersion, kind string) bool {
-	return kind == "IronCoreShoot" && (apiVersion == "sap.eu/v1alpha1" || apiVersion == "apeiro.eu/v1alpha1")
 }

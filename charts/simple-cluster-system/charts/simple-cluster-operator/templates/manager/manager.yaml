@@ -1,3 +1,6 @@
+{{- if not .Values.kcpAccount.enabled }}
+{{- fail "kcpAccount.enabled must be true: child resources use only account workspaces" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,7 +34,6 @@ spec:
             {{- if .Values.kcpAccount.enabled }}
             - --kcp-kubeconfig=/etc/kcp/kubeconfig
             - --kcp-api-export={{ .Values.kcpAccount.apiExportName }}
-            - {{ printf "--kcp-legacy-parent-uids=%s" (join "," .Values.kcpAccount.legacyParentUIDs) | quote }}
             {{- end }}
             - {{ printf "--secret-reference-allowlist=%s" (.Values.secretReferenceAllowlist | default list | toJson) | quote }}
             {{- range .Values.controllerManager.container.args }}

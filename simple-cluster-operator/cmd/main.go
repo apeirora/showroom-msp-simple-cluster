@@ -20,7 +20,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
-	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -76,12 +75,10 @@ func main() {
 	var ordCatalogSystemVersion string
 	var ordCatalogInterval time.Duration
 	var tlsOpts []func(*tls.Config)
-	var kcpKubeconfig, kcpAPIExport, legacyParentUIDs string
+	var kcpKubeconfig, kcpAPIExport string
 	flag.StringVar(&kcpKubeconfig, "kcp-kubeconfig", "", "Provider kubeconfig file for KCP account targets.")
 	flag.StringVar(&kcpAPIExport, "kcp-api-export", "simpleclusters.showroom.apeirora.eu",
 		"Provider APIExport used for account targets.")
-	flag.StringVar(&legacyParentUIDs, "kcp-legacy-parent-uids", "",
-		"Existing account parent UIDs that retain local targets until recreation (comma-separated).")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -233,16 +230,9 @@ func main() {
 			setupLog.Error(err, "cannot load provider kubeconfig")
 			os.Exit(1)
 		}
-		accountProvider = &target.AccountProvider{
-			Config: cfg, APIExportName: kcpAPIExport, LegacyParentUIDs: map[string]bool{},
-		}
-		for _, uid := range strings.Split(legacyParentUIDs, ",") {
-			if uid = strings.TrimSpace(uid); uid != "" {
-				accountProvider.LegacyParentUIDs[uid] = true
-			}
-		}
-	} else if legacyParentUIDs != "" {
-		setupLog.Error(nil, "kcp-legacy-parent-uids requires kcp-kubeconfig")
+		accountProvider = &target.AccountProvider{Config: cfg, APIExportName: kcpAPIExport}
+	} else {
+		setupLog.Error(nil, "kcp-kubeconfig is required for account child resources")
 		os.Exit(1)
 	}
 

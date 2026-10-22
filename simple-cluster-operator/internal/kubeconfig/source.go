@@ -57,7 +57,7 @@ func Fetch(
 	switch {
 	case ks.Inline != nil:
 		if live.GetAPIVersion() == "v1" && live.GetKind() == "Secret" {
-			if _, err := tc.SecretPolicy.Resolve(sc.Namespace, live.GetNamespace(), live.GetName(), secretpolicy.Copy); err != nil {
+			if _, err := tc.SecretPolicy.Resolve(sourceOwnerNamespace(tc, sc), live.GetNamespace(), live.GetName(), secretpolicy.Copy); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -115,7 +115,7 @@ func fetchSecretRef(
 		ns = strings.TrimSpace(ns)
 	}
 	if ns == "" {
-		ns = sc.Namespace
+		ns = sourceOwnerNamespace(tc, sc)
 	}
 
 	dataKey := src.DataKey
@@ -123,11 +123,7 @@ func fetchSecretRef(
 		dataKey = "kubeconfig"
 	}
 
-	ownerNamespace := sc.Namespace
-	if tc.AccountParent != nil {
-		ownerNamespace = tc.OwnerNamespace
-	}
-	ns, err = tc.SecretPolicy.Resolve(ownerNamespace, ns, name, secretpolicy.Copy)
+	ns, err = tc.SecretPolicy.Resolve(sourceOwnerNamespace(tc, sc), ns, name, secretpolicy.Copy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -150,6 +146,14 @@ func fetchSecretRef(
 		return nil, nil, fmt.Errorf("secret %s/%s data.%s not valid base64: %w", ns, name, dataKey, err)
 	}
 	return decoded, nil, nil
+}
+
+// sourceOwnerNamespace separates the account destination from the physical parent projection.
+func sourceOwnerNamespace(tc *target.Client, sc *showroomv1alpha1.SimpleCluster) string {
+	if tc.AccountParent != nil {
+		return tc.OwnerNamespace
+	}
+	return sc.Namespace
 }
 
 // coerceBytes interprets a JSONPath-extracted value as kubeconfig bytes.

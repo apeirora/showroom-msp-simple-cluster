@@ -28,6 +28,8 @@ import (
 )
 
 const (
+	ctxKeyAccount   = "Account"
+	ctxKeyNamespace = "namespace"
 	// AnnoSimpleCluster names the owning SimpleCluster as "<ns>/<name>".
 	AnnoSimpleCluster = "simple-cluster-name"
 	// AnnoSimpleClusterProvider names the SCPC whose template produced R.
@@ -203,7 +205,7 @@ func buildContext(
 
 	var targetName string
 	if resource.NameTemplate != "" {
-		nameCtx := map[string]any{"SC": scContext(sc), ctxKeyInputs: inputs}
+		nameCtx := map[string]any{"SC": scContext(sc), ctxKeyAccount: accountContext(sc), ctxKeyInputs: inputs}
 		rendered, nerr := RenderString(resource.Name+".nameTemplate", resource.NameTemplate, nameCtx)
 		if nerr != nil {
 			return nil, fmt.Errorf("nameTemplate: %w", nerr)
@@ -246,7 +248,7 @@ func buildContext(
 	if rawNamespace == "" {
 		rawNamespace = scpc.Spec.Target.Namespace
 	}
-	targetNamespace, err := renderNamespace(resource.Name, rawNamespace, scCtx, inputs)
+	targetNamespace, err := renderNamespace(resource.Name, rawNamespace, scCtx, inputs, accountContext(sc))
 	if err != nil {
 		return nil, err
 	}
@@ -257,12 +259,13 @@ func buildContext(
 	}
 
 	return map[string]any{
-		"SC":         scCtx,
-		ctxKeyInputs: inputs,
+		"SC":          scCtx,
+		ctxKeyAccount: accountContext(sc),
+		ctxKeyInputs:  inputs,
 		"Target": map[string]any{
-			"name":      targetName,
-			"namespace": targetNamespace,
-			"kind":      resource.Kind,
+			"name":          targetName,
+			ctxKeyNamespace: targetNamespace,
+			"kind":          resource.Kind,
 		},
 		"Resources": resourcesCtx,
 		"Index":     index,
@@ -274,9 +277,9 @@ func buildContext(
 // the standalone namespace resolution.
 func scContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
 	scCtx := map[string]any{
-		"name":      sc.Name,
-		"namespace": sc.Namespace,
-		"uid":       string(sc.UID),
+		"name":          sc.Name,
+		ctxKeyNamespace: sc.Namespace,
+		"uid":           string(sc.UID),
 		"workers": map[string]any{
 			ctxKeyNodes:     sc.Spec.Workers.MinNodes(),
 			"min":           sc.Spec.Workers.MinNodes(),
@@ -330,13 +333,14 @@ func encryptionContext(enc *showroomv1alpha1.EncryptionSpec) map[string]any {
 // concrete value. Templates see only .SC and .Inputs so the namespace stays
 // stable regardless of sibling resources or repeat index. A literal namespace
 // (no template action) is returned unchanged.
-func renderNamespace(resourceName, raw string, scCtx, inputs map[string]any) (string, error) {
+func renderNamespace(resourceName, raw string, scCtx, inputs map[string]any, account map[string]any) (string, error) {
 	if raw == "" || !strings.Contains(raw, "{{") {
 		return raw, nil
 	}
 	out, err := RenderString(resourceName+".namespace", raw, map[string]any{
-		"SC":         scCtx,
-		ctxKeyInputs: inputs,
+		"SC":          scCtx,
+		ctxKeyAccount: account,
+		ctxKeyInputs:  inputs,
 	})
 	if err != nil {
 		return "", fmt.Errorf("render namespace %q: %w", raw, err)
@@ -364,7 +368,7 @@ func ResolveNamespace(
 	if err != nil {
 		return "", err
 	}
-	return renderNamespace(resource.Name, raw, scContext(sc), inputs)
+	return renderNamespace(resource.Name, raw, scContext(sc), inputs, accountContext(sc))
 }
 
 // nodeResourcesContext stringifies CPU/Memory quantities into the
@@ -520,4 +524,12 @@ func SanitiseTargetName(prefix, base string) string {
 		name = "sc"
 	}
 	return name
+}
+
+// accountContext identifies the consumer destination without changing existing SC name hashes.
+func accountContext(sc *showroomv1alpha1.SimpleCluster) map[string]any {
+	if ref := sc.Status.AccountTarget; ref != nil {
+		return map[string]any{"cluster": ref.Cluster, ctxKeyNamespace: ref.Namespace}
+	}
+	return map[string]any{"cluster": sc.Labels["syncagent.kcp.io/remote-object-cluster"], ctxKeyNamespace: sc.Annotations["syncagent.kcp.io/remote-object-namespace"]}
 }

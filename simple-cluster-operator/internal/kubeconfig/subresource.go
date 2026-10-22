@@ -20,7 +20,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator/internal/secretpolicy"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -91,6 +93,35 @@ func fetchSubResource(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
+	if tc.AccountParent != nil {
+		if tc.CredentialAuthorization == nil {
+			return nil, nil, fmt.Errorf("account credential subresource lacks graph preflight authorization")
+		}
+		ri, err := tc.ResourceFor(mapping, live.GetNamespace(), live.GetName(), secretpolicy.Copy)
+		if err != nil {
+			return nil, nil, err
+		}
+		current, err := ri.Get(ctx, live.GetName(), metav1.GetOptions{})
+		if err != nil {
+			return nil, nil, err
+		}
+		if live.GetUID() == "" || current.GetUID() != live.GetUID() {
+			return nil, nil, fmt.Errorf("account credential parent UID changed")
+		}
+		if err := target.ValidateParent(current, tc.AccountParent); err != nil {
+			return nil, nil, err
+		}
+		authorization, err := target.ResolveAccountSubresource(ctx, tc, parentGVK, src.SubResource)
+		if err != nil {
+			return nil, nil, err
+		}
+		if authorization.IdentityHash != tc.CredentialAuthorization.IdentityHash {
+			return nil, nil, fmt.Errorf("account credential parent API identity changed before POST")
+		}
+		if err := authorization.CheckObject(current); err != nil {
+			return nil, nil, err
+		}
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("POST %s: %w", url, err)

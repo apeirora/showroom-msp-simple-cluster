@@ -114,14 +114,12 @@ type InputDeclaration struct {
 	Values []InputEnumValue `json:"values,omitempty"`
 }
 
-// TargetSpec describes which cluster the rendered resources are created on
-// and the default namespace for namespaced resources. Per-resource overrides
+// TargetSpec contains the default account namespace for child resources.
+// The owning KCP account is always the destination. Per-resource overrides
 // (apiVersion/kind, namespace, namePrefix, deletionAnnotations) live on
 // each ResourceSpec.
-// +kubebuilder:validation:XValidation:rule="!has(self.kcpAccount) || !self.kcpAccount || (!has(self.kubeconfigSecretRef) && (!has(self.namespace) || size(self.namespace) == 0))",message="kcpAccount cannot use a namespace or kubeconfigSecretRef"
 type TargetSpec struct {
-	// KCPAccount creates resources in the owning KCP account through the provider export.
-	// It cannot be combined with kubeconfigSecretRef or a target namespace.
+	// KCPAccount is deprecated and ignored. All provider children use the account.
 	// +optional
 	KCPAccount bool `json:"kcpAccount,omitempty"`
 
@@ -132,9 +130,8 @@ type TargetSpec struct {
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
-	// KubeconfigSecretRef points at a Secret in the management cluster
-	// whose "kubeconfig" key holds credentials for the target cluster.
-	// When nil, resources are created on the management cluster.
+	// KubeconfigSecretRef is retained to detect unmigrated remote provider targets.
+	// Provider-child reconciliation refuses it. It never selects another destination.
 	// +optional
 	KubeconfigSecretRef *corev1.SecretReference `json:"kubeconfigSecretRef,omitempty"`
 }
@@ -400,6 +397,7 @@ type SimpleClusterProviderConfigStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=scpc
+// +kubebuilder:metadata:annotations="showroom.apeirora.eu/account-resource-contract=1"
 // +kubebuilder:printcolumn:name="Reachable",type=boolean,JSONPath=`.status.reachable`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 

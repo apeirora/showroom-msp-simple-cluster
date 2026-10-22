@@ -63,7 +63,7 @@ var _ = Describe("SimpleClusterProviderConfig Controller", func() {
 		})
 
 		It("reports Reachable + resolves every resource GVK", func() {
-			r := &SimpleClusterProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			r := &SimpleClusterProviderConfigReconciler{AccountProvider: envtestAccountProvider, Client: k8sClient, Scheme: k8sClient.Scheme()}
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -124,7 +124,7 @@ var _ = Describe("SimpleClusterProviderConfig Controller", func() {
 		})
 
 		It("surfaces InvalidSCPC in ConditionReady=False", func() {
-			r := &SimpleClusterProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			r := &SimpleClusterProviderConfigReconciler{AccountProvider: envtestAccountProvider, Client: k8sClient, Scheme: k8sClient.Scheme()}
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 			Expect(err).NotTo(HaveOccurred())
 
