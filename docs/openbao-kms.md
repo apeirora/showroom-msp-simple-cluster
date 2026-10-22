@@ -41,7 +41,41 @@ so the plugin runs as a systemd unit that starts before `k3s.service`.
 **Through SimpleCluster (the normal way).** A `SimpleCluster` with
 `spec.encryption.provider.type: OpenBao` on a provider config that lists
 `encryptionProviders: [OpenBao]` renders an `UbuntuCluster` with the same
-`spec.encryption`. `simple-cluster-operator-ubuntu` then does everything below by
+`spec.encryption`:
+
+```yaml
+apiVersion: showroom.apeirora.eu/v1alpha1
+kind: SimpleCluster
+metadata:
+  name: vault-backed
+  namespace: team-a
+spec:
+  providerConfigRefs: [cloudferro]
+  controlPlane:
+    nodes: 1
+    requested: { cpu: "2", memory: "4Gi" }
+  workers:
+    nodes: 1
+    requested: { cpu: "2", memory: "4Gi" }
+  encryption:
+    provider:
+      type: OpenBao
+      keyRotationPeriod: 720h   # optional, at least 1h; unset means no automatic rotation
+```
+
+`spec.encryption` is immutable (it can be neither added, removed nor changed after
+creation) and only `type: OpenBao` exists today. The portal's create dialog writes the
+same field when the UI is configured to offer it for that provider
+(`clusterConfig.encryptionProviders` of the `simple-cluster-ui` chart, see
+[ui/README.md](../ui/README.md)). While encryption is requested the SimpleCluster
+carries an `EncryptionReady` condition: `Provisioning` until the cluster is Ready and
+the provider's resource reports `EncryptionReady=True`, then `Encrypted`; a provider
+config that does not list the type refuses the request before anything is created
+(`Error=True`, reason `EncryptionUnsupported`, phase `Pending`), and a provider that
+reports Ready without confirming encryption keeps the kubeconfig back
+(`ProviderNotVerified`).
+
+`simple-cluster-operator-ubuntu` then does everything below by
 itself, before k3s is installed on each control-plane host:
 
 1. logs in to the platform's SimpleCluster KMS tenancy with its own projected

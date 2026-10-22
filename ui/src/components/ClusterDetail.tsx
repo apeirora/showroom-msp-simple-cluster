@@ -10,6 +10,7 @@ import {
   Title
 } from '@ui5/webcomponents-react';
 import type { Condition, SimpleCluster } from '../types';
+import { encryptionView } from '../lib/encryption';
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <FlexBox style={{ gap: '0.75rem', padding: '0.25rem 0', alignItems: 'baseline' }}>
@@ -50,6 +51,7 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
   const st = cluster.status ?? {};
   const hasKubeconfig = Boolean(st.kubeconfigSecretRef?.name);
   const phase = cluster.metadata.deletionTimestamp ? 'Deleting' : st.phase;
+  const encryption = encryptionView(cluster);
 
   return (
     <Dialog
@@ -97,6 +99,31 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
             {st.providerConfigRef?.name ?? s.providerConfigRefs?.[0]}
           </Row>
           <Row label="Target cluster">{st.targetCluster}</Row>
+          <Row label="Encryption at rest">
+            {encryption.requested ? (
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 2 }}>
+                <FlexBox style={{ gap: '0.5rem', alignItems: 'baseline' }}>
+                  <ObjectStatus state={encryption.state} inverted>
+                    {encryption.provider ?? 'Requested'}
+                  </ObjectStatus>
+                  {encryption.provider && (
+                    <span style={{ fontSize: '0.8rem' }}>
+                      {encryption.keyRotationPeriod
+                        ? `requested key rotation period ${encryption.keyRotationPeriod}`
+                        : 'no automatic key rotation requested'}
+                    </span>
+                  )}
+                </FlexBox>
+                {encryption.detail && (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--sapContent_LabelColor)' }}>
+                    {encryption.detail}
+                  </span>
+                )}
+              </FlexBox>
+            ) : (
+              'Not requested'
+            )}
+          </Row>
           <Row label="Created">{fmtDate(cluster.metadata.creationTimestamp)}</Row>
         </Panel>
 
