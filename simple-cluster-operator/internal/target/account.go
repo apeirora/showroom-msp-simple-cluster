@@ -148,8 +148,8 @@ func (c *Client) StampParent(obj *unstructured.Unstructured) error {
 	if c.AccountParent == nil {
 		return nil
 	}
-	if obj.GetAPIVersion() != "sap.eu/v1alpha1" || obj.GetKind() != "IronCoreShoot" {
-		return fmt.Errorf("KCP account target supports only sap.eu/v1alpha1 IronCoreShoot")
+	if !IsAccountIronCoreShoot(obj.GetAPIVersion(), obj.GetKind()) {
+		return fmt.Errorf("KCP account target supports only sap.eu/v1alpha1 or apeiro.eu/v1alpha1 IronCoreShoot")
 	}
 	mapping, err := c.Mapper.RESTMapping(obj.GroupVersionKind().GroupKind(), obj.GroupVersionKind().Version)
 	if err != nil {
@@ -189,4 +189,9 @@ func ValidateParent(obj *unstructured.Unstructured, ref *showroomv1alpha1.Accoun
 		return fmt.Errorf("account child must not have ownerReferences")
 	}
 	return nil
+}
+
+// IsAccountIronCoreShoot identifies the supported account child APIs.
+func IsAccountIronCoreShoot(apiVersion, kind string) bool {
+	return kind == "IronCoreShoot" && (apiVersion == "sap.eu/v1alpha1" || apiVersion == "apeiro.eu/v1alpha1")
 }
