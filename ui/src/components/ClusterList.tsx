@@ -11,6 +11,7 @@ import {
 } from '@ui5/webcomponents-react';
 import '@ui5/webcomponents-fiori/dist/illustrations/NoData.js';
 import type { SimpleCluster, ClusterPhase } from '../types';
+import { encryptionView, type EncryptionState } from '../lib/encryption';
 
 export type ClusterAction = 'view' | 'delete' | 'download-kubeconfig';
 
@@ -88,17 +89,23 @@ export const ClusterList = ({ clusters, loading, canCreate, onCreate, onAction }
     );
   }
 
-  const rows = clusters.map((c) => ({
-    name: c.metadata.name,
-    namespace: c.metadata.namespace,
-    phase: derivePhase(c),
-    provider: c.status?.providerConfigRef?.name ?? c.spec?.providerConfigRefs?.[0] ?? '—',
-    cp: c.status?.cp ?? '—',
-    wkr: c.status?.wkr ?? '—',
-    age: ageOf(c.metadata.creationTimestamp),
-    hasKubeconfig: Boolean(c.status?.kubeconfigSecretRef?.name),
-    _cluster: c
-  }));
+  const rows = clusters.map((c) => {
+    const encryption = encryptionView(c);
+    return {
+      name: c.metadata.name,
+      namespace: c.metadata.namespace,
+      phase: derivePhase(c),
+      provider: c.status?.providerConfigRef?.name ?? c.spec?.providerConfigRefs?.[0] ?? '—',
+      cp: c.status?.cp ?? '—',
+      wkr: c.status?.wkr ?? '—',
+      age: ageOf(c.metadata.creationTimestamp),
+      hasKubeconfig: Boolean(c.status?.kubeconfigSecretRef?.name),
+      encryption: encryption.label,
+      _encryptionState: encryption.state,
+      _encryptionDetail: encryption.detail,
+      _cluster: c
+    };
+  });
 
   const columns = [
     { Header: 'Name', accessor: 'name', minWidth: 150 },
@@ -116,6 +123,21 @@ export const ClusterList = ({ clusters, loading, canCreate, onCreate, onAction }
     { Header: 'Provider', accessor: 'provider', minWidth: 180 },
     { Header: 'CP', accessor: 'cp', width: 70 },
     { Header: 'Workers', accessor: 'wkr', width: 90 },
+    {
+      Header: 'Encryption',
+      accessor: 'encryption',
+      width: 120,
+      Cell: ({ value, row }: { value: string; row: { original: (typeof rows)[number] } }) =>
+        value === '—' ? (
+          <span>—</span>
+        ) : (
+          <span title={row.original._encryptionDetail}>
+            <ObjectStatus state={row.original._encryptionState as EncryptionState} inverted>
+              {value}
+            </ObjectStatus>
+          </span>
+        )
+    },
     { Header: 'Age', accessor: 'age', width: 80 },
     {
       Header: 'Actions',

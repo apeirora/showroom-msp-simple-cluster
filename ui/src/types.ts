@@ -37,10 +37,26 @@ export interface WorkersPool extends NodePool {
   autoscaling?: WorkerAutoscaling;
 }
 
+export interface EncryptionProviderSpec {
+  /** Key management provider type, e.g. "OpenBao". */
+  type: string;
+  /** Go duration, at least 1h. Absent means no automatic key rotation. */
+  keyRotationPeriod?: string;
+}
+
+/**
+ * Opt-in to encryption at rest of the cluster's Secrets, from the first write.
+ * Immutable: the API refuses to add, remove or change it after creation.
+ */
+export interface EncryptionSpec {
+  provider: EncryptionProviderSpec;
+}
+
 export interface SimpleClusterSpec {
   providerConfigRefs?: string[];
   controlPlane?: NodePool;
   workers?: WorkersPool;
+  encryption?: EncryptionSpec;
 }
 
 export interface ResourceStatus {
@@ -117,6 +133,14 @@ export interface ClusterConfig {
   // Live provider discovery sources. When non-empty, the create dialog lists
   // providers discovered from these CRs instead of the static list.
   providerSources: ProviderSource[];
+  // Key management providers each SimpleClusterProviderConfig admits for
+  // spec.encryption, keyed by provider config name (the value of
+  // providerConfigRefs). Mirrors SimpleClusterProviderConfig
+  // .spec.encryptionProviders, which lives on the MSP cluster where the portal
+  // cannot read it, so it is deployment configuration. A provider without an
+  // entry gets no encryption control. The operator still refuses a request the
+  // provider config does not admit, so this only decides what is offered.
+  encryptionProviders: Record<string, string[]>;
   cpu: string[];
   memory: string[];
   controlPlane: {

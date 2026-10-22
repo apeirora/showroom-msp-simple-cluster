@@ -5,10 +5,38 @@
  */
 
 import type { SimpleCluster } from '../types';
-import { graphqlFetch, subscribe, type GraphqlClientOptions, type SubscriptionHandle } from './graphql';
+import {
+  graphqlFetch,
+  GraphqlError,
+  subscribe,
+  type GraphqlClientOptions,
+  type SubscriptionHandle
+} from './graphql';
 import { fixtureSimpleClusters, fixturesEnabled } from './fixtures';
 
-const CLUSTER_LIST_QUERY = `
+// spec.encryption arrived with simple-cluster-operator 0.43. The gateway
+// schema follows the APIResourceSchema the sync agent publishes from the
+// CRD, so a gateway whose schema predates the field rejects the whole list
+// query over one selection. The list therefore probes once per gateway: on
+// the validator's unknown-field error for exactly this field it falls back
+// to the selection without it for the rest of the session and says so on
+// the console. Such a landscape cannot create encrypted clusters either; the
+// mutation then fails loudly instead of creating something unencrypted.
+//
+// Keyed by gateway URL, not workspace: the schema is the landscape's and
+// every account on that gateway shares it, while another gateway may differ.
+// Concurrent first calls share one probe instead of each probing.
+const encryptionInSchema = new Map<string, boolean>();
+const probesInFlight = new Map<string, Promise<unknown>>();
+const UNKNOWN_ENCRYPTION_FIELD = /Cannot query field "encryption"/i;
+
+/** Forgets what was learned about gateways (tests). */
+export const resetSchemaProbe = (): void => {
+  encryptionInSchema.clear();
+  probesInFlight.clear();
+};
+
+const clusterListQuery = (withEncryption: boolean): string => `
   query SimpleClusters($ns: String) {
     showroom_apeirora_eu {
       v1alpha1 {
@@ -19,6 +47,7 @@ const CLUSTER_LIST_QUERY = `
               providerConfigRefs
               controlPlane { nodes requested { cpu memory } }
               workers { nodes autoscaling { min max } requested { cpu memory } }
+              ${withEncryption ? 'encryption { provider { type keyRotationPeriod } }' : ''}
             }
             status {
               phase
@@ -52,11 +81,53 @@ export const listSimpleClusters = async (
   namespace: string | null
 ): Promise<SimpleCluster[]> => {
   if (fixturesEnabled()) return fixtureSimpleClusters();
-  const data = await graphqlFetch<SimpleClusterListResponse>(opts, {
-    query: CLUSTER_LIST_QUERY,
-    variables: { ns: namespace }
-  });
-  return data.showroom_apeirora_eu?.v1alpha1?.SimpleClusters?.items ?? [];
+  const fetchList = async (withEncryption: boolean) => {
+    const data = await graphqlFetch<SimpleClusterListResponse>(opts, {
+      query: clusterListQuery(withEncryption),
+      variables: { ns: namespace }
+    });
+    return data.showroom_apeirora_eu?.v1alpha1?.SimpleClusters?.items ?? [];
+  };
+  const gateway = opts.graphqlUrl;
+  const known = encryptionInSchema.get(gateway);
+  if (known !== undefined) return fetchList(known);
+
+  // Another call is probing this gateway: wait for its verdict, then fetch
+  // with it. If that probe failed for an unrelated reason nothing was
+  // learned, and this call probes itself.
+  const inFlight = probesInFlight.get(gateway);
+  if (inFlight) {
+    await inFlight.then(
+      () => undefined,
+      () => undefined
+    );
+    const learned = encryptionInSchema.get(gateway);
+    if (learned !== undefined) return fetchList(learned);
+  }
+
+  const probe = (async () => {
+    try {
+      const items = await fetchList(true);
+      encryptionInSchema.set(gateway, true);
+      return items;
+    } catch (err) {
+      if (!(err instanceof GraphqlError) || err.kind !== 'graphql' || !UNKNOWN_ENCRYPTION_FIELD.test(err.message)) {
+        throw err;
+      }
+      console.warn(
+        '[simple-cluster-ui] the gateway schema has no SimpleCluster.spec.encryption; listing without it',
+        err.message
+      );
+      encryptionInSchema.set(gateway, false);
+      return fetchList(false);
+    }
+  })();
+  probesInFlight.set(gateway, probe);
+  try {
+    return await probe;
+  } finally {
+    if (probesInFlight.get(gateway) === probe) probesInFlight.delete(gateway);
+  }
 };
 
 export interface CreateSimpleClusterInput {
@@ -78,6 +149,11 @@ export interface CreateSimpleClusterInput {
    * addon once the cluster is ready.
    */
   labels?: Record<string, string>;
+  /**
+   * Encryption at rest with a key management provider the provider config
+   * admits. Sent as spec.encryption; the API treats it as immutable.
+   */
+  encryption?: { provider: string; keyRotationPeriod?: string };
 }
 
 const CREATE_SIMPLECLUSTER_MUTATION = `
@@ -143,6 +219,14 @@ export const createSimpleCluster = async (
     providerConfigRefs: [input.provider],
     workers
   };
+  // Only when asked for: an absent field is "no encryption", and the CRD
+  // forbids changing that later, so nothing is sent by default.
+  if (input.encryption?.provider) {
+    const provider: Record<string, string> = { type: input.encryption.provider };
+    const period = input.encryption.keyRotationPeriod?.trim();
+    if (period) provider.keyRotationPeriod = period;
+    spec.encryption = { provider };
+  }
   // Control plane is optional — providers like Gardener manage it themselves.
   if (input.controlPlaneNodes && input.controlPlaneNodes > 0) {
     spec.controlPlane = {

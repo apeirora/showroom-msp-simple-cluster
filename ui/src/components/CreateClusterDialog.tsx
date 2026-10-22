@@ -15,6 +15,7 @@ import {
   StepInput
 } from '@ui5/webcomponents-react';
 import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig } from '../types';
+import { keyRotationPeriodValid } from '../lib/duration';
 
 const RFC_1123 = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 
@@ -32,6 +33,12 @@ export interface CreateValues {
   controlPlaneNodes: number;
   controlPlaneCpu: string;
   controlPlaneMemory: string;
+  /**
+   * Encryption at rest, only when the user ticked it for a provider that
+   * offers it. Absent otherwise, so the created object carries no
+   * spec.encryption and provisions exactly as before.
+   */
+  encryption?: { provider: string; keyRotationPeriod?: string };
 }
 
 interface Props {
@@ -42,6 +49,10 @@ interface Props {
   // discovery is enabled, otherwise the static config list).
   providers: string[];
   providersLoading: boolean;
+  // Key management providers per provider config name (see
+  // ClusterConfig.encryptionProviders). Decides whether the encryption
+  // control is shown for the selected provider.
+  encryptionProviders: Record<string, string[]>;
   // Installable extensions offered for this kind, and whether this workspace has each
   // one. Empty hides the section entirely.
   addons: AddonCatalogEntry[];
@@ -62,6 +73,7 @@ export const CreateClusterDialog = ({
   config,
   providers,
   providersLoading,
+  encryptionProviders,
   addons,
   entitlements,
   addonsLoading,
@@ -81,6 +93,36 @@ export const CreateClusterDialog = ({
       setProvider(providers[0] ?? '');
     }
   }, [open, providers, provider]);
+  // Encryption at rest is offered only for a provider config that admits a
+  // key management provider. The selection follows the provider: switching to
+  // one without the option drops the request, so what is submitted is always
+  // consistent with what is on screen.
+  const offeredEncryption = useMemo(
+    () =>
+      (Object.prototype.hasOwnProperty.call(encryptionProviders, provider)
+        ? encryptionProviders[provider]
+        : []
+      ).filter(
+        (t) => typeof t === 'string' && t.trim() !== ''
+      ),
+    [encryptionProviders, provider]
+  );
+  const [encrypt, setEncrypt] = useState(false);
+  const [encryptionType, setEncryptionType] = useState('');
+  const [keyRotationPeriod, setKeyRotationPeriod] = useState('');
+  const [keyRotationTouched, setKeyRotationTouched] = useState(false);
+  useEffect(() => {
+    if (offeredEncryption.length === 0) {
+      setEncrypt(false);
+      setEncryptionType('');
+      return;
+    }
+    if (!offeredEncryption.includes(encryptionType)) setEncryptionType(offeredEncryption[0]);
+  }, [offeredEncryption, encryptionType]);
+  const keyRotationValid = keyRotationPeriodValid(keyRotationPeriod);
+  const encryptionValid =
+    !encrypt || (offeredEncryption.includes(encryptionType) && keyRotationValid);
+
   const [workerNodes, setWorkerNodes] = useState(config.workers.default);
   const [workerAutoscaling, setWorkerAutoscaling] = useState(false);
   const [workerMin, setWorkerMin] = useState(config.workers.default);
@@ -104,7 +146,8 @@ export const CreateClusterDialog = ({
     Boolean(workerMemory) &&
     controlPlaneNodes >= 1 &&
     Boolean(controlPlaneCpu) &&
-    Boolean(controlPlaneMemory);
+    Boolean(controlPlaneMemory) &&
+    encryptionValid;
 
   // Only a box that is both ticked and entitled becomes a label. Entitlement can change
   // between opening the dialog and submitting it (the check is asynchronous), and a
@@ -136,6 +179,10 @@ export const CreateClusterDialog = ({
     setNameTouched(false);
     setEnabledAddons(new Set());
     setProvider(providers[0] ?? '');
+    setEncrypt(false);
+    setEncryptionType('');
+    setKeyRotationPeriod('');
+    setKeyRotationTouched(false);
     setWorkerNodes(config.workers.default);
     setWorkerAutoscaling(false);
     setWorkerMin(config.workers.default);
@@ -154,10 +201,18 @@ export const CreateClusterDialog = ({
 
   const handleSubmit = () => {
     if (!canSubmit) return;
+    // Sent only when ticked for a provider that offers it: a stale tick from a
+    // previously selected provider must not travel with the request.
+    const period = keyRotationPeriod.trim();
+    const encryption =
+      encrypt && offeredEncryption.includes(encryptionType)
+        ? { provider: encryptionType, ...(period ? { keyRotationPeriod: period } : {}) }
+        : undefined;
     onSubmit({
       name,
       provider,
       labels: addonLabels,
+      ...(encryption ? { encryption } : {}),
       workerNodes,
       workerAutoscaling,
       workerMin,
@@ -242,6 +297,66 @@ export const CreateClusterDialog = ({
             </Select>
           )}
         </FlexBox>
+
+        {/*
+          * Only for a provider config that admits a key management provider.
+          * Nothing is shown otherwise: the operator would refuse the request, so
+          * offering a box that cannot work helps nobody.
+          */}
+        {offeredEncryption.length > 0 && (
+          <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+            <Label>Encryption at rest</Label>
+            <CheckBox
+              id="sc-encrypt"
+              text={
+                offeredEncryption.length === 1
+                  ? `Encrypt Kubernetes Secrets with ${offeredEncryption[0]} (KMS)`
+                  : 'Encrypt Kubernetes Secrets with an external key management provider (KMS)'
+              }
+              checked={encrypt}
+              onChange={(e) => setEncrypt(Boolean((e.target as unknown as HTMLInputElement).checked))}
+            />
+            {encrypt && offeredEncryption.length > 1 && (
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+                <Label for="sc-encrypt-provider" required>
+                  Key management provider
+                </Label>
+                <Select id="sc-encrypt-provider" onChange={(e) => setEncryptionType(selectValue(e))}>
+                  {offeredEncryption.map((t) => (
+                    <Option key={t} value={t} selected={t === encryptionType}>
+                      {t}
+                    </Option>
+                  ))}
+                </Select>
+              </FlexBox>
+            )}
+            {encrypt && (
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+                <Label for="sc-key-rotation">Key rotation period (optional)</Label>
+                <Input
+                  id="sc-key-rotation"
+                  value={keyRotationPeriod}
+                  placeholder="e.g. 720h — empty means no automatic rotation"
+                  valueState={keyRotationTouched && !keyRotationValid ? 'Negative' : 'None'}
+                  onInput={(e) => {
+                    setKeyRotationPeriod(String((e.target as unknown as HTMLInputElement).value ?? ''));
+                    setKeyRotationTouched(true);
+                  }}
+                />
+                {keyRotationTouched && !keyRotationValid && (
+                  <span style={{ color: 'var(--sapNegativeColor)', fontSize: '0.75rem' }}>
+                    Use a duration of at least 1h, such as 24h, 720h or 1h30m.
+                  </span>
+                )}
+              </FlexBox>
+            )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
+              Secrets are encrypted from the first write with a key the platform's key
+              management holds for this cluster. Cannot be switched on or off after the
+              cluster is created.
+            </span>
+          </FlexBox>
+        )}
 
         {/*
           * Hidden entirely when no extension is installed on the landscape, so the

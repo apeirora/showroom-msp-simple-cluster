@@ -58,8 +58,25 @@
       "namespaced": true
     }
   ],
-  "cpu": ["1", "2", "4", "8", "16"],
-  "memory": ["2Gi", "4Gi", "8Gi", "16Gi", "32Gi"],
+  "encryptionProviders": {
+    "cloudferro": [
+      "OpenBao"
+    ]
+  },
+  "cpu": [
+    "1",
+    "2",
+    "4",
+    "8",
+    "16"
+  ],
+  "memory": [
+    "2Gi",
+    "4Gi",
+    "8Gi",
+    "16Gi",
+    "32Gi"
+  ],
   "controlPlane": {
     "min": 1,
     "max": 10,

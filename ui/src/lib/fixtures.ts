@@ -78,6 +78,46 @@ export const fixtureSimpleClusters = (): SimpleCluster[] => [
   },
   {
     metadata: {
+      name: 'vault-backed',
+      namespace: 'default',
+      creationTimestamp: new Date(Date.now() - 3 * 3600_000).toISOString(),
+      uid: 'fixture-4'
+    },
+    spec: {
+      providerConfigRefs: ['cloudferro'],
+      controlPlane: { nodes: 1, requested: { cpu: '2', memory: '4Gi' } },
+      workers: { nodes: 1, requested: { cpu: '2', memory: '4Gi' } },
+      encryption: { provider: { type: 'OpenBao', keyRotationPeriod: '720h' } }
+    },
+    status: {
+      phase: 'Ready',
+      cp: '1/1',
+      wkr: '1/1',
+      providerConfigRef: { name: 'cloudferro' },
+      targetCluster: 'cloudferro',
+      kubeconfigSecretRef: { name: 'vault-backed-kubeconfig' },
+      kubeconfigExpiresAt: new Date(Date.now() + 24 * 3600_000).toISOString(),
+      kubeconfigIssuedAt: new Date(Date.now() - 1 * 3600_000).toISOString(),
+      conditions: [
+        {
+          type: 'Ready',
+          status: 'True',
+          reason: 'Ready',
+          message: 'all resources Ready',
+          lastTransitionTime: new Date(Date.now() - 2 * 3600_000).toISOString()
+        },
+        {
+          type: 'EncryptionReady',
+          status: 'True',
+          reason: 'Encrypted',
+          message: 'Secrets are encrypted at rest with OpenBao (verified on cluster)',
+          lastTransitionTime: new Date(Date.now() - 2 * 3600_000).toISOString()
+        }
+      ]
+    }
+  },
+  {
+    metadata: {
       name: 'ci-runner',
       namespace: 'default',
       creationTimestamp: new Date(Date.now() - 20 * 60_000).toISOString(),

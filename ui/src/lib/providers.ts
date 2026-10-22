@@ -78,7 +78,7 @@ export const fetchAvailableProviders = async (
   sources: ProviderSource[]
 ): Promise<ProviderDiscovery> => {
   if (fixturesEnabled()) {
-    return { providers: ['dati'], ran: true };
+    return { providers: ['cloudferro', 'dati'], ran: true };
   }
   // Namespace is only needed for namespaced sources; cluster-scoped provider
   // CRs (the default) list workspace-wide.

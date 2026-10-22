@@ -252,7 +252,8 @@ const App = () => {
         workerMemory: values.workerMemory,
         controlPlaneNodes: values.controlPlaneNodes,
         controlPlaneCpu: values.controlPlaneCpu,
-        controlPlaneMemory: values.controlPlaneMemory
+        controlPlaneMemory: values.controlPlaneMemory,
+        encryption: values.encryption
       });
       if (client.signal?.aborted) return;
       setCreateOpen(false);
@@ -401,6 +402,7 @@ const App = () => {
         config={config}
         providers={providers}
         providersLoading={providersLoading}
+        encryptionProviders={config.encryptionProviders}
         addons={addons}
         entitlements={entitlements}
         addonsLoading={addonsLoading}

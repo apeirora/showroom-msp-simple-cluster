@@ -109,6 +109,16 @@ clusterConfig:
       label: Arsys (virtual)
       providerConfigName: arsys-virtual
       namespaced: true
+  # Key management providers a SimpleClusterProviderConfig admits for
+  # SimpleCluster.spec.encryption (apeirora/showroom#470), keyed by provider
+  # config name. The portal cannot read the provider config itself (it lives on
+  # the MSP cluster), so this mirrors spec.encryptionProviders by hand. Empty
+  # means the create dialog offers no encryption control anywhere; the operator
+  # refuses a request the provider config does not admit regardless.
+  # Example:
+  #   encryptionProviders:
+  #     cloudferro: [OpenBao]
+  encryptionProviders: {}
   # Static fallback provider list, used only when providerSources is empty
   # (legacy deployments / offline). Ignored once providerSources is set.
   providers:
