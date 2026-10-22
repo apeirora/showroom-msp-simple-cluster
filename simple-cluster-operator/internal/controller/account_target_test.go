@@ -28,6 +28,7 @@ import (
 )
 
 type accountFixture struct {
+	group      string
 	credential []byte
 
 	loseCreateResponse bool
@@ -44,9 +45,13 @@ type accountFixture struct {
 	paths                     []string
 }
 
-func newAccountFixture(t *testing.T) *accountFixture {
+func newAccountFixture(t *testing.T, groups ...string) *accountFixture {
 	t.Helper()
-	f := &accountFixture{parentUID: "account-parent"}
+	group := "sap.eu"
+	if len(groups) > 0 {
+		group = groups[0]
+	}
+	f := &accountFixture{parentUID: "account-parent", group: group}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.server.Close)
 	return f
@@ -59,7 +64,7 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var obj any
 	base := "/services/apiexport/provider/simpleclusters.showroom.apeirora.eu/clusters/account-a"
-	if r.URL.Path == "/physical/apis/sap.eu/v1alpha1/namespaces/account-a/ironcoreshoots/sc-child" {
+	if r.URL.Path == "/physical/apis/"+f.group+"/v1alpha1/namespaces/account-a/ironcoreshoots/sc-child" {
 		obj = f.child
 	} else if r.URL.Path == "/physical/api/v1/namespaces/account-a/secrets/sc-child-ironcoreshoot-kubeconfig" {
 		obj = &corev1.Secret{TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"}, ObjectMeta: metav1.ObjectMeta{Name: "sc-child-ironcoreshoot-kubeconfig", Namespace: "account-a"}, Data: map[string][]byte{"kubeconfig": f.credential}}
@@ -77,13 +82,13 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			obj = metav1.APIResourceList{GroupVersion: "v1", APIResources: []metav1.APIResource{{Name: "secrets", Kind: "Secret", Namespaced: true}}}
 		case "/apis":
 			groups := make([]metav1.APIGroup, 0, 2)
-			for _, group := range []string{"sap.eu", "showroom.apeirora.eu"} {
+			for _, group := range []string{f.group, "showroom.apeirora.eu"} {
 				gv := metav1.GroupVersionForDiscovery{GroupVersion: group + "/v1alpha1", Version: "v1alpha1"}
 				groups = append(groups, metav1.APIGroup{Name: group, Versions: []metav1.GroupVersionForDiscovery{gv}, PreferredVersion: gv})
 			}
 			obj = metav1.APIGroupList{Groups: groups}
-		case "/apis/sap.eu/v1alpha1":
-			obj = metav1.APIResourceList{GroupVersion: "sap.eu/v1alpha1", APIResources: []metav1.APIResource{{Name: "ironcoreshoots", Kind: "IronCoreShoot", Namespaced: false}}}
+		case "/apis/" + f.group + "/v1alpha1":
+			obj = metav1.APIResourceList{GroupVersion: f.group + "/v1alpha1", APIResources: []metav1.APIResource{{Name: "ironcoreshoots", Kind: "IronCoreShoot", Namespaced: false}}}
 		case "/apis/showroom.apeirora.eu/v1alpha1":
 			obj = metav1.APIResourceList{GroupVersion: "showroom.apeirora.eu/v1alpha1", APIResources: []metav1.APIResource{{Name: "simpleclusters", Kind: "SimpleCluster", Namespaced: true}}}
 		case "/api/v1/namespaces/default/secrets/sc-child-ironcoreshoot-kubeconfig":
@@ -95,7 +100,7 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 				parent.SetDeletionTimestamp(&now)
 			}
 			obj = parent
-		case "/apis/sap.eu/v1alpha1/ironcoreshoots":
+		case "/apis/" + f.group + "/v1alpha1/ironcoreshoots":
 			if r.Method != "POST" {
 				w.WriteHeader(405)
 				return
@@ -122,7 +127,7 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			w.WriteHeader(http.StatusCreated)
 			obj = f.child
-		case "/apis/sap.eu/v1alpha1/ironcoreshoots/sc-child":
+		case "/apis/" + f.group + "/v1alpha1/ironcoreshoots/sc-child":
 			if f.child == nil || f.deletedChild {
 				w.WriteHeader(http.StatusNotFound)
 				obj = metav1.Status{Status: "Failure", Reason: metav1.StatusReasonNotFound, Code: http.StatusNotFound}
@@ -167,9 +172,9 @@ func accountReconciler(t *testing.T, f *accountFixture) (*SimpleClusterReconcile
 		t.Fatal(err)
 	}
 	sc := &showroomv1alpha1.SimpleCluster{ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "account-a", UID: "physical-parent", Labels: map[string]string{target.RemoteClusterLabel: "account-a"}, Annotations: map[string]string{target.RemoteNamespaceAnnotation: "default", target.RemoteNameAnnotation: "demo"}}, Spec: showroomv1alpha1.SimpleClusterSpec{ProviderConfigRefs: []string{"provider"}}}
-	pc := &showroomv1alpha1.SimpleClusterProviderConfig{ObjectMeta: metav1.ObjectMeta{Name: "provider", Namespace: "account-a"}, Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{Target: showroomv1alpha1.TargetSpec{KCPAccount: true}, Resources: []showroomv1alpha1.ResourceSpec{{Name: "shoot", APIVersion: "sap.eu/v1alpha1", Kind: "IronCoreShoot", NameTemplate: "sc-child", Readiness: &showroomv1alpha1.ReadinessCheck{PhasePath: "status.phase", PhaseReadyValue: "Ready"}, Template: "apiVersion: sap.eu/v1alpha1\nkind: IronCoreShoot\nmetadata: {}\nspec: plain-gardener-spec\n"}}, KubeconfigSource: showroomv1alpha1.KubeconfigSource{ResourceName: "shoot", SecretRef: &showroomv1alpha1.KubeconfigSecretSource{Name: "{{ .Target.name }}-ironcoreshoot-kubeconfig", Namespace: "default"}}}}
-	mapper := apimeta.NewDefaultRESTMapper([]schema.GroupVersion{{Group: "sap.eu", Version: "v1alpha1"}})
-	mapper.Add(schema.GroupVersionKind{Group: "sap.eu", Version: "v1alpha1", Kind: "IronCoreShoot"}, apimeta.RESTScopeNamespace)
+	pc := &showroomv1alpha1.SimpleClusterProviderConfig{ObjectMeta: metav1.ObjectMeta{Name: "provider", Namespace: "account-a"}, Spec: showroomv1alpha1.SimpleClusterProviderConfigSpec{Target: showroomv1alpha1.TargetSpec{KCPAccount: true}, Resources: []showroomv1alpha1.ResourceSpec{{Name: "shoot", APIVersion: f.group + "/v1alpha1", Kind: "IronCoreShoot", NameTemplate: "sc-child", Readiness: &showroomv1alpha1.ReadinessCheck{PhasePath: "status.phase", PhaseReadyValue: "Ready"}, Template: "apiVersion: " + f.group + "/v1alpha1\nkind: IronCoreShoot\nmetadata: {}\nspec: plain-gardener-spec\n"}}, KubeconfigSource: showroomv1alpha1.KubeconfigSource{ResourceName: "shoot", SecretRef: &showroomv1alpha1.KubeconfigSecretSource{Name: "{{ .Target.name }}-ironcoreshoot-kubeconfig", Namespace: "default"}}}}
+	mapper := apimeta.NewDefaultRESTMapper([]schema.GroupVersion{{Group: f.group, Version: "v1alpha1"}})
+	mapper.Add(schema.GroupVersionKind{Group: f.group, Version: "v1alpha1", Kind: "IronCoreShoot"}, apimeta.RESTScopeNamespace)
 	physical := fake.NewClientBuilder().WithScheme(scheme).WithRESTMapper(mapper).WithStatusSubresource(sc, pc).WithObjects(sc, pc).Build()
 	return &SimpleClusterReconciler{Client: physical, APIReader: physical, Scheme: scheme, RESTConfig: &rest.Config{Host: f.server.URL + "/physical"}, AccountProvider: &target.AccountProvider{Config: &rest.Config{Host: f.server.URL + "/clusters/provider"}, APIExportName: "simpleclusters.showroom.apeirora.eu", LegacyParentUIDs: map[string]bool{}}}, sc, pc
 }
@@ -181,122 +186,147 @@ func reconcileAccount(t *testing.T, r *SimpleClusterReconciler, sc *showroomv1al
 }
 
 func TestAccountReconcileCreatesScopedChildAndReusesIt(t *testing.T) {
-	f := newAccountFixture(t)
-	r, sc, _ := accountReconciler(t, f)
-	for i := 0; i < 2; i++ {
-		if err := reconcileAccount(t, r, sc); err != nil {
-			t.Fatal(err)
-		}
+	for _, group := range []string{"sap.eu", "apeiro.eu"} {
+		t.Run(group, func(t *testing.T) {
+			f := newAccountFixture(t, group)
+			r, sc, _ := accountReconciler(t, f)
+			for i := 0; i < 2; i++ {
+				if err := reconcileAccount(t, r, sc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if f.creates != 1 || f.child == nil {
+				t.Fatalf("child creates=%d", f.creates)
+			}
+			if f.child.GetNamespace() != "" || len(f.child.GetOwnerReferences()) != 0 {
+				t.Fatal("invalid child scope or ownerReference")
+			}
+			if f.child.GetAnnotations()[target.ParentUIDAnnotation] != "account-parent" {
+				t.Fatal("used physical parent UID")
+			}
+			if f.child.GetLabels()["showroom.apeirora.eu/simple-cluster"] != "demo" {
+				t.Fatal("lost parent label")
+			}
+			current := &showroomv1alpha1.SimpleCluster{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal(err)
+			}
+			if current.Status.AccountTarget == nil || current.Status.AccountTarget.Mode != target.AccountMode || current.Status.TargetCluster != "kcp:account-a" {
+				t.Fatalf("target not pinned: %+v", current.Status.AccountTarget)
+			}
+		})
 	}
-	if f.creates != 1 || f.child == nil {
-		t.Fatalf("child creates=%d", f.creates)
-	}
-	if f.child.GetNamespace() != "" || len(f.child.GetOwnerReferences()) != 0 {
-		t.Fatal("invalid child scope or ownerReference")
-	}
-	if f.child.GetAnnotations()[target.ParentUIDAnnotation] != "account-parent" {
-		t.Fatal("used physical parent UID")
-	}
-	if f.child.GetLabels()["showroom.apeirora.eu/simple-cluster"] != "demo" {
-		t.Fatal("lost parent label")
-	}
-	current := &showroomv1alpha1.SimpleCluster{}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal(err)
-	}
-	if current.Status.AccountTarget == nil || current.Status.AccountTarget.Mode != target.AccountMode || current.Status.TargetCluster != "kcp:account-a" {
-		t.Fatalf("target not pinned: %+v", current.Status.AccountTarget)
-	}
+
 }
 
 func TestAccountReconcileDeniedClaimDoesNotUseLocalTarget(t *testing.T) {
-	f := newAccountFixture(t)
-	f.forbidden = true
-	r, sc, _ := accountReconciler(t, f)
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
+	for _, group := range []string{"sap.eu", "apeiro.eu"} {
+		t.Run(group, func(t *testing.T) {
+			f := newAccountFixture(t, group)
+			f.forbidden = true
+			r, sc, _ := accountReconciler(t, f)
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			current := &showroomv1alpha1.SimpleCluster{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal(err)
+			}
+			if f.creates != 0 || accountErrorReason(current) != "CreateError" {
+				t.Fatal("claim denial did not fail closed")
+			}
+			for _, path := range f.paths {
+				if strings.Contains(path, "/physical/") {
+					t.Fatal("fell back to physical target")
+				}
+			}
+		})
 	}
-	current := &showroomv1alpha1.SimpleCluster{}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal(err)
-	}
-	if f.creates != 0 || accountErrorReason(current) != "CreateError" {
-		t.Fatal("claim denial did not fail closed")
-	}
-	for _, path := range f.paths {
-		if strings.Contains(path, "/physical/") {
-			t.Fatal("fell back to physical target")
-		}
-	}
+
 }
 
 func TestAccountReconcileRejectsExistingChildOwnership(t *testing.T) {
-	f := newAccountFixture(t)
-	r, sc, _ := accountReconciler(t, f)
-	f.child = &unstructured.Unstructured{Object: map[string]any{"apiVersion": "sap.eu/v1alpha1", "kind": "IronCoreShoot", "metadata": map[string]any{"name": "sc-child", "uid": "someone-elses-child"}}}
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
+	for _, group := range []string{"sap.eu", "apeiro.eu"} {
+		t.Run(group, func(t *testing.T) {
+			f := newAccountFixture(t, group)
+			r, sc, _ := accountReconciler(t, f)
+			f.child = &unstructured.Unstructured{Object: map[string]any{"apiVersion": group + "/v1alpha1", "kind": "IronCoreShoot", "metadata": map[string]any{"name": "sc-child", "uid": "someone-elses-child"}}}
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			current := &showroomv1alpha1.SimpleCluster{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal(err)
+			}
+			if accountErrorReason(current) != "ChildOwnershipConflict" || f.creates+f.patches+f.deletes != 0 {
+				t.Fatal("implicitly adopted another child")
+			}
+		})
 	}
-	current := &showroomv1alpha1.SimpleCluster{}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal(err)
-	}
-	if accountErrorReason(current) != "ChildOwnershipConflict" || f.creates+f.patches+f.deletes != 0 {
-		t.Fatal("implicitly adopted another child")
-	}
+
 }
 
 func TestAccountParentDeletionPreventsCreation(t *testing.T) {
-	f := newAccountFixture(t)
-	f.parentDeleting = true
-	r, sc, _ := accountReconciler(t, f)
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
+	for _, group := range []string{"sap.eu", "apeiro.eu"} {
+		t.Run(group, func(t *testing.T) {
+			f := newAccountFixture(t, group)
+			f.parentDeleting = true
+			r, sc, _ := accountReconciler(t, f)
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			if f.creates != 0 {
+				t.Fatal("created child for deleted account parent")
+			}
+		})
 	}
-	if f.creates != 0 {
-		t.Fatal("created child for deleted account parent")
-	}
+
 }
 
 func TestAccountDeletionWaitsForChildFinalizer(t *testing.T) {
-	f := newAccountFixture(t)
-	r, sc, _ := accountReconciler(t, f)
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
+	for _, group := range []string{"sap.eu", "apeiro.eu"} {
+		t.Run(group, func(t *testing.T) {
+			f := newAccountFixture(t, group)
+			r, sc, _ := accountReconciler(t, f)
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			current := &showroomv1alpha1.SimpleCluster{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Delete(context.Background(), current); err != nil {
+				t.Fatal(err)
+			}
+			f.parentDeleting = true
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			if f.deletes != 1 || f.patches != 1 {
+				t.Fatalf("deletes=%d patches=%d", f.deletes, f.patches)
+			}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal("parent removed before child cleanup")
+			}
+			if !containsString(current.Finalizers, showroomv1alpha1.FinalizerName) {
+				t.Fatal("removed parent finalizer too early")
+			}
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			if f.deletes != 1 {
+				t.Fatal("repeated delete while child finalizer is pending")
+			}
+			f.deletedChild = true
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Get(context.Background(), types.NamespacedName{Namespace: sc.Namespace, Name: sc.Name}, current); err == nil {
+				t.Fatal("parent finalizer remained after child disappeared")
+			}
+		})
 	}
-	current := &showroomv1alpha1.SimpleCluster{}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Delete(context.Background(), current); err != nil {
-		t.Fatal(err)
-	}
-	f.parentDeleting = true
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
-	}
-	if f.deletes != 1 || f.patches != 1 {
-		t.Fatalf("deletes=%d patches=%d", f.deletes, f.patches)
-	}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal("parent removed before child cleanup")
-	}
-	if !containsString(current.Finalizers, showroomv1alpha1.FinalizerName) {
-		t.Fatal("removed parent finalizer too early")
-	}
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
-	}
-	if f.deletes != 1 {
-		t.Fatal("repeated delete while child finalizer is pending")
-	}
-	f.deletedChild = true
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Get(context.Background(), types.NamespacedName{Namespace: sc.Namespace, Name: sc.Name}, current); err == nil {
-		t.Fatal("parent finalizer remained after child disappeared")
-	}
+
 }
 
 func containsString(values []string, want string) bool {
@@ -368,6 +398,10 @@ func TestAccountMissingProviderAndInvalidConfigurationFailClosed(t *testing.T) {
 		t.Fatal("missing provider fell back to local")
 	}
 	for _, mutate := range []func(*showroomv1alpha1.SimpleClusterProviderConfig){
+		func(p *showroomv1alpha1.SimpleClusterProviderConfig) {
+			p.Spec.Resources[0].APIVersion = "unknown.eu/v1alpha1"
+		},
+		func(p *showroomv1alpha1.SimpleClusterProviderConfig) { p.Spec.Resources[0].Kind = "OpenStackShoot" },
 		func(p *showroomv1alpha1.SimpleClusterProviderConfig) { p.Spec.Target.Namespace = "foreign" },
 		func(p *showroomv1alpha1.SimpleClusterProviderConfig) {
 			p.Spec.Target.KubeconfigSecretRef = &corev1.SecretReference{Name: "secret"}
@@ -389,34 +423,39 @@ func TestAccountMissingProviderAndInvalidConfigurationFailClosed(t *testing.T) {
 }
 
 func TestAccountDeletionRefusesChildOfAnotherParent(t *testing.T) {
-	f := newAccountFixture(t)
-	r, sc, _ := accountReconciler(t, f)
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
+	for _, group := range []string{"sap.eu", "apeiro.eu"} {
+		t.Run(group, func(t *testing.T) {
+			f := newAccountFixture(t, group)
+			r, sc, _ := accountReconciler(t, f)
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			annotations := f.child.GetAnnotations()
+			annotations[target.ParentUIDAnnotation] = "replacement"
+			f.child.SetAnnotations(annotations)
+			current := &showroomv1alpha1.SimpleCluster{}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Delete(context.Background(), current); err != nil {
+				t.Fatal(err)
+			}
+			f.parentDeleting = true
+			if err := reconcileAccount(t, r, sc); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+				t.Fatal("parent removed despite foreign child")
+			}
+			if !containsString(current.Finalizers, showroomv1alpha1.FinalizerName) {
+				t.Fatal("released foreign child ownership")
+			}
+			if f.patches+f.deletes != 0 {
+				t.Fatal("changed another parent's child")
+			}
+		})
 	}
-	annotations := f.child.GetAnnotations()
-	annotations[target.ParentUIDAnnotation] = "replacement"
-	f.child.SetAnnotations(annotations)
-	current := &showroomv1alpha1.SimpleCluster{}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Delete(context.Background(), current); err != nil {
-		t.Fatal(err)
-	}
-	f.parentDeleting = true
-	if err := reconcileAccount(t, r, sc); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
-		t.Fatal("parent removed despite foreign child")
-	}
-	if !containsString(current.Finalizers, showroomv1alpha1.FinalizerName) {
-		t.Fatal("released foreign child ownership")
-	}
-	if f.patches+f.deletes != 0 {
-		t.Fatal("changed another parent's child")
-	}
+
 }
 
 func TestAccountLostCreateResponseRetainsDeletionIdentity(t *testing.T) {

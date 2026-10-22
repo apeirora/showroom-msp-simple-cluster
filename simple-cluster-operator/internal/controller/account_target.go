@@ -21,7 +21,7 @@ func validateAccountTarget(scpc *showroomv1alpha1.SimpleClusterProviderConfig) e
 		return fmt.Errorf("kcpAccount cannot be combined with a target namespace or kubeconfigSecretRef")
 	}
 	for _, rs := range scpc.Spec.Resources {
-		if rs.APIVersion != "sap.eu/v1alpha1" || rs.Kind != "IronCoreShoot" || rs.Namespace != "" || rs.ForceCleanupOnCascade {
+		if !target.IsAccountIronCoreShoot(rs.APIVersion, rs.Kind) || rs.Namespace != "" || rs.ForceCleanupOnCascade {
 			return fmt.Errorf("account targets require cluster-scoped IronCoreShoots without forced cleanup")
 		}
 	}

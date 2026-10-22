@@ -145,7 +145,7 @@ limitations under the License.
 ## KCP account targets
 
 Set `SimpleClusterProviderConfig.spec.target.kcpAccount: true` to create the provider child in the request's KCP account.
-This target currently supports cluster-scoped `sap.eu/v1alpha1` IronCoreShoots.
+This target supports cluster-scoped IronCoreShoots in `sap.eu/v1alpha1` and `apeiro.eu/v1alpha1`.
 Keep `target.namespace` empty and omit `target.kubeconfigSecretRef`.
 Set `kubeconfigSource.secretRef.namespace: default`.
 

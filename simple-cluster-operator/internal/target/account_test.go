@@ -152,3 +152,20 @@ func TestAccountProviderRejectsForeignExportSlice(t *testing.T) {
 		t.Fatal("followed endpoint from foreign export")
 	}
 }
+
+func TestAccountIronCoreShootAllowlist(t *testing.T) {
+	for _, tc := range []struct {
+		version, kind string
+		allowed       bool
+	}{
+		{"sap.eu/v1alpha1", "IronCoreShoot", true},
+		{"apeiro.eu/v1alpha1", "IronCoreShoot", true},
+		{"unknown.eu/v1alpha1", "IronCoreShoot", false},
+		{"apeiro.eu/v1beta1", "IronCoreShoot", false},
+		{"apeiro.eu/v1alpha1", "OpenStackShoot", false},
+	} {
+		if got := IsAccountIronCoreShoot(tc.version, tc.kind); got != tc.allowed {
+			t.Fatalf("%s %s: got %v", tc.version, tc.kind, got)
+		}
+	}
+}
