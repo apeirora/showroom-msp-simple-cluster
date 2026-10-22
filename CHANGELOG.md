@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.0.0...v1.0.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **controller:** stop the UbuntuCluster reconcile loop that starves other clusters ([#234](https://github.com/apeirora/showroom-msp-simple-cluster/issues/234)) ([5a88950](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5a889503f51801cfb256743133fe83809ab57425))
+
 ## [1.0.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.43.2...v1.0.0) (2026-10-22)
 
 
