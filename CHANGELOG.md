@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.43.2...v1.0.0) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **controller:** existing local, remote and old account records require a reviewed account handoff. Configure the provider KCP credential before the operator starts.
+
+### Features
+
+* **chart:** publish SSHKey and UbuntuCluster through KCP ([#232](https://github.com/apeirora/showroom-msp-simple-cluster/issues/232)) ([8908cc4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/8908cc47ef8546e546703eaa0898b49708846a6f))
+* **controller:** make account workspaces the only child destination ([#231](https://github.com/apeirora/showroom-msp-simple-cluster/issues/231)) ([9a1d554](https://github.com/apeirora/showroom-msp-simple-cluster/commit/9a1d554f1ef378fb2c3e92b9d35b380788d6d7ce))
+
 ## [0.43.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.43.1...v0.43.2) (2026-10-22)
 
 
