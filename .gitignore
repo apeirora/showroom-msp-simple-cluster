@@ -26,3 +26,6 @@ DESIGN.md
 *.pfx
 id_rsa*
 id_ed25519*
+
+# hack/crdcheck is run with go run; never commit its binary
+hack/crdcheck/crdcheck
