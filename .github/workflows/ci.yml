@@ -143,6 +143,52 @@ jobs:
           helm template "ci-${{ matrix.chart }}" "$chart_dir" --namespace default >/dev/null
           helm package "$chart_dir" --destination "dist/${{ matrix.chart }}"
 
+  chart-crds:
+    # helm lint/template cannot see what the apiserver checks at install time
+    # (CEL cost budget, structural schema rules). Render every chart that ships
+    # CRDs and install them into a real kube-apiserver of the Kubernetes minor
+    # the MSP clusters run. Release 0.43.0 was rejected by both clusters while
+    # this workflow was green; see hack/crdcheck.
+    name: Helm (CRDs install on Kubernetes ${{ matrix.k8s }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s:
+          - "1.34"
+    env:
+      CHARTS_WITH_CRDS: simple-cluster-system ubuntu-machines-operator sshkey-operator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: hack/crdcheck/go.mod
+          cache-dependency-path: hack/crdcheck/go.sum
+
+      - name: Render the charts that ship CRDs
+        run: |
+          set -euo pipefail
+          for chart in $CHARTS_WITH_CRDS; do
+            mkdir -p "rendered/$chart"
+            helm template crdcheck "charts/$chart" --namespace simple-cluster-system > "rendered/$chart/all.yaml"
+            echo "$chart: $(grep -c '^kind: CustomResourceDefinition' "rendered/$chart/all.yaml") CRDs"
+          done
+
+      - name: Install the rendered CRDs into a kube-apiserver
+        run: |
+          set -euo pipefail
+          assets="$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.25 use ${{ matrix.k8s }} --bin-dir "$RUNNER_TEMP/envtest" -p path)"
+          for chart in $CHARTS_WITH_CRDS; do
+            echo "== $chart"
+            go run -C hack/crdcheck . "$assets" "$GITHUB_WORKSPACE/rendered/$chart"
+          done
+
   charts-ord:
     name: Helm (ORD wiring)
     runs-on: ubuntu-latest
