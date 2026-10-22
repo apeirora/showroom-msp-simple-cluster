@@ -14,6 +14,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
+const bindingAPIGroup = "apis.kcp.io"
+
 // AccountAuthorization pins the API identity and permission selectors for one resource.
 // Resolve validates the graph contract; CheckObject validates the complete object before a write.
 type AccountAuthorization struct {
@@ -73,7 +75,7 @@ func ResolveAccountResource(ctx context.Context, dyn dynamic.Interface, mapper a
 	if err != nil {
 		return nil, fmt.Errorf("resolve account child API: %w", err)
 	}
-	bindingMapping, err := mapper.RESTMapping(schema.GroupKind{Group: "apis.kcp.io", Kind: "APIBinding"})
+	bindingMapping, err := mapper.RESTMapping(schema.GroupKind{Group: bindingAPIGroup, Kind: "APIBinding"})
 	if err != nil {
 		return nil, fmt.Errorf("account APIBinding metadata is unavailable: %w", err)
 	}
@@ -84,6 +86,10 @@ func ResolveAccountResource(ctx context.Context, dyn dynamic.Interface, mapper a
 	providerBinding, childIdentity, err := boundAPIIdentities(bindings.Items, simpleClusterIdentity, mapping.Resource)
 	if err != nil {
 		return nil, err
+	}
+	// Resources exported by SimpleCluster itself need no cross-export permission claim.
+	if childIdentity == simpleClusterIdentity {
+		return &AccountAuthorization{Mapping: mapping, IdentityHash: childIdentity}, nil
 	}
 	legacy := bindingMapping.Resource.Version == legacyBindingVersion
 	result := &AccountAuthorization{Mapping: mapping, IdentityHash: childIdentity}

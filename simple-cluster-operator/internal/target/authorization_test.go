@@ -160,3 +160,36 @@ func TestAccountAuthorizationSelectorMatchAndCoreClaims(t *testing.T) {
 		}
 	}
 }
+
+func TestEmptyLegacyResourceSelectorDoesNotGrantAccess(t *testing.T) {
+	object := &unstructured.Unstructured{}
+	object.SetName("demo")
+	object.SetNamespace("default")
+	object.SetGroupVersionKind(arbitraryGVK)
+	_, _, mapper := authorizationFixture(t)
+	mapping, err := mapper.RESTMapping(arbitraryGVK.GroupKind(), arbitraryGVK.Version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorization := &AccountAuthorization{Mapping: mapping, selectors: []permissionScope{{resources: []map[string]any{{"name": "", "namespace": ""}}}}}
+	if err := authorization.CheckObject(object); err == nil {
+		t.Fatal("empty legacy resource selector granted access")
+	}
+}
+
+func TestAccountOwnExportNeedsNoCrossExportClaim(t *testing.T) {
+	provider, _, mapper := authorizationFixture(t)
+	resources, _, _ := unstructured.NestedSlice(provider.Object, "status", "boundResources")
+	resources = append(resources, map[string]any{"group": arbitraryGVK.Group, "resource": "arbitrarychildren", "schema": map[string]any{"identityHash": "own-identity"}})
+	if err := unstructured.SetNestedSlice(provider.Object, resources, "status", "boundResources"); err != nil {
+		t.Fatal(err)
+	}
+	delete(provider.Object, "spec")
+	delete(provider.Object["status"].(map[string]any), "exportPermissionClaims")
+	delete(provider.Object["status"].(map[string]any), "appliedPermissionClaims")
+	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{bindingGVR: "APIBindingList"}, provider)
+	authorization, err := ResolveAccountResource(context.Background(), dyn, mapper, "own-identity", arbitraryGVK, "get", "create")
+	if err != nil || authorization.IdentityHash != "own-identity" {
+		t.Fatalf("own export resource: authorization=%v err=%v", authorization, err)
+	}
+}
