@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.43.1...v0.43.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **simple-cluster:** accept Apeiro account IronCoreShoots ([#229](https://github.com/apeirora/showroom-msp-simple-cluster/issues/229)) ([2b41835](https://github.com/apeirora/showroom-msp-simple-cluster/commit/2b41835dc3d4efd29a59b43ac90af677ef0d2f21))
+
 ## [0.43.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.43.0...v0.43.1) (2026-10-22)
 
 
