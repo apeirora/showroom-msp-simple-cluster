@@ -25,9 +25,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	ubuntuv1alpha1 "github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/k3s"
@@ -888,8 +890,16 @@ func apiURLFromEndpoint(addr string) string {
 }
 
 func (r *UbuntuClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Every reconcile pass patches status twice (the mid-pass flush after
+	// the bootstrap CP and the terminal patch). Without this predicate each
+	// of those writes re-queues the same cluster at event priority, the
+	// single worker spins on it once per second, SSHes into every host each
+	// time, and the clusters waiting at the initial low priority never get a
+	// turn. Status-only updates carry nothing new for us: spec changes bump
+	// the generation, deletion does too, and the periodic re-check comes
+	// from RequeueAfter.
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ubuntuv1alpha1.UbuntuCluster{}).
+		For(&ubuntuv1alpha1.UbuntuCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("ubuntucluster").
 		Complete(r)
 }
