@@ -6,6 +6,7 @@ metadata:
   labels:
     {{- include "chart.labels" . | nindent 4 }}
   annotations:
+    showroom.apeirora.eu/account-resource-contract: "1"
     {{- if .Values.crd.keep }}
     "helm.sh/resource-policy": keep
     {{- end }}

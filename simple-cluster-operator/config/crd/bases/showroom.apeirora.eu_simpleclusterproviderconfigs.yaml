@@ -4,6 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
+    showroom.apeirora.eu/account-resource-contract: "1"
   name: simpleclusterproviderconfigs.showroom.apeirora.eu
 spec:
   group: showroom.apeirora.eu

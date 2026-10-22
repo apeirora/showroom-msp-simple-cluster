@@ -37,6 +37,10 @@ type accountFixture struct {
 
 	loseCreateResponse bool
 
+	restrictToName      string
+	advertiseCredential bool
+	credentialPosts     int
+
 	mu sync.Mutex
 
 	server                    *httptest.Server
@@ -106,12 +110,23 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			for _, claims := range []any{own["spec"].(map[string]any)["permissionClaims"], own["status"].(map[string]any)["exportPermissionClaims"], own["status"].(map[string]any)["appliedPermissionClaims"]} {
 				claims.([]any)[0].(map[string]any)["resource"] = f.resource
 			}
+			if f.restrictToName != "" {
+				for _, claims := range []any{own["spec"].(map[string]any)["permissionClaims"], own["status"].(map[string]any)["appliedPermissionClaims"]} {
+					claim := claims.([]any)[0].(map[string]any)
+					delete(claim, "all")
+					claim["resourceSelector"] = []any{map[string]any{"name": f.restrictToName}}
+				}
+			}
 			if f.revokeAt > 0 && f.bindingReads >= f.revokeAt {
 				own["spec"].(map[string]any)["permissionClaims"].([]any)[0].(map[string]any)["state"] = "Rejected"
 			}
 			obj = list
 		case "/apis/" + f.group + "/v1alpha1":
-			obj = metav1.APIResourceList{GroupVersion: f.group + "/v1alpha1", APIResources: []metav1.APIResource{{Name: f.resource, Kind: f.kind, Namespaced: f.namespaced}}}
+			resources := []metav1.APIResource{{Name: f.resource, Kind: f.kind, Namespaced: f.namespaced}}
+			if f.advertiseCredential {
+				resources = append(resources, metav1.APIResource{Name: f.resource + "/kubeconfig", Kind: "CredentialRequest", Namespaced: f.namespaced, Verbs: metav1.Verbs{"create"}})
+			}
+			obj = metav1.APIResourceList{GroupVersion: f.group + "/v1alpha1", APIResources: resources}
 		case "/apis/showroom.apeirora.eu/v1alpha1":
 			obj = metav1.APIResourceList{GroupVersion: "showroom.apeirora.eu/v1alpha1", APIResources: []metav1.APIResource{{Name: "simpleclusters", Kind: "SimpleCluster", Namespaced: true}}}
 		case "/api/v1/namespaces/default/secrets/sc-child-ironcoreshoot-kubeconfig":
@@ -150,6 +165,14 @@ func (f *accountFixture) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			w.WriteHeader(http.StatusCreated)
 			obj = f.child
+		case f.childPath() + "/sc-child/kubeconfig":
+			if r.Method != "POST" {
+				w.WriteHeader(405)
+				return
+			}
+			f.credentialPosts++
+			obj = map[string]any{"apiVersion": "v1", "kind": "CredentialRequest", "status": map[string]any{"kubeconfig": "apiVersion: v1\nkind: Config\nusers:\n- name: fixture\n  user: {}\n"}}
+
 		case f.childPath() + "/sc-child":
 			if f.child == nil || f.deletedChild {
 				w.WriteHeader(http.StatusNotFound)
@@ -661,5 +684,112 @@ func TestAccountClaimRevokedBeforeDeleteStopsDelete(t *testing.T) {
 	}
 	if f.patches != 1 || f.deletes != 0 {
 		t.Fatalf("patches=%d deletes=%d", f.patches, f.deletes)
+	}
+}
+
+func TestAccountGraphSelectorPreflightRejectsLaterIndependentChildBeforeAnyCreate(t *testing.T) {
+	f := newAccountFixture(t)
+	f.restrictToName = "sc-child"
+	r, sc, pc := accountReconciler(t, f)
+	second := pc.Spec.Resources[0]
+	second.Name = "second"
+	second.NameTemplate = "sc-other"
+	pc.Spec.Resources = append(pc.Spec.Resources, second)
+	if err := r.Update(context.Background(), pc); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.creates+f.patches+f.deletes != 0 {
+		t.Fatalf("partially wrote denied graph: creates=%d patches=%d deletes=%d", f.creates, f.patches, f.deletes)
+	}
+	current := &showroomv1alpha1.SimpleCluster{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal(err)
+	}
+	if accountErrorReason(current) != "AccountAuthorizationDenied" {
+		t.Fatal("missing selector preflight failure")
+	}
+}
+
+func TestAccountGraphUnresolvedDependentSelectorFailsBeforeAnyCreate(t *testing.T) {
+	f := newAccountFixture(t)
+	f.restrictToName = "sc-child"
+	r, sc, pc := accountReconciler(t, f)
+	second := pc.Spec.Resources[0]
+	second.Name = "second"
+	second.DependsOn = []string{"shoot"}
+	second.Template += "data: {value: '{{ .Resources.shoot.status.output }}'}\n"
+	pc.Spec.Resources = append(pc.Spec.Resources, second)
+	if err := r.Update(context.Background(), pc); err != nil {
+		t.Fatal(err)
+	}
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.creates+f.patches+f.deletes != 0 {
+		t.Fatal("wrote a graph with unresolved restricted selectors")
+	}
+}
+
+func useAccountCredentialSubresource(t *testing.T, r *SimpleClusterReconciler, pc *showroomv1alpha1.SimpleClusterProviderConfig) {
+	t.Helper()
+	pc.Spec.KubeconfigSource.SecretRef = nil
+	pc.Spec.KubeconfigSource.SubResource = &showroomv1alpha1.KubeconfigSubResourceSource{APIVersion: "v1", Kind: "CredentialRequest", SubResource: "kubeconfig", KubeconfigPath: "status.kubeconfig"}
+	if err := r.Update(context.Background(), pc); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAccountCredentialDiscoveryMissingRejectsGraphBeforeCreate(t *testing.T) {
+	f := newAccountFixture(t)
+	r, sc, pc := accountReconciler(t, f)
+	useAccountCredentialSubresource(t, r, pc)
+	if err := reconcileAccount(t, r, sc); err != nil {
+		t.Fatal(err)
+	}
+	if f.creates+f.patches+f.deletes+f.credentialPosts != 0 {
+		t.Fatal("wrote graph without credential subresource discovery")
+	}
+	current := &showroomv1alpha1.SimpleCluster{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sc), current); err != nil {
+		t.Fatal(err)
+	}
+	if accountErrorReason(current) != "AccountAuthorizationDenied" {
+		t.Fatal("missing credential preflight failure")
+	}
+}
+
+func TestAccountCredentialRevocationBeforePOST(t *testing.T) {
+	for _, revoked := range []bool{false, true} {
+		f := newAccountFixture(t)
+		f.advertiseCredential = true
+		r, sc, pc := accountReconciler(t, f)
+		useAccountCredentialSubresource(t, r, pc)
+		if err := reconcileAccount(t, r, sc); err != nil {
+			t.Fatal(err)
+		}
+		if f.child == nil {
+			t.Fatal("fixture child was not created")
+		}
+		f.child.Object["status"] = map[string]any{"phase": "Ready"}
+		// The next pass checks child and credential claims, then rechecks immediately before POST.
+		if revoked {
+			f.revokeAt = f.bindingReads + 3
+		}
+		if err := reconcileAccount(t, r, sc); err != nil {
+			t.Fatal(err)
+		}
+		wantPosts := 1
+		if revoked {
+			wantPosts = 0
+		}
+		if f.credentialPosts != wantPosts {
+			t.Fatalf("revoked=%v credential POSTs=%d", revoked, f.credentialPosts)
+		}
+		if f.creates != 1 {
+			t.Fatal("credential renewal changed the child")
+		}
 	}
 }

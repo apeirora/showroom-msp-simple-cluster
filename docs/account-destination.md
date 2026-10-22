@@ -29,6 +29,27 @@ The API server also checks each operation.
 Resources from the SimpleCluster export itself do not need a cross-export claim.
 Native resources, such as Secrets, require explicit permission claims.
 
+## Graph preflight and credentials
+
+Before any child write, the controller renders and checks every independently resolvable instance.
+It uses recorded predecessor objects to check dependent instances when their outputs are available.
+An unresolved dependency can proceed only when both accepted and applied selectors permit every object.
+A restricted selector with unresolved predecessor data stops the graph before any child write.
+After predecessor outputs arrive, the controller checks each complete dependent object before its write.
+It checks current permission claims again before each mutation.
+
+Credential subresources require the parent resource's create claim.
+KCP v1alpha2 does not permit a slash in permission claim resource names.
+The account must advertise the exact parent/subresource with create in discovery.
+A missing subresource stops graph preflight before any child write.
+Immediately before the credential POST, the controller rereads the parent and checks its UID, ownership, API identity and current selectors.
+It checks requested, accepted and applied create permissions again.
+
+The SCPC CRD advertises `showroom.apeirora.eu/account-resource-contract: "1"`.
+Providers that require the universal destination check this API contract before they write an SCPC.
+If SCPC is exported through KCP, carry the annotation onto its bound APIResourceSchema.
+Deploy the core release before the hosting release.
+
 ## Namespace and ownership
 
 Namespaced children use the parent account namespace when no namespace is specified.

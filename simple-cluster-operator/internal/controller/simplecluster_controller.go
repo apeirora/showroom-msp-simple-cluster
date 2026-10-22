@@ -180,6 +180,9 @@ func (r *SimpleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return r.failSC(ctx, &sc, "AccountAuthorizationDenied", err.Error())
 	}
+	if err := preflightAccountObjects(ctx, tc, &scpc, &sc, authorizations); err != nil {
+		return r.failSC(ctx, &sc, "AccountAuthorizationDenied", err.Error())
+	}
 	for _, receipt := range sc.Status.AccountResources {
 		found := false
 		for _, rs := range scpc.Spec.Resources {

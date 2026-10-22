@@ -36,8 +36,9 @@ const KubeconfigKey = "kubeconfig"
 // underlying *rest.Config (needed for raw subresource POSTs that
 // dynamic.Interface does not expose).
 type Client struct {
-	AccountParent    *showroomv1alpha1.AccountTargetStatus
-	ProviderIdentity string
+	AccountParent           *showroomv1alpha1.AccountTargetStatus
+	ProviderIdentity        string
+	CredentialAuthorization *AccountAuthorization
 
 	Dynamic        dynamic.Interface
 	Mapper         apimeta.RESTMapper

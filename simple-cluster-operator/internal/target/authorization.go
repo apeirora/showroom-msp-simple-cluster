@@ -30,6 +30,17 @@ type permissionScope struct {
 	resources []map[string]any
 }
 
+// Unrestricted reports whether accepted and applied claims permit every object.
+// Dependent templates that cannot yet render may proceed only with this scope.
+func (a *AccountAuthorization) Unrestricted() bool {
+	for _, scope := range a.selectors {
+		if !scope.all {
+			return false
+		}
+	}
+	return true
+}
+
 // CheckObject requires both the current accepted and applied permission selectors.
 func (a *AccountAuthorization) CheckObject(obj *unstructured.Unstructured) error {
 	if obj.GroupVersionKind() != a.Mapping.GroupVersionKind {

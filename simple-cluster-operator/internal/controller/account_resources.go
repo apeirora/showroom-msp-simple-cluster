@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,7 +36,149 @@ func authorizeAccountGraph(ctx context.Context, tc *target.Client, scpc *showroo
 		}
 		result[rs.Name] = authorization
 	}
+	if source := scpc.Spec.KubeconfigSource.SubResource; source != nil {
+		for _, rs := range scpc.Spec.Resources {
+			if rs.Name != scpc.Spec.KubeconfigSource.ResourceName {
+				continue
+			}
+			gv, err := schema.ParseGroupVersion(rs.APIVersion)
+			if err != nil {
+				return nil, err
+			}
+			authorization, err := target.ResolveAccountSubresource(ctx, tc, gv.WithKind(rs.Kind), source.SubResource)
+			if err != nil {
+				return nil, err
+			}
+			if authorization.IdentityHash != result[rs.Name].IdentityHash {
+				return nil, fmt.Errorf("credential parent API identity changed during graph preflight")
+			}
+			tc.CredentialAuthorization = authorization
+		}
+	}
 	return result, nil
+}
+
+// preflightAccountObjects checks every currently renderable instance before a child write.
+// A dependent with unknown predecessor data requires unrestricted selectors in phase one.
+// Phase two checks its complete object after predecessor outputs become available.
+func preflightAccountObjects(ctx context.Context, tc *target.Client, scpc *showroomv1alpha1.SimpleClusterProviderConfig,
+	sc *showroomv1alpha1.SimpleCluster, authorizations map[string]*target.AccountAuthorization) error {
+	live, err := readRecordedAccountObjects(ctx, tc, sc, authorizations)
+	if err != nil {
+		return err
+	}
+	specs := map[string]*showroomv1alpha1.ResourceSpec{}
+	for i := range scpc.Spec.Resources {
+		specs[scpc.Spec.Resources[i].Name] = &scpc.Spec.Resources[i]
+	}
+	order, err := validateAndTopoSort(scpc)
+	if err != nil {
+		return err
+	}
+	counts := map[string]int{}
+	for _, name := range order {
+		rs := specs[name]
+		predecessors := map[string]rendertpl.Predecessor{}
+		unresolved := false
+		for _, dependency := range rs.DependsOn {
+			count, resolved := counts[dependency]
+			objects := live[dependency]
+			if resolved && count == len(objects) {
+				predecessors[dependency] = rendertpl.Predecessor{Repeated: specs[dependency].Repeat != "", Objects: objects}
+			} else {
+				unresolved = true
+			}
+		}
+		unrestricted := authorizations[rs.Name].Unrestricted()
+		if rs.Name == scpc.Spec.KubeconfigSource.ResourceName && tc.CredentialAuthorization != nil {
+			unrestricted = unrestricted && tc.CredentialAuthorization.Unrestricted()
+		}
+		if unresolved && !unrestricted {
+			return fmt.Errorf("resource %q has unresolved predecessor outputs and restricted selectors; no child write is allowed", rs.Name)
+		}
+		rendered, err := rendertpl.Render(scpc, sc, rs, predecessors)
+		if err != nil {
+			if len(rs.DependsOn) > 0 && unrestricted {
+				continue
+			}
+			return fmt.Errorf("resource %q cannot complete selector preflight before child writes: %w", rs.Name, err)
+		}
+		if !unresolved {
+			counts[rs.Name] = len(rendered)
+		}
+		for _, obj := range rendered {
+			if err := tc.StampParent(obj); err != nil {
+				return err
+			}
+			if err := authorizations[rs.Name].CheckObject(obj); err != nil {
+				return fmt.Errorf("resource %q selector preflight: %w", rs.Name, err)
+			}
+			if rs.Name == scpc.Spec.KubeconfigSource.ResourceName && tc.CredentialAuthorization != nil {
+				if err := tc.CredentialAuthorization.CheckObject(obj); err != nil {
+					return fmt.Errorf("credential parent selector preflight: %w", err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// readRecordedAccountObjects supplies predecessor data only from pinned child identities.
+func readRecordedAccountObjects(ctx context.Context, tc *target.Client, sc *showroomv1alpha1.SimpleCluster,
+	authorizations map[string]*target.AccountAuthorization) (map[string][]*unstructured.Unstructured, error) {
+	known := map[string][]showroomv1alpha1.AccountResourceStatus{}
+	for _, receipt := range sc.Status.AccountResources {
+		if !receipt.Deleting {
+			known[receipt.ResourceName] = append(known[receipt.ResourceName], receipt)
+		}
+	}
+	live := map[string][]*unstructured.Unstructured{}
+	for name, receipts := range known {
+		authorization := authorizations[name]
+		if authorization == nil {
+			return nil, fmt.Errorf("recorded resource %q is absent from the graph", name)
+		}
+		sort.Slice(receipts, func(i, j int) bool { return receipts[i].Index < receipts[j].Index })
+		complete := true
+		for index, receipt := range receipts {
+			if receipt.Index != int32(index) {
+				complete = false
+			}
+			if receipt.Resource != authorization.Mapping.Resource.Resource || receipt.APIIdentityHash != authorization.IdentityHash {
+				return nil, fmt.Errorf("recorded resource %q API identity changed", name)
+			}
+			ri, err := tc.ResourceFor(authorization.Mapping, receipt.Namespace, receipt.Name, secretpolicy.Copy)
+			if err != nil {
+				return nil, err
+			}
+			obj, err := ri.Get(ctx, receipt.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				if receipt.UID != "" {
+					return nil, fmt.Errorf("recorded resource %q child disappeared before graph preflight", name)
+				}
+				complete = false
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if err := authorization.CheckObject(obj); err != nil {
+				return nil, err
+			}
+			if err := target.ValidateParent(obj, tc.AccountParent); err != nil {
+				return nil, err
+			}
+			if (receipt.UID != "" && receipt.UID != string(obj.GetUID())) || obj.GetAnnotations()[target.CreationIDAnnotation] != receipt.CreationID {
+				return nil, fmt.Errorf("recorded resource %q child identity changed", name)
+			}
+			live[name] = append(live[name], obj)
+		}
+		if !complete {
+			delete(live, name)
+		}
+
+	}
+	return live, nil
 }
 
 func receiptIndex(sc *showroomv1alpha1.SimpleCluster, resource string, index int) int {

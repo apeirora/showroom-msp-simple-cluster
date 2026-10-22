@@ -397,6 +397,7 @@ type SimpleClusterProviderConfigStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=scpc
+// +kubebuilder:metadata:annotations="showroom.apeirora.eu/account-resource-contract=1"
 // +kubebuilder:printcolumn:name="Reachable",type=boolean,JSONPath=`.status.reachable`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
