@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	legacyBindingVersion      = "v1alpha1"
 	RemoteClusterLabel        = "syncagent.kcp.io/remote-object-cluster"
 	RemoteNamespaceAnnotation = "syncagent.kcp.io/remote-object-namespace"
 	RemoteNameAnnotation      = "syncagent.kcp.io/remote-object-name"
@@ -33,8 +34,8 @@ const (
 )
 
 var (
-	endpointSlices = schema.GroupVersionResource{Group: "apis.kcp.io", Version: "v1alpha1", Resource: "apiexportendpointslices"}
-	simpleClusters = schema.GroupVersionResource{Group: "showroom.apeirora.eu", Version: "v1alpha1", Resource: "simpleclusters"}
+	endpointSlices = schema.GroupVersionResource{Group: "apis.kcp.io", Version: legacyBindingVersion, Resource: "apiexportendpointslices"}
+	simpleClusters = schema.GroupVersionResource{Group: "showroom.apeirora.eu", Version: legacyBindingVersion, Resource: "simpleclusters"}
 )
 
 // AccountProvider uses the existing provider credential and export endpoint.
