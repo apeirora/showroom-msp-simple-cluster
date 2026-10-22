@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.0.1...v1.1.0) (2026-10-22)
+
+
+### Features
+
+* offer OpenBao encryption at rest when creating a SimpleCluster ([#237](https://github.com/apeirora/showroom-msp-simple-cluster/issues/237)) ([65b6419](https://github.com/apeirora/showroom-msp-simple-cluster/commit/65b64194ad7534a43b594edc18467527fa236d78))
+
 ## [1.0.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.0.0...v1.0.1) (2026-10-22)
 
 
