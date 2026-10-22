@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.43.0...v0.43.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **crd:** bound k3s arg lists so the UbuntuCluster CRD fits the CEL cost budget ([#227](https://github.com/apeirora/showroom-msp-simple-cluster/issues/227)) ([d846c3b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d846c3b5f8ba9663d7f4441e56b2d41ce1be8009))
+
 ## [0.43.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v0.42.1...v0.43.0) (2026-10-21)
 
 
