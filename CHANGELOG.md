@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.0...v1.2.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* let the key storage field use the full dialog width ([#241](https://github.com/apeirora/showroom-msp-simple-cluster/issues/241)) ([6a2ee1a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/6a2ee1a75bdcb24845f93509d2dc24cd8d5174d6))
+
 ## [1.2.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.1.0...v1.2.0) (2026-10-23)
 
 
