@@ -372,7 +372,8 @@ export const CreateClusterDialog = ({
             {describedType && (
               <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
                 <Label for="sc-key-store">Key storage</Label>
-                <Input id="sc-key-store" value={keyStoreSummary(describedType, keyStore)} readonly />
+                {/* Full width: the summary carries a host name and a namespace and must not be cut off. */}
+                <Input id="sc-key-store" value={keyStoreSummary(describedType, keyStore)} readonly style={{ width: '100%' }} />
                 {keyStore?.keys && (
                   <span style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
                     {keyStore.keys}
