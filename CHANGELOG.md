@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.1.0...v1.2.0) (2026-10-23)
+
+
+### Features
+
+* show where the keys of an encrypted SimpleCluster are stored ([#239](https://github.com/apeirora/showroom-msp-simple-cluster/issues/239)) ([63aabfe](https://github.com/apeirora/showroom-msp-simple-cluster/commit/63aabfe62a6eed877cadcc777ef6eea224cf5a26))
+
 ## [1.1.0](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.0.1...v1.1.0) (2026-10-22)
 
 
