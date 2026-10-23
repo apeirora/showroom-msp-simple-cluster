@@ -30,7 +30,7 @@ vi.mock('@ui5/webcomponents-react', () => ({
 import { CreateClusterDialog, type CreateValues } from '../src/components/CreateClusterDialog';
 
 const config: ClusterConfig = {
-  providers: [], providerSources: [], encryptionProviders: {},
+  providers: [], providerSources: [], encryptionProviders: {}, encryptionKeyStores: {},
   cpu: ['2'], memory: ['4Gi'], controlPlane: { min: 1, max: 3, default: 1 }, workers: { min: 1, max: 3, default: 1 }
 };
 
@@ -39,7 +39,7 @@ const open = (encryptionProviders: Record<string, string[]>, providers = ['cloud
   render(
     <CreateClusterDialog
       open busy={false} config={config} providers={providers} providersLoading={false}
-      encryptionProviders={encryptionProviders}
+      encryptionProviders={encryptionProviders} encryptionKeyStores={{}}
       addons={[]} entitlements={new Map()} addonsLoading={false} catalogUnavailable={false}
       onClose={() => undefined} onSubmit={onSubmit}
     />

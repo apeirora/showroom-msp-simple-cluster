@@ -119,6 +119,18 @@ clusterConfig:
   #   encryptionProviders:
   #     cloudferro: [OpenBao]
   encryptionProviders: {}
+  # Where each key management provider type keeps its keys, keyed by the type
+  # name. Display only: shown read-only under the encryption control and in
+  # the detail view, so "where are the keys stored?" is answered on screen.
+  # Mirror the ubuntu operator's openbao.address and openbao namespace here.
+  # Empty means the dialog says the location is not published for this portal.
+  # Example:
+  #   encryptionKeyStores:
+  #     OpenBao:
+  #       address: https://openbao.example.eu
+  #       namespace: simple-cluster
+  #       keys: One Transit key per cluster, created with the cluster and removed with it.
+  encryptionKeyStores: {}
   # Static fallback provider list, used only when providerSources is empty
   # (legacy deployments / offline). Ignored once providerSources is set.
   providers:

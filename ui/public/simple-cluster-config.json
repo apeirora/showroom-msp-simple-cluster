@@ -63,6 +63,13 @@
       "OpenBao"
     ]
   },
+  "encryptionKeyStores": {
+    "OpenBao": {
+      "address": "https://openbao.cc-d2.showroom.apeirora.eu",
+      "namespace": "simple-cluster",
+      "keys": "One Transit key per cluster, created with the cluster and removed with it."
+    }
+  },
   "cpu": [
     "1",
     "2",

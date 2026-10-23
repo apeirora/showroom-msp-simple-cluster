@@ -60,6 +60,22 @@ it. See [docs/openbao-kms.md](../docs/openbao-kms.md).
 Only provider types the SimpleCluster API admits (today `OpenBao`) survive the config
 load; anything else is dropped with a console warning.
 
+**Where are the keys stored?** is answered next to the checkbox and in the detail view
+from `encryptionKeyStores` (chart value `clusterConfig.encryptionKeyStores`), keyed by
+provider type. It is display only; the key store is a platform decision mirrored here
+because the portal cannot read the operator's settings:
+
+```json
+{ "encryptionKeyStores": { "OpenBao": {
+    "address": "https://openbao.cc-d2.showroom.apeirora.eu",
+    "namespace": "simple-cluster",
+    "keys": "One Transit key per cluster, created with the cluster and removed with it." } } }
+```
+
+renders `OpenBao at openbao.cc-d2.showroom.apeirora.eu, namespace simple-cluster` in a
+read-only field. Without an entry the field says the location is not published for this
+portal. Entries for types the API does not admit are dropped with a console warning.
+
 If the gateway schema predates `spec.encryption`, the list falls back to a query without
 the field (once per gateway, with a console warning; the request still shows as
 "Requested" from the operator's conditions) and a create with the box ticked fails with

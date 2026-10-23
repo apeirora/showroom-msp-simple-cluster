@@ -14,8 +14,9 @@ import {
   Select,
   StepInput
 } from '@ui5/webcomponents-react';
-import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig } from '../types';
+import type { AddonCatalogEntry, AddonEntitlement, ClusterConfig, KeyStoreInfo } from '../types';
 import { keyRotationPeriodValid } from '../lib/duration';
+import { keyStoreSummary } from '../lib/encryption';
 
 const RFC_1123 = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 
@@ -53,6 +54,9 @@ interface Props {
   // ClusterConfig.encryptionProviders). Decides whether the encryption
   // control is shown for the selected provider.
   encryptionProviders: Record<string, string[]>;
+  // Where each key management provider type keeps its keys (see
+  // ClusterConfig.encryptionKeyStores). Display only.
+  encryptionKeyStores: Record<string, KeyStoreInfo>;
   // Installable extensions offered for this kind, and whether this workspace has each
   // one. Empty hides the section entirely.
   addons: AddonCatalogEntry[];
@@ -74,6 +78,7 @@ export const CreateClusterDialog = ({
   providers,
   providersLoading,
   encryptionProviders,
+  encryptionKeyStores,
   addons,
   entitlements,
   addonsLoading,
@@ -119,6 +124,15 @@ export const CreateClusterDialog = ({
     }
     if (!offeredEncryption.includes(encryptionType)) setEncryptionType(offeredEncryption[0]);
   }, [offeredEncryption, encryptionType]);
+  // The type whose key store is described: the chosen one once the box is
+  // ticked, otherwise the first offered, so the answer to "where would the
+  // keys be?" is on screen before the user commits to anything.
+  const describedType = offeredEncryption.includes(encryptionType)
+    ? encryptionType
+    : offeredEncryption[0] ?? '';
+  const keyStore = Object.prototype.hasOwnProperty.call(encryptionKeyStores, describedType)
+    ? encryptionKeyStores[describedType]
+    : undefined;
   const keyRotationValid = keyRotationPeriodValid(keyRotationPeriod);
   const encryptionValid =
     !encrypt || (offeredEncryption.includes(encryptionType) && keyRotationValid);
@@ -346,6 +360,22 @@ export const CreateClusterDialog = ({
                 {keyRotationTouched && !keyRotationValid && (
                   <span style={{ color: 'var(--sapNegativeColor)', fontSize: '0.75rem' }}>
                     Use a duration of at least 1h, such as 24h, 720h or 1h30m.
+                  </span>
+                )}
+              </FlexBox>
+            )}
+            {/*
+              * Read-only: the key store is a platform decision, not a per-cluster
+              * choice, but a bare checkbox leaves "where are the keys stored?"
+              * unanswered. Shown whether or not the box is ticked.
+              */}
+            {describedType && (
+              <FlexBox direction={FlexBoxDirection.Column} style={{ gap: 4 }}>
+                <Label for="sc-key-store">Key storage</Label>
+                <Input id="sc-key-store" value={keyStoreSummary(describedType, keyStore)} readonly />
+                {keyStore?.keys && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--sapContent_LabelColor)' }}>
+                    {keyStore.keys}
                   </span>
                 )}
               </FlexBox>
