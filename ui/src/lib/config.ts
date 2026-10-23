@@ -3,7 +3,7 @@
  * deployment time via the Helm ConfigMap without rebuilding the container.
  */
 
-import type { ClusterConfig } from '../types';
+import type { ClusterConfig, KeyStoreInfo } from '../types';
 import { ENCRYPTION_PROVIDER_TYPES } from './encryption';
 
 const FALLBACK: ClusterConfig = {
@@ -18,6 +18,7 @@ const FALLBACK: ClusterConfig = {
     }
   ],
   encryptionProviders: {},
+  encryptionKeyStores: {},
   cpu: ['1', '2', '4', '8', '16'],
   memory: ['2Gi', '4Gi', '8Gi', '16Gi', '32Gi'],
   controlPlane: { min: 1, max: 10, default: 1 },
@@ -50,6 +51,33 @@ const sanitizeEncryptionProviders = (raw: unknown): Record<string, string[]> => 
   return out;
 };
 
+// Key store descriptions keyed by provider type. Only types the API admits
+// are kept (anything else can never be selected, so its description would be
+// dead weight and is dropped with a warning); fields are trimmed strings and
+// an entry with nothing left is dropped.
+const KEY_STORE_FIELDS = ['name', 'address', 'namespace', 'keys'] as const;
+const sanitizeKeyStores = (raw: unknown): Record<string, KeyStoreInfo> => {
+  const out: Record<string, KeyStoreInfo> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [rawType, value] of Object.entries(raw as Record<string, unknown>)) {
+    const type = rawType.trim();
+    if (!type || !value || typeof value !== 'object' || Array.isArray(value)) continue;
+    if (!ENCRYPTION_PROVIDER_TYPES.includes(type)) {
+      console.warn(
+        `[simple-cluster-ui] encryptionKeyStores.${rawType}: not a provider type the SimpleCluster API admits; ignored`
+      );
+      continue;
+    }
+    const info: KeyStoreInfo = {};
+    for (const field of KEY_STORE_FIELDS) {
+      const v = (value as Record<string, unknown>)[field];
+      if (typeof v === 'string' && v.trim()) info[field] = v.trim();
+    }
+    if (Object.keys(info).length) out[type] = info;
+  }
+  return out;
+};
+
 export const loadClusterConfig = async (
   url = '/simple-cluster-config.json'
 ): Promise<ClusterConfig> => {
@@ -66,6 +94,7 @@ export const loadClusterConfig = async (
       providers: body.providers?.length ? body.providers : FALLBACK.providers,
       providerSources: body.providerSources ?? FALLBACK.providerSources,
       encryptionProviders: sanitizeEncryptionProviders(body.encryptionProviders),
+      encryptionKeyStores: sanitizeKeyStores(body.encryptionKeyStores),
       cpu: body.cpu?.length ? body.cpu : FALLBACK.cpu,
       memory: body.memory?.length ? body.memory : FALLBACK.memory,
       controlPlane: { ...FALLBACK.controlPlane, ...(body.controlPlane ?? {}) },

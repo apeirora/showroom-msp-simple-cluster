@@ -6,7 +6,7 @@
  * the Error condition with reason EncryptionUnsupported.
  */
 
-import type { SimpleCluster } from '../types';
+import type { KeyStoreInfo, SimpleCluster } from '../types';
 
 /**
  * Provider types the SimpleCluster API admits (the enum of
@@ -62,4 +62,36 @@ export const encryptionView = (cluster: SimpleCluster): EncryptionView => {
     label: type ?? 'Requested',
     detail: refused?.message ?? ready?.message
   };
+};
+
+/**
+ * The host part of a key store address for display, or the address as given
+ * when it has no host (not a URL, or a scheme-only form such as "host:8200"
+ * that the URL parser reads as a scheme).
+ */
+const displayAddress = (address: string): string => {
+  try {
+    const u = new URL(address);
+    if (!u.hostname) return address;
+    return u.port ? `${u.hostname}:${u.port}` : u.hostname;
+  } catch {
+    return address;
+  }
+};
+
+/**
+ * One line answering "where are the keys stored?" for a provider type, from
+ * deployment configuration. Without configuration the line says so instead
+ * of guessing: the portal has no way to read the operator's settings.
+ */
+export const keyStoreSummary = (type: string, info?: KeyStoreInfo): string => {
+  const name = info?.name?.trim() || type;
+  const parts: string[] = [];
+  if (info?.address?.trim()) parts.push(`${name} at ${displayAddress(info.address.trim())}`);
+  else parts.push(name);
+  if (info?.namespace?.trim()) parts.push(`namespace ${info.namespace.trim()}`);
+  if (parts.length === 1 && !info?.address?.trim()) {
+    return `${name}, operated by the platform; its location is not published for this portal`;
+  }
+  return parts.join(', ');
 };

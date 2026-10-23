@@ -403,6 +403,7 @@ const App = () => {
         providers={providers}
         providersLoading={providersLoading}
         encryptionProviders={config.encryptionProviders}
+        encryptionKeyStores={config.encryptionKeyStores}
         addons={addons}
         entitlements={entitlements}
         addonsLoading={addonsLoading}
@@ -426,6 +427,7 @@ const App = () => {
           void navigateToCluster(null, ctx.namespace, client.signal).catch((err: Error) => { if (!client.signal?.aborted) setError(err.message); });
         }}
         onDownloadKubeconfig={(c) => void handleDownloadKubeconfig(c)}
+        encryptionKeyStores={config.encryptionKeyStores}
       />
 
       <KubeconfigDialog

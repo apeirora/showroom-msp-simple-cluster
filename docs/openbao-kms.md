@@ -67,7 +67,9 @@ spec:
 creation) and only `type: OpenBao` exists today. The portal's create dialog writes the
 same field when the UI is configured to offer it for that provider
 (`clusterConfig.encryptionProviders` of the `simple-cluster-ui` chart, see
-[ui/README.md](../ui/README.md)). While encryption is requested the SimpleCluster
+[ui/README.md](../ui/README.md)); `clusterConfig.encryptionKeyStores` tells the dialog
+and the detail view where the keys live (address and namespace of the OpenBao the
+ubuntu operator is configured with), so the portal answers that question itself. While encryption is requested the SimpleCluster
 carries an `EncryptionReady` condition: `Provisioning` until the cluster is Ready and
 the provider's resource reports `EncryptionReady=True`, then `Encrypted`; a provider
 config that does not list the type refuses the request before anything is created

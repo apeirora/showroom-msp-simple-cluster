@@ -126,6 +126,18 @@ export interface ProviderSource {
   providerConfigName?: string;
 }
 
+export interface KeyStoreInfo {
+  // Display name of the store; the provider type name is used when absent.
+  name?: string;
+  // Address of the key store, e.g. https://openbao.cc-d2.showroom.apeirora.eu
+  address?: string;
+  // Tenancy namespace inside the store that holds this platform's keys.
+  namespace?: string;
+  // How keys are laid out, e.g. "one Transit key per cluster, created with
+  // the cluster and removed with it".
+  keys?: string;
+}
+
 export interface ClusterConfig {
   // Static fallback provider list, used only when no providerSources are
   // configured (legacy deployments, offline/fixtures).
@@ -141,6 +153,12 @@ export interface ClusterConfig {
   // entry gets no encryption control. The operator still refuses a request the
   // provider config does not admit, so this only decides what is offered.
   encryptionProviders: Record<string, string[]>;
+  // Where the keys of each key management provider type live, keyed by the
+  // type name (OpenBao). Shown read-only next to the encryption control and in
+  // the detail view so "where are the keys stored?" has an answer on screen.
+  // Deployment configuration like encryptionProviders: the portal cannot read
+  // the operator's OpenBao settings. Missing entries show a generic sentence.
+  encryptionKeyStores: Record<string, KeyStoreInfo>;
   cpu: string[];
   memory: string[];
   controlPlane: {

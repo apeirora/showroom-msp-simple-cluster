@@ -9,8 +9,8 @@ import {
   Panel,
   Title
 } from '@ui5/webcomponents-react';
-import type { Condition, SimpleCluster } from '../types';
-import { encryptionView } from '../lib/encryption';
+import type { Condition, KeyStoreInfo, SimpleCluster } from '../types';
+import { encryptionView, keyStoreSummary } from '../lib/encryption';
 
 const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <FlexBox style={{ gap: '0.75rem', padding: '0.25rem 0', alignItems: 'baseline' }}>
@@ -43,15 +43,23 @@ interface Props {
   cluster: SimpleCluster | null;
   onClose: () => void;
   onDownloadKubeconfig?: (cluster: SimpleCluster) => void;
+  // Where each key management provider type keeps its keys (deployment
+  // configuration, see ClusterConfig.encryptionKeyStores). Display only.
+  encryptionKeyStores?: Record<string, KeyStoreInfo>;
 }
 
-export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: Props) => {
+export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig, encryptionKeyStores }: Props) => {
   if (!cluster) return null;
   const s = cluster.spec ?? {};
   const st = cluster.status ?? {};
   const hasKubeconfig = Boolean(st.kubeconfigSecretRef?.name);
   const phase = cluster.metadata.deletionTimestamp ? 'Deleting' : st.phase;
   const encryption = encryptionView(cluster);
+  const keyStore =
+    encryption.provider && encryptionKeyStores &&
+    Object.prototype.hasOwnProperty.call(encryptionKeyStores, encryption.provider)
+      ? encryptionKeyStores[encryption.provider]
+      : undefined;
 
   return (
     <Dialog
@@ -117,6 +125,12 @@ export const ClusterDetail = ({ open, cluster, onClose, onDownloadKubeconfig }: 
                 {encryption.detail && (
                   <span style={{ fontSize: '0.8rem', color: 'var(--sapContent_LabelColor)' }}>
                     {encryption.detail}
+                  </span>
+                )}
+                {encryption.provider && (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--sapContent_LabelColor)' }}>
+                    Keys: {keyStoreSummary(encryption.provider, keyStore)}
+                    {keyStore?.keys ? `. ${keyStore.keys}` : ''}
                   </span>
                 )}
               </FlexBox>
