@@ -17,8 +17,8 @@ build-time tooling and are not part of any shipped artefact.
 
 ## Summary
 
-- **158** distinct third-party dependencies across **8** published components.
-- Licences in use: `Apache-2.0` (64), `MIT` (43), `BSD-3-Clause` (26), `Apache-2.0 AND BSD-3-Clause` (14), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
+- **159** distinct third-party dependencies across **8** published components.
+- Licences in use: `Apache-2.0` (64), `MIT` (43), `BSD-3-Clause` (26), `Apache-2.0 AND BSD-3-Clause` (15), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
 - **No copyleft dependencies.** Every licence above is permissive (Apache-2.0, BSD, MIT, ISC), so redistribution under Apache-2.0 carries no source-disclosure obligation.
 
 ## Obligations
@@ -205,7 +205,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `gopkg.in/inf.v0` | `v0.9.1` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `lit-html` | `2.8.0` | ui |
 
-### Apache-2.0 AND BSD-3-Clause (14)
+### Apache-2.0 AND BSD-3-Clause (15)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -221,7 +221,8 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.opentelemetry.io/otel/trace` | `v1.46.0` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/apimachinery` | `v0.36.4` | bind-watcher-operator |
 | `k8s.io/apimachinery` | `v0.37.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `k8s.io/utils` | `v0.0.0-20260707023825-cf1189d6abe3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/utils` | `v0.0.0-20260707023825-cf1189d6abe3` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/utils` | `v0.0.0-20261023123148-ca04ba58ecab` | simple-cluster-operator |
 | `sigs.k8s.io/json` | `v0.0.0-20260909141634-11ed52e25bc5` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 
 ### Apache-2.0 AND BSD-3-Clause AND MIT (4)
