@@ -34,10 +34,10 @@ jobs:
         working-directory: ${{ matrix.module }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache: true
@@ -63,19 +63,19 @@ jobs:
           - sshkey-operator
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Run linter
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.14.0
+          version: v2.15.0
           working-directory: ${{ matrix.module }}
 
   # ------------------------------------------------------------------------ UI
@@ -87,12 +87,12 @@ jobs:
         working-directory: ui
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
@@ -129,10 +129,10 @@ jobs:
           - ubuntu-machines-operator
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Lint, template and package chart
         run: |
@@ -160,13 +160,13 @@ jobs:
       CHARTS_WITH_CRDS: simple-cluster-system ubuntu-machines-operator sshkey-operator
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: hack/crdcheck/go.mod
           cache-dependency-path: hack/crdcheck/go.sum
@@ -194,13 +194,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
 
       - name: Set up Go for credential chart tests
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: bind-watcher-operator/go.mod
           cache-dependency-path: bind-watcher-operator/go.sum
@@ -218,10 +218,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: REUSE lint
-        uses: fsfe/reuse-action@v5
+        uses: fsfe/reuse-action@v6
 
   secrets:
     name: Gate — Secret scan
@@ -230,7 +230,7 @@ jobs:
       GITLEAKS_VERSION: v8.30.1
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Run gitleaks directly rather than through gitleaks-action: the action
       # requires a GITLEAKS_LICENSE secret for organisation-owned repositories,
@@ -260,10 +260,10 @@ jobs:
           - bind-watcher-operator
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.module }}/go.mod
           cache: true
@@ -283,12 +283,12 @@ jobs:
         working-directory: ui
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
@@ -300,10 +300,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: simple-cluster-operator/go.mod
 
@@ -329,6 +329,7 @@ jobs:
       - lint
       - ui
       - helm
+      - chart-crds
       - charts-ord
       - reuse
       - secrets
