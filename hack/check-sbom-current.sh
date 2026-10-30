@@ -2,10 +2,8 @@
 # CI gate: the committed SBOM set and licence audit must still describe the
 # dependencies the repository actually declares.
 #
-# SBOMs carry a fresh timestamp and serial number on every run, so a byte diff
-# would always fail. This compares the part that matters — the set of
-# (component, dependency, version, licence) tuples — and the rendered licence
-# audit, which is deterministic.
+# CycloneDX compares dependency tuples. SPDX compares complete normalized
+# documents, excluding only the creation timestamp and document namespace.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -44,6 +42,13 @@ if ! diff -u "$TMP/committed.txt" "$TMP/regenerated.txt"; then
   echo "The committed SBOM no longer matches the declared dependencies." >&2
   echo "Run ./hack/generate-sbom.sh and hack/generate-third-party-licenses.py," >&2
   echo "then commit sbom/ and docs/third-party-licenses.md." >&2
+  exit 1
+fi
+
+python3 hack/normalize-spdx.py sbom > "$TMP/committed-spdx.json"
+python3 hack/normalize-spdx.py "$TMP/sbom" > "$TMP/regenerated-spdx.json"
+if ! diff -u "$TMP/committed-spdx.json" "$TMP/regenerated-spdx.json"; then
+  echo "The committed SPDX documents are stale. Run ./hack/generate-sbom.sh and commit sbom/." >&2
   exit 1
 fi
 

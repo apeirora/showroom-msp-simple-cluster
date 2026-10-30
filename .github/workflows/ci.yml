@@ -307,6 +307,9 @@ jobs:
         with:
           go-version-file: simple-cluster-operator/go.mod
 
+      - name: Test SBOM freshness validation
+        run: python3 -m unittest discover -s hack/tests -p 'test_sbom_current.py'
+
       - name: Check the SBOM and licence audit are current
         run: bash hack/check-sbom-current.sh
 

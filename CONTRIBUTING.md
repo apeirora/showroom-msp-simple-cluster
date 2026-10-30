@@ -76,6 +76,10 @@ and commit those artifacts together with the dependency update. CI verifies the
 inventory but does not commit refreshed artifacts for the bot.
 
 Keep both CycloneDX and SPDX files for each changed component consistent.
+The freshness gate compares CycloneDX dependency tuples and complete SPDX
+documents, ignoring SPDX creation timestamps, document namespaces and ordering.
+Run its isolated regression tests without Docker or network access with
+`python3 -m unittest discover -s hack/tests -p 'test_sbom_current.py'`.
 Unchanged components can retain their existing files only after confirming that
 regeneration changed nothing except timestamps, serial numbers and document
 namespaces. Do not hand-edit dependency versions or licence classifications in
