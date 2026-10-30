@@ -29,3 +29,7 @@ id_ed25519*
 
 # hack/crdcheck is run with go run; never commit its binary
 hack/crdcheck/crdcheck
+
+# Local Python helper and test bytecode.
+__pycache__/
+*.py[cod]

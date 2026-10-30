@@ -17,8 +17,8 @@ build-time tooling and are not part of any shipped artefact.
 
 ## Summary
 
-- **159** distinct third-party dependencies across **8** published components.
-- Licences in use: `Apache-2.0` (64), `MIT` (43), `BSD-3-Clause` (26), `Apache-2.0 AND BSD-3-Clause` (15), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
+- **158** distinct third-party dependencies across **8** published components.
+- Licences in use: `Apache-2.0` (64), `MIT` (42), `BSD-3-Clause` (26), `Apache-2.0 AND BSD-3-Clause` (15), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
 - **No copyleft dependencies.** Every licence above is permissive (Apache-2.0, BSD, MIT, ISC), so redistribution under Apache-2.0 carries no source-disclosure obligation.
 
 ## Obligations
@@ -61,18 +61,18 @@ in the Go module cache and is recorded in `OVERRIDES` in
 
 | Dependency | Version | Used by |
 |---|---|---|
-| `@luigi-project/client` | `2.31.0` | ui |
+| `@luigi-project/client` | `2.32.0` | ui |
 | `@sap-theming/theming-base-content` | `11.36.4` | ui |
-| `@ui5/webcomponents` | `2.26.0` | ui |
-| `@ui5/webcomponents-base` | `2.26.0` | ui |
-| `@ui5/webcomponents-fiori` | `2.26.0` | ui |
-| `@ui5/webcomponents-icons` | `2.26.0` | ui |
-| `@ui5/webcomponents-icons-business-suite` | `2.26.0` | ui |
-| `@ui5/webcomponents-icons-tnt` | `2.26.0` | ui |
-| `@ui5/webcomponents-localization` | `2.26.0` | ui |
-| `@ui5/webcomponents-react` | `2.26.2` | ui |
-| `@ui5/webcomponents-react-base` | `2.26.2` | ui |
-| `@ui5/webcomponents-theming` | `2.26.0` | ui |
+| `@ui5/webcomponents` | `2.28.1` | ui |
+| `@ui5/webcomponents-base` | `2.28.1` | ui |
+| `@ui5/webcomponents-fiori` | `2.28.1` | ui |
+| `@ui5/webcomponents-icons` | `2.28.1` | ui |
+| `@ui5/webcomponents-icons-business-suite` | `2.28.1` | ui |
+| `@ui5/webcomponents-icons-tnt` | `2.28.1` | ui |
+| `@ui5/webcomponents-localization` | `2.28.1` | ui |
+| `@ui5/webcomponents-react` | `2.28.2` | ui |
+| `@ui5/webcomponents-react-base` | `2.28.2` | ui |
+| `@ui5/webcomponents-theming` | `2.28.1` | ui |
 | `cel.dev/expr` | `v0.25.3` | simple-cluster-operator, sshkey-operator |
 | `github.com/Masterminds/goutils` | `v1.1.1` | simple-cluster-operator |
 | `github.com/go-logr/logr` | `v1.4.4` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -93,12 +93,12 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `github.com/go-openapi/swag/typeutils` | `v0.29.2` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/go-openapi/swag/yamlutils` | `v0.29.2` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/google/gnostic-models` | `v0.7.1` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `github.com/gophercloud/gophercloud/v2` | `v2.14.0` | simple-cluster-operator-openstack |
+| `github.com/gophercloud/gophercloud/v2` | `v2.15.0` | simple-cluster-operator-openstack |
 | `github.com/inconshreveable/mousetrap` | `v1.1.0` | simple-cluster-operator, simple-cluster-operator-kind, sshkey-operator |
-| `github.com/kcp-dev/apimachinery/v2` | `v2.33.0` | bind-watcher-operator |
+| `github.com/kcp-dev/apimachinery/v2` | `v2.33.3` | bind-watcher-operator |
 | `github.com/kcp-dev/logicalcluster/v3` | `v3.0.5` | bind-watcher-operator |
 | `github.com/kcp-dev/multicluster-provider` | `v0.8.0` | bind-watcher-operator |
-| `github.com/kcp-dev/sdk` | `v0.33.0` | bind-watcher-operator |
+| `github.com/kcp-dev/sdk` | `v0.33.3` | bind-watcher-operator |
 | `github.com/modern-go/concurrent` | `v0.0.0-20180306012644-bacd9c7ef1dd` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/modern-go/reflect2` | `v1.0.3-0.20250322232337-35a7c28c31ee` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/prometheus/client_model` | `v0.6.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -112,28 +112,28 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20260911204522-f61a6ca850bd` | simple-cluster-operator, sshkey-operator |
 | `google.golang.org/grpc` | `v1.83.2` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/api` | `v0.36.4` | bind-watcher-operator |
-| `k8s.io/api` | `v0.37.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/api` | `v0.37.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/apiextensions-apiserver` | `v0.36.4` | bind-watcher-operator |
 | `k8s.io/apiextensions-apiserver` | `v0.37.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/apiserver` | `v0.37.0` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/component-base` | `v0.37.0` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/klog/v2` | `v2.140.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `k8s.io/streaming` | `v0.37.0` | simple-cluster-operator, sshkey-operator |
+| `k8s.io/streaming` | `v0.37.2` | simple-cluster-operator, sshkey-operator |
 | `sigs.k8s.io/apiserver-network-proxy/konnectivity-client` | `v0.36.0` | simple-cluster-operator, sshkey-operator |
 | `sigs.k8s.io/controller-runtime` | `v0.24.1` | bind-watcher-operator |
-| `sigs.k8s.io/controller-runtime` | `v0.25.1` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `sigs.k8s.io/controller-runtime` | `v0.25.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `sigs.k8s.io/multicluster-runtime` | `v0.24.1` | bind-watcher-operator |
 | `sigs.k8s.io/randfill` | `v1.0.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `sigs.k8s.io/structured-merge-diff/v6` | `v6.4.2` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 
-### MIT (43)
+### MIT (42)
 
 | Dependency | Version | Used by |
 |---|---|---|
-| `@tanstack/react-virtual` | `3.14.13` | ui |
-| `@tanstack/virtual-core` | `3.17.11` | ui |
+| `@tanstack/react-virtual` | `3.14.22` | ui |
+| `@tanstack/virtual-core` | `3.19.7` | ui |
 | `@types/jquery` | `3.5.34` | ui |
-| `@types/openui5` | `1.152.0` | ui |
+| `@types/openui5` | `1.153.0` | ui |
 | `@types/qunit` | `2.19.14` | ui |
 | `@types/react` | `19.3.0` | ui |
 | `@types/react-dom` | `19.3.0` | ui |
@@ -159,18 +159,17 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `github.com/mattn/go-isatty` | `v0.0.24` | simple-cluster-operator-kind |
 | `github.com/mitchellh/copystructure` | `v1.2.0` | simple-cluster-operator |
 | `github.com/mitchellh/reflectwalk` | `v1.0.2` | simple-cluster-operator |
-| `github.com/onsi/ginkgo/v2` | `v2.32.2` | simple-cluster-operator, sshkey-operator |
-| `github.com/onsi/gomega` | `v1.40.0` | simple-cluster-operator, sshkey-operator |
-| `github.com/onsi/gomega` | `v1.43.0` | bind-watcher-operator |
+| `github.com/onsi/ginkgo/v2` | `v2.33.1` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `github.com/onsi/gomega` | `v1.44.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/shopspring/decimal` | `v1.4.0` | simple-cluster-operator |
 | `github.com/spf13/cast` | `v1.10.0` | simple-cluster-operator |
 | `github.com/x448/float16` | `v0.8.4` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.uber.org/multierr` | `v1.11.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.uber.org/zap` | `v1.28.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `graphql` | `16.14.2` | ui |
-| `graphql-sse` | `2.6.1` | ui |
-| `react` | `19.3.0` | ui |
-| `react-dom` | `19.3.0` | ui |
+| `graphql-sse` | `2.6.3` | ui |
+| `react` | `19.3.1` | ui |
+| `react-dom` | `19.3.1` | ui |
 | `scheduler` | `0.28.0` | ui |
 | `ts-custom-error` | `3.3.1` | ui |
 
@@ -220,7 +219,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.opentelemetry.io/otel/sdk` | `v1.46.0` | simple-cluster-operator, sshkey-operator |
 | `go.opentelemetry.io/otel/trace` | `v1.46.0` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/apimachinery` | `v0.36.4` | bind-watcher-operator |
-| `k8s.io/apimachinery` | `v0.37.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/apimachinery` | `v0.37.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/utils` | `v0.0.0-20260707023825-cf1189d6abe3` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/utils` | `v0.0.0-20261023123148-ca04ba58ecab` | simple-cluster-operator |
 | `sigs.k8s.io/json` | `v0.0.0-20260909141634-11ed52e25bc5` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -230,7 +229,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | Dependency | Version | Used by |
 |---|---|---|
 | `k8s.io/client-go` | `v0.36.4` | bind-watcher-operator |
-| `k8s.io/client-go` | `v0.37.0` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/client-go` | `v0.37.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/kube-openapi` | `v0.0.0-20260721132016-d427ff9ee9ad` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `sigs.k8s.io/yaml` | `v1.6.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 
