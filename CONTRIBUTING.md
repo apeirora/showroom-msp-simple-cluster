@@ -91,6 +91,15 @@ Kubernetes label value. Keep the image digest pin; Helm lint alone does not
 detect this API validation failure. Upstream template:
 https://github.com/kcp-dev/helm-charts/blob/main/charts/api-syncagent/templates/deployment.yaml
 
+When updating this chart dependency, also run
+`helm dependency build --skip-refresh charts/simple-cluster-sync-agent` after
+refreshing the Helm repository index. Commit `Chart.lock` and the matching
+official archive under `charts/simple-cluster-sync-agent/charts/`, removing the
+obsolete archive. A manifest-only version bump can leave Helm loading the old
+package without the dependency alias values. The Ubuntu operator's chart tests
+verify that the vendored package and declared version match. A successful render
+still does not establish valid Kubernetes labels or deployment readiness.
+
 Bind watcher retains controller-runtime and multicluster-runtime 0.24.1 with
 Kubernetes libraries 0.36.4. `multicluster-provider` 0.8.0 implements the earlier
 event-recorder interface and cannot compile against controller-runtime 0.25.2.

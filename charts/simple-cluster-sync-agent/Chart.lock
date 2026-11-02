@@ -1,0 +1,6 @@
+dependencies:
+- name: api-syncagent
+  repository: https://kcp-dev.github.io/helm-charts
+  version: 0.6.2
+digest: sha256:da6d3a5638bde19c3a54b365972ca62115eefb128f3997e82ec503ab9daf86ba
+generated: "2026-11-02T10:14:05.665823+01:00"
