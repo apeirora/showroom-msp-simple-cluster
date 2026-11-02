@@ -91,6 +91,12 @@ Kubernetes label value. Keep the image digest pin; Helm lint alone does not
 detect this API validation failure. Upstream template:
 https://github.com/kcp-dev/helm-charts/blob/main/charts/api-syncagent/templates/deployment.yaml
 
+Chart rendering tests use the committed dependency archives and isolated Helm
+settings. They must not download dependencies or create or modify `Chart.lock`
+in the source checkout. Refresh chart dependencies explicitly when changing a
+dependency version, then commit the matching official archive and lockfile.
+See https://helm.sh/docs/helm/helm_dependency_build/ for the refresh command.
+
 Bind watcher retains controller-runtime and multicluster-runtime 0.24.1 with
 Kubernetes libraries 0.36.4. `multicluster-provider` 0.8.0 implements the earlier
 event-recorder interface and cannot compile against controller-runtime 0.25.2.
