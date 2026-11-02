@@ -3,6 +3,7 @@ package charttests
 import (
 	"bytes"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -12,18 +13,58 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+// TestKCPCredentialMounts verifies local rendering under ordinary and inherited
+// SQL storage settings. It reports failures through t and restores environment
+// changes after each subtest. A deliberately invalid SQL connection string makes
+// a regression fail during parsing instead of reaching a developer's database.
 func TestKCPCredentialMounts(t *testing.T) {
+	for _, driver := range []string{"secret", "sql"} {
+		t.Run(driver, func(t *testing.T) {
+			t.Setenv("HELM_DRIVER", driver)
+			t.Setenv("HELM_DRIVER_SQL_CONNECTION_STRING", "invalid-helm-test-dsn")
+			testKCPCredentialMounts(t)
+		})
+	}
+}
+
+// testKCPCredentialMounts renders vendored charts with isolated Helm settings,
+// validates their credential mounts, and reports errors through t. Temporary
+// settings are cleaned up automatically; source archives and Chart.lock must
+// remain unchanged, and no dependency downloads or database access are needed.
+func testKCPCredentialMounts(t *testing.T) {
+	t.Helper()
 	if _, err := exec.LookPath("helm"); err != nil {
 		t.Skip("Helm is required; the chart CI job runs this test with Helm installed")
 	}
+	helmHome := t.TempDir()
+	for key, path := range map[string]string{
+		"HELM_DRIVER":            "secret",
+		"HELM_CONFIG_HOME":       filepath.Join(helmHome, "config"),
+		"HELM_CACHE_HOME":        filepath.Join(helmHome, "cache"),
+		"HELM_DATA_HOME":         filepath.Join(helmHome, "data"),
+		"HELM_REPOSITORY_CONFIG": filepath.Join(helmHome, "repositories.yaml"),
+		"HELM_REPOSITORY_CACHE":  filepath.Join(helmHome, "repository-cache"),
+	} {
+		t.Setenv(key, path)
+	}
+	lockPath := filepath.Join("..", "..", "..", "charts", "simple-cluster-sync-agent", "Chart.lock")
+	originalLock, originalErr := os.ReadFile(lockPath)
+	if originalErr != nil && !os.IsNotExist(originalErr) {
+		t.Fatal(originalErr)
+	}
+	t.Cleanup(func() {
+		currentLock, currentErr := os.ReadFile(lockPath)
+		if currentErr != nil && !os.IsNotExist(currentErr) {
+			t.Error(currentErr)
+			return
+		}
+		if os.IsNotExist(originalErr) != os.IsNotExist(currentErr) || !bytes.Equal(originalLock, currentLock) {
+			t.Error("chart rendering must not create or modify Chart.lock; refresh dependencies explicitly")
+		}
+	})
 	for _, chart := range []string{"bind-watcher-operator", "simple-cluster-sync-agent"} {
 		t.Run(chart, func(t *testing.T) {
 			path := filepath.Join("..", "..", "..", "charts", chart)
-			if chart == "simple-cluster-sync-agent" {
-				if output, err := exec.Command("helm", "dependency", "build", path).CombinedOutput(); err != nil {
-					t.Fatalf("dependencies: %v\n%s", err, output)
-				}
-			}
 			for _, custom := range []bool{false, true} {
 				args := []string{"template", "test", path}
 				secret := "kcp-kubeconfig"
