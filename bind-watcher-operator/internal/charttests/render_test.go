@@ -13,15 +13,32 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-// TestKCPCredentialMounts validates the vendored charts' credential mounts with
-// isolated Helm settings. It renders local archives without relying on a user's
-// registered repositories or downloading dependencies into the source checkout.
+// TestKCPCredentialMounts verifies local rendering under ordinary and inherited
+// SQL storage settings. It reports failures through t and restores environment
+// changes after each subtest. A deliberately invalid SQL connection string makes
+// a regression fail during parsing instead of reaching a developer's database.
 func TestKCPCredentialMounts(t *testing.T) {
+	for _, driver := range []string{"secret", "sql"} {
+		t.Run(driver, func(t *testing.T) {
+			t.Setenv("HELM_DRIVER", driver)
+			t.Setenv("HELM_DRIVER_SQL_CONNECTION_STRING", "invalid-helm-test-dsn")
+			testKCPCredentialMounts(t)
+		})
+	}
+}
+
+// testKCPCredentialMounts renders vendored charts with isolated Helm settings,
+// validates their credential mounts, and reports errors through t. Temporary
+// settings are cleaned up automatically; source archives and Chart.lock must
+// remain unchanged, and no dependency downloads or database access are needed.
+func testKCPCredentialMounts(t *testing.T) {
+	t.Helper()
 	if _, err := exec.LookPath("helm"); err != nil {
 		t.Skip("Helm is required; the chart CI job runs this test with Helm installed")
 	}
 	helmHome := t.TempDir()
 	for key, path := range map[string]string{
+		"HELM_DRIVER":            "secret",
 		"HELM_CONFIG_HOME":       filepath.Join(helmHome, "config"),
 		"HELM_CACHE_HOME":        filepath.Join(helmHome, "cache"),
 		"HELM_DATA_HOME":         filepath.Join(helmHome, "data"),
