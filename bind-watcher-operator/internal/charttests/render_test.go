@@ -12,18 +12,26 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
+// TestKCPCredentialMounts validates the vendored charts' credential mounts with
+// isolated Helm settings. It renders local archives without relying on a user's
+// registered repositories or downloading dependencies into the source checkout.
 func TestKCPCredentialMounts(t *testing.T) {
 	if _, err := exec.LookPath("helm"); err != nil {
 		t.Skip("Helm is required; the chart CI job runs this test with Helm installed")
 	}
+	helmHome := t.TempDir()
+	for key, path := range map[string]string{
+		"HELM_CONFIG_HOME":       filepath.Join(helmHome, "config"),
+		"HELM_CACHE_HOME":        filepath.Join(helmHome, "cache"),
+		"HELM_DATA_HOME":         filepath.Join(helmHome, "data"),
+		"HELM_REPOSITORY_CONFIG": filepath.Join(helmHome, "repositories.yaml"),
+		"HELM_REPOSITORY_CACHE":  filepath.Join(helmHome, "repository-cache"),
+	} {
+		t.Setenv(key, path)
+	}
 	for _, chart := range []string{"bind-watcher-operator", "simple-cluster-sync-agent"} {
 		t.Run(chart, func(t *testing.T) {
 			path := filepath.Join("..", "..", "..", "charts", chart)
-			if chart == "simple-cluster-sync-agent" {
-				if output, err := exec.Command("helm", "dependency", "build", path).CombinedOutput(); err != nil {
-					t.Fatalf("dependencies: %v\n%s", err, output)
-				}
-			}
 			for _, custom := range []bool{false, true} {
 				args := []string{"template", "test", path}
 				secret := "kcp-kubeconfig"

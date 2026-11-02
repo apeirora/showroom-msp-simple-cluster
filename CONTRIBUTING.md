@@ -99,6 +99,8 @@ obsolete archive. A manifest-only version bump can leave Helm loading the old
 package without the dependency alias values. The Ubuntu operator's chart tests
 verify that the vendored package and declared version match. A successful render
 still does not establish valid Kubernetes labels or deployment readiness.
+Chart tests render these committed archives with isolated Helm settings; they do
+not download dependencies or require a developer's Helm repository registration.
 
 Bind watcher retains controller-runtime and multicluster-runtime 0.24.1 with
 Kubernetes libraries 0.36.4. `multicluster-provider` 0.8.0 implements the earlier
