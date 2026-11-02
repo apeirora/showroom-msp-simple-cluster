@@ -45,7 +45,7 @@ func TestSyncAgentVendoredDependency(t *testing.T) {
 	}
 	expected := filepath.Join(chartDir, "charts", "api-syncagent-"+version+".tgz")
 	if len(archives) != 1 || archives[0] != expected {
-		t.Fatalf("vendored api-syncagent must match declared version %s: found %v; run helm dependency build", version, archives)
+		t.Fatalf("vendored api-syncagent must match declared version %s: found %v; run helm dependency update", version, archives)
 	}
 	archive, err := os.Open(expected)
 	if err != nil {
