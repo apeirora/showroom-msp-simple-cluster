@@ -2,5 +2,17 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "bind-watcher-operator holds controller-runtime one minor back, via a replace directive, because kcp-dev/multicluster-provider v0.8.0 does not compile against 0.25.x. See the comment on that replace in bind-watcher-operator/go.mod. Remove this rule together with the replace once the provider supports 0.25.",
+      "matchFileNames": [
+        "bind-watcher-operator/go.mod"
+      ],
+      "matchPackageNames": [
+        "sigs.k8s.io/controller-runtime"
+      ],
+      "allowedVersions": "<0.25.0"
+    }
   ]
 }
