@@ -99,6 +99,12 @@ dependency version to refresh the archives and stale lockfile, then commit the
 matching official archive and lockfile.
 See https://helm.sh/docs/helm/helm_dependency_update/ for the refresh command.
 
+Remove obsolete archives under `charts/simple-cluster-sync-agent/charts/` when
+refreshing dependencies. A manifest-only version bump can leave Helm loading an
+old package without its dependency alias values. The Ubuntu operator's chart
+tests verify that the vendored package and declared version match. A successful
+render still does not establish valid Kubernetes labels or deployment readiness.
+
 Bind watcher retains controller-runtime and multicluster-runtime 0.24.1 with
 Kubernetes libraries 0.36.4. `multicluster-provider` 0.8.0 implements the earlier
 event-recorder interface and cannot compile against controller-runtime 0.25.2.
