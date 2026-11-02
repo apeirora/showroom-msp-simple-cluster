@@ -2,5 +2,18 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Hold bind-watcher-operator at controller-runtime 0.24.x: kcp-dev/multicluster-provider v0.8.0 does not satisfy the cluster.Cluster interface of 0.25.x, because recorder.Provider.GetEventRecorder changed its return type. Remove this rule once the provider supports 0.25.",
+      "matchFileNames": [
+        "bind-watcher-operator/go.mod"
+      ],
+      "matchPackageNames": [
+        "sigs.k8s.io/controller-runtime",
+        "sigs.k8s.io/multicluster-runtime"
+      ],
+      "allowedVersions": "<0.25.0"
+    }
   ]
 }
