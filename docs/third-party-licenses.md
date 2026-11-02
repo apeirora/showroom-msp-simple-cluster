@@ -95,10 +95,10 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `github.com/google/gnostic-models` | `v0.7.1` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/gophercloud/gophercloud/v2` | `v2.15.0` | simple-cluster-operator-openstack |
 | `github.com/inconshreveable/mousetrap` | `v1.1.0` | simple-cluster-operator, simple-cluster-operator-kind, sshkey-operator |
-| `github.com/kcp-dev/apimachinery/v2` | `v2.33.3` | bind-watcher-operator |
+| `github.com/kcp-dev/apimachinery/v2` | `v2.33.4` | bind-watcher-operator |
 | `github.com/kcp-dev/logicalcluster/v3` | `v3.0.5` | bind-watcher-operator |
 | `github.com/kcp-dev/multicluster-provider` | `v0.8.0` | bind-watcher-operator |
-| `github.com/kcp-dev/sdk` | `v0.33.3` | bind-watcher-operator |
+| `github.com/kcp-dev/sdk` | `v0.33.4` | bind-watcher-operator |
 | `github.com/modern-go/concurrent` | `v0.0.0-20180306012644-bacd9c7ef1dd` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/modern-go/reflect2` | `v1.0.3-0.20250322232337-35a7c28c31ee` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `github.com/prometheus/client_model` | `v0.6.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
