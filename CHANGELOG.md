@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.1...v1.2.2) (2026-11-05)
+
+
+### Bug Fixes
+
+* bump deps ([#244](https://github.com/apeirora/showroom-msp-simple-cluster/issues/244)) ([1e2575c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/1e2575c91a623c44c827260c71ea49e74230a872))
+* bump x/net to v0.62.0 in all modules ([#248](https://github.com/apeirora/showroom-msp-simple-cluster/issues/248)) ([d5c70bc](https://github.com/apeirora/showroom-msp-simple-cluster/commit/d5c70bce76d054d56d3a6b6b0e6be340158ffee6))
+* bump x/net, x/text, x/sys in crdcheck and vitest in ui ([#246](https://github.com/apeirora/showroom-msp-simple-cluster/issues/246)) ([bd842bb](https://github.com/apeirora/showroom-msp-simple-cluster/commit/bd842bbbf722c7712ad2cfab1eee5e7fc06dff20))
+* bump x/oauth2 and x/time in crdcheck ([#247](https://github.com/apeirora/showroom-msp-simple-cluster/issues/247)) ([5ba9b56](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5ba9b5687456b80728102bc82f2db0cca76c016e))
+* **deps:** update k8s.io/utils digest to ca04ba5 ([18942b0](https://github.com/apeirora/showroom-msp-simple-cluster/commit/18942b0a367995519770c9a40883d7366f6d682c))
+* **deps:** Update KCP SDK to v0.33.4 ([eb98641](https://github.com/apeirora/showroom-msp-simple-cluster/commit/eb986417b69df3efc8bec6aaf17587f66c1fdb70))
+* **deps:** update multicluster-runtime to v0.25.2 in bind-watcher-operator ([#269](https://github.com/apeirora/showroom-msp-simple-cluster/issues/269)) ([637cc28](https://github.com/apeirora/showroom-msp-simple-cluster/commit/637cc286e0a0b14aa5c198da263227eda704aafa))
+* regenerate SBOM and licence audit for x/net v0.62.0 ([#250](https://github.com/apeirora/showroom-msp-simple-cluster/issues/250)) ([919f410](https://github.com/apeirora/showroom-msp-simple-cluster/commit/919f410dcf8a542e45f1790bc879a7415367a978))
+* **ui:** discover Telekom OSC from the default provider sources ([#275](https://github.com/apeirora/showroom-msp-simple-cluster/issues/275)) ([923069a](https://github.com/apeirora/showroom-msp-simple-cluster/commit/923069af3351db02bbc6b1b1eb60d35198118ebe))
+
 ## [1.2.1](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.0...v1.2.1) (2026-10-23)
 
 
