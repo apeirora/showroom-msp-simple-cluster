@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.2...v1.2.3) (2026-11-05)
+
+
+### Bug Fixes
+
+* **ci:** register the locked KCP chart repository before publishing ([#277](https://github.com/apeirora/showroom-msp-simple-cluster/issues/277)) ([29526c3](https://github.com/apeirora/showroom-msp-simple-cluster/commit/29526c3f3932c8d3d3ab067040ff5a69e3c1b7d3))
+
 ## [1.2.2](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.1...v1.2.2) (2026-11-05)
 
 
