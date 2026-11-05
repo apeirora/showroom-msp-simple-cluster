@@ -146,6 +146,8 @@ jobs:
         run: |
           set -euo pipefail
           V="${VERSION}"
+          # dependency build needs the locked external repository registered.
+          helm repo add kcp https://kcp-dev.github.io/helm-charts
           # Chart paths relative to the repo root. The cloud providers (dati, sap,
           # cloudferro, arsys) now live in their own repositories and publish there.
           # ubuntu-machines / sshkey / ubuntu / openstack stay here as the shared
