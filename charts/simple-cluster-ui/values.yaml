@@ -109,6 +109,12 @@ clusterConfig:
       label: Arsys (virtual)
       providerConfigName: arsys-virtual
       namespaced: true
+    - group: gardener.t-systems.com
+      version: v1
+      listField: ShootClaims
+      label: Telekom OSC
+      providerConfigName: telekom
+      namespaced: true
   # Key management providers a SimpleClusterProviderConfig admits for
   # SimpleCluster.spec.encryption (apeirora/showroom#470), keyed by provider
   # config name. The portal cannot read the provider config itself (it lives on
