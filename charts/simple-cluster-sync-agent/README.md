@@ -34,7 +34,7 @@ See the [consumer contract](https://github.com/apeirora/showroom/blob/main/commo
 
 ## Agent version
 
-The default image is api-syncagent v0.7.0, pinned by digest.
+The default image is api-syncagent v0.7.0 by tag. The subchart writes the tag into the `app.kubernetes.io/version` pod label, so a digest cannot be part of it; the matching digest is noted in `values.yaml`.
 This matches the Showroom deployment.
 The Helm dependency supplies the deployment template.
 The image value selects the agent version.

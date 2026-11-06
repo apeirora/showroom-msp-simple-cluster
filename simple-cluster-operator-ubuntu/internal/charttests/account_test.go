@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -347,10 +348,18 @@ func TestAgentImageAndEndpoint(t *testing.T) {
 		if obj.GetKind() != "Deployment" {
 			continue
 		}
+		// The subchart copies image.tag into this label, so the tag must stay a
+		// valid label value: no digest suffix (see charts/simple-cluster-sync-agent/values.yaml).
+		labels, _, _ := unstructured.NestedStringMap(obj.Object, "spec", "template", "metadata", "labels")
+		for key, value := range labels {
+			if errs := validation.IsValidLabelValue(value); len(errs) > 0 {
+				t.Fatalf("pod template label %s=%q is invalid: %v", key, value, errs)
+			}
+		}
 		containers, _, _ := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
 		for _, value := range containers {
 			container := value.(map[string]any)
-			if container["image"] != "ghcr.io/kcp-dev/api-syncagent:v0.7.0@sha256:22835bea348eaae5820afdcbbf601000967ae84197a4449243d3336866239301" {
+			if container["image"] != "ghcr.io/kcp-dev/api-syncagent:v0.7.0" {
 				continue
 			}
 			found = true
