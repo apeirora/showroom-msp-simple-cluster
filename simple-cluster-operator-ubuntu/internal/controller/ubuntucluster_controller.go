@@ -123,6 +123,15 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.fail(ctx, &cluster, "InvalidSpec", "spec.controlPlane.hosts must not be empty")
 	}
 
+	// Per-host login Secrets can arrive after the cluster Secret. Wait for
+	// all of them before the KMS or any host is touched. Other credential
+	// errors stay with the per-host paths below.
+	for _, h := range append(append([]ubuntuv1alpha1.Host{}, cps...), cluster.Spec.Workers.Hosts...) {
+		if _, _, err := r.hostCredential(ctx, &cluster, h, cred); errors.Is(err, errSecretMissing) {
+			return r.waitForSecret(ctx, &cluster, err.Error())
+		}
+	}
+
 	k3sVer := cluster.Spec.Version
 	if k3sVer == "" {
 		k3sVer = r.DefaultK3sVersion

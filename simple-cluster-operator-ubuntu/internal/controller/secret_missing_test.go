@@ -152,6 +152,43 @@ func TestCreateWithLoginSecretProceeds(t *testing.T) {
 	}
 }
 
+func TestCreateWaitsForMissingHostLoginSecret(t *testing.T) {
+	cases := []struct {
+		name   string
+		change func(*api.UbuntuCluster)
+	}{
+		{"bootstrap", func(c *api.UbuntuCluster) {
+			c.Spec.ControlPlane.Hosts[0].PasswordSecretRef = &corev1.SecretReference{Name: "cp-password"}
+		}},
+		{"worker", func(c *api.UbuntuCluster) {
+			c.Spec.Workers.Hosts[0].PasswordSecretRef = &corev1.SecretReference{Name: "worker-password"}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := clusterFixture()
+			tc.change(c)
+			h := newSecretMissingHarness(t, c, loginSecret())
+
+			res := h.reconcile(t, c)
+			if res.RequeueAfter <= 0 {
+				t.Fatalf("missing host Secret must requeue, got %+v", res)
+			}
+			if len(h.dials) != 0 {
+				t.Fatalf("dialed before every host Secret exists: %d", len(h.dials))
+			}
+			stored, _ := h.get(t, c)
+			if stored.Status.Phase != api.PhaseProvisioning || len(stored.Status.HostStatuses) != 0 {
+				t.Fatalf("phase=%q hosts=%+v", stored.Status.Phase, stored.Status.HostStatuses)
+			}
+			ready := apimeta.FindStatusCondition(stored.Status.Conditions, api.ConditionReady)
+			if ready == nil || ready.Reason != reasonWaitingForSecret || !strings.Contains(ready.Message, "-password") {
+				t.Fatalf("ready condition=%+v", ready)
+			}
+		})
+	}
+}
+
 func TestDeleteWithMissingLoginSecretRemovesFinalizer(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

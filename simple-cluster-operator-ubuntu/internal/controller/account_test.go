@@ -44,8 +44,14 @@ func TestAccountCredentialReconcile(t *testing.T) {
 				}
 				return
 			}
-			if calls != 1 || len(spy.reads) != 1 || spy.reads[0].Namespace != c.Namespace {
+			// The host Secret pre-check reads the worker Secret too. Every read must stay in the account namespace.
+			if calls != 1 || len(spy.reads) == 0 {
 				t.Fatalf("dials=%d reads=%v", calls, spy.reads)
+			}
+			for _, read := range spy.reads {
+				if read.Namespace != c.Namespace {
+					t.Fatalf("read outside the account namespace: %v", spy.reads)
+				}
 			}
 			_, cred, err := r.hostCredential(context.Background(), c, c.Spec.Workers.Hosts[0], sshpkg.Credential{})
 			if err != nil || cred.Password == "" {
