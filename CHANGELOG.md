@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.4](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.3...v1.2.4) (2026-11-12)
+
+
+### Bug Fixes
+
+* **controller:** wait for missing ubuntu login Secrets and finish delete without them ([#285](https://github.com/apeirora/showroom-msp-simple-cluster/issues/285)) ([5f8e886](https://github.com/apeirora/showroom-msp-simple-cluster/commit/5f8e886a11834655f9721f638a82051f20890f1d))
+
 ## [1.2.3](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.2...v1.2.3) (2026-11-05)
 
 
