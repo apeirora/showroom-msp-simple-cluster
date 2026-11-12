@@ -2,7 +2,7 @@ module github.com/apeirora/showroom-msp-simple-cluster/hack/crdcheck
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require sigs.k8s.io/controller-runtime v0.25.2
 
