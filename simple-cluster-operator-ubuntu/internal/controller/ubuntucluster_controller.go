@@ -46,7 +46,17 @@ const (
 	hostPhaseInstalling = "Installing"
 	hostPhaseReady      = "Ready"
 	hostPhaseFailed     = "Failed"
+
+	// reasonWaitingForSecret marks a cluster whose login Secret does not
+	// exist yet. Secrets synced from elsewhere often arrive after the
+	// UbuntuCluster, so this is a waiting state, not a failure.
+	reasonWaitingForSecret = "WaitingForSSHSecret"
+	reasonSSHKeyError      = "SSHKeyError"
 )
+
+// errSecretMissing marks a login Secret that does not exist (yet). Callers
+// use it to tell a waiting state from a real credential error.
+var errSecretMissing = errors.New("secret not found")
 
 // UbuntuClusterReconciler drives k3s install across the spec'd Ubuntu
 // hosts and mirrors per-host progress back to status.
@@ -101,13 +111,25 @@ func (r *UbuntuClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	cred, err := r.readSSHCredential(ctx, &cluster)
+	if errors.Is(err, errSecretMissing) {
+		return r.waitForSecret(ctx, &cluster, err.Error())
+	}
 	if err != nil {
-		return r.fail(ctx, &cluster, "SSHKeyError", err.Error())
+		return r.fail(ctx, &cluster, reasonSSHKeyError, err.Error())
 	}
 
 	cps := cluster.Spec.ControlPlane.Hosts
 	if len(cps) == 0 {
 		return r.fail(ctx, &cluster, "InvalidSpec", "spec.controlPlane.hosts must not be empty")
+	}
+
+	// Per-host login Secrets can arrive after the cluster Secret. Wait for
+	// all of them before the KMS or any host is touched. Other credential
+	// errors stay with the per-host paths below.
+	for _, h := range append(append([]ubuntuv1alpha1.Host{}, cps...), cluster.Spec.Workers.Hosts...) {
+		if _, _, err := r.hostCredential(ctx, &cluster, h, cred); errors.Is(err, errSecretMissing) {
+			return r.waitForSecret(ctx, &cluster, err.Error())
+		}
 	}
 
 	k3sVer := cluster.Spec.Version
@@ -503,26 +525,34 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 		allOK = false
 	}
 
+	// The k3s uninstall below is best effort: the hosts themselves are
+	// removed by whoever provisioned them, not by this controller. Without
+	// the login Secret there is no way to reach the hosts, so skip the
+	// uninstall instead of holding the finalizer forever.
 	cred, err := r.readSSHCredential(ctx, cluster)
+	if errors.Is(err, errSecretMissing) {
+		r.skipUninstall(ctx, cluster, "all hosts", err)
+		return r.finishDelete(ctx, cluster, allOK)
+	}
 	if err != nil {
-		log.Error(err, "delete: SSH key unreadable — finalizer kept; user may need to remove it manually")
+		log.Error(err, "delete: SSH credential unusable; finalizer kept, will retry")
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
 	}
 
 	cps := cluster.Spec.ControlPlane.Hosts
 	if len(cps) == 0 {
-		if !allOK {
-			return ctrl.Result{RequeueAfter: requeueWorking}, nil
-		}
-		// Nothing to talk to — let finalizer fall off.
-		patch := client.MergeFrom(cluster.DeepCopy())
-		controllerutil.RemoveFinalizer(cluster, ubuntuv1alpha1.FinalizerName)
-		return ctrl.Result{}, r.Patch(ctx, cluster, patch)
+		// Nothing to talk to, let the finalizer fall off.
+		return r.finishDelete(ctx, cluster, allOK)
 	}
 	bootstrap := cps[0]
 
 	// Open bastion to bootstrap CP; workers + extra CPs go via it.
 	bastion, err := r.dialBootstrap(ctx, cluster, bootstrap, cred)
+	if errors.Is(err, errSecretMissing) {
+		// Every other host is reached through the bootstrap CP.
+		r.skipUninstall(ctx, cluster, "all hosts", err)
+		return r.finishDelete(ctx, cluster, allOK)
+	}
 	if err != nil {
 		log.Error(err, "delete: bastion dial failed; will retry")
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
@@ -536,7 +566,9 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	for _, h := range cluster.Spec.Workers.Hosts {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"agent uninstall on %s", h.Name)
-		if err := r.uninstallVia(ctx, cluster, bastion, h, cred, false); err != nil {
+		if err := r.uninstallVia(ctx, cluster, bastion, h, cred, false); errors.Is(err, errSecretMissing) {
+			r.skipUninstall(ctx, cluster, h.Name, err)
+		} else if err != nil {
 			log.Error(err, "uninstall agent failed", "host", h.Name)
 			allOK = false
 		}
@@ -544,7 +576,9 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 	for _, h := range cps[1:] {
 		r.eventf(cluster, corev1.EventTypeNormal, "UninstallingK3s",
 			"server uninstall on %s", h.Name)
-		if err := r.uninstallVia(ctx, cluster, bastion, h, cred, true); err != nil {
+		if err := r.uninstallVia(ctx, cluster, bastion, h, cred, true); errors.Is(err, errSecretMissing) {
+			r.skipUninstall(ctx, cluster, h.Name, err)
+		} else if err != nil {
 			log.Error(err, "uninstall server failed", "host", h.Name)
 			allOK = false
 		}
@@ -557,16 +591,29 @@ func (r *UbuntuClusterReconciler) reconcileDelete(ctx context.Context, cluster *
 		allOK = false
 	}
 
+	return r.finishDelete(ctx, cluster, allOK)
+}
+
+// finishDelete removes the finalizer once every required cleanup step
+// succeeded, and requeues otherwise.
+func (r *UbuntuClusterReconciler) finishDelete(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, allOK bool) (ctrl.Result, error) {
 	if !allOK {
 		return ctrl.Result{RequeueAfter: requeueWorking}, nil
 	}
-
 	patch := client.MergeFrom(cluster.DeepCopy())
 	controllerutil.RemoveFinalizer(cluster, ubuntuv1alpha1.FinalizerName)
 	if err := r.Patch(ctx, cluster, patch); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// skipUninstall records that the best-effort k3s uninstall on target was
+// skipped because its login Secret is gone.
+func (r *UbuntuClusterReconciler) skipUninstall(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, target string, err error) {
+	logf.FromContext(ctx).Info("delete: login Secret missing, skipping k3s uninstall", "target", target, "reason", err.Error())
+	r.eventf(cluster, corev1.EventTypeWarning, "UninstallSkipped",
+		"k3s uninstall skipped on %s: %s", target, err.Error())
 }
 
 func (r *UbuntuClusterReconciler) uninstallVia(
@@ -641,6 +688,9 @@ func (r *UbuntuClusterReconciler) hostCredential(ctx context.Context, cluster *u
 	}
 	var sec corev1.Secret
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: h.PasswordSecretRef.Name}, &sec); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", sshpkg.Credential{}, fmt.Errorf("host %s passwordSecretRef %s/%s: %w", h.Name, ns, h.PasswordSecretRef.Name, errSecretMissing)
+		}
 		return "", sshpkg.Credential{}, fmt.Errorf("read host %s passwordSecretRef %s/%s: %w", h.Name, ns, h.PasswordSecretRef.Name, err)
 	}
 	pw := sec.Data[ubuntuv1alpha1.SSHSecretPasswordKey]
@@ -684,7 +734,7 @@ func (r *UbuntuClusterReconciler) readSecretKey(ctx context.Context, namespace, 
 	key := types.NamespacedName{Name: name, Namespace: namespace}
 	if err := r.Get(ctx, key, &secret); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("ssh Secret %s not found", key.String())
+			return nil, fmt.Errorf("ssh Secret %s: %w", key.String(), errSecretMissing)
 		}
 		return nil, fmt.Errorf("get ssh Secret %s: %w", key.String(), err)
 	}
@@ -764,6 +814,28 @@ func (r *UbuntuClusterReconciler) setPhase(ctx context.Context, cluster *ubuntuv
 		Message: msg,
 	})
 	return r.Status().Patch(ctx, cluster, patch)
+}
+
+// waitForSecret reports a cluster whose login Secret has not arrived yet.
+// It is not Failed: the Secret may be synced later, so requeue and retry.
+func (r *UbuntuClusterReconciler) waitForSecret(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, msg string) (ctrl.Result, error) {
+	patch := client.MergeFrom(cluster.DeepCopy())
+	cluster.Status.Phase = ubuntuv1alpha1.PhaseProvisioning
+	cluster.Status.Message = "Provisioning: waiting for login Secret: " + msg
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:    ubuntuv1alpha1.ConditionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  reasonWaitingForSecret,
+		Message: msg,
+	})
+	// Clear an Error left by an older operator that treated this as fatal.
+	if c := apimeta.FindStatusCondition(cluster.Status.Conditions, ubuntuv1alpha1.ConditionError); c != nil && c.Reason == reasonSSHKeyError {
+		apimeta.RemoveStatusCondition(&cluster.Status.Conditions, ubuntuv1alpha1.ConditionError)
+	}
+	if err := r.Status().Patch(ctx, cluster, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: requeueWorking}, nil
 }
 
 func (r *UbuntuClusterReconciler) fail(ctx context.Context, cluster *ubuntuv1alpha1.UbuntuCluster, reason, msg string) (ctrl.Result, error) {
