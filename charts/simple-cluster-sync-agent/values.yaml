@@ -2,7 +2,12 @@ syncAgentOperator:
   enabled: true
   image:
     repository: ghcr.io/kcp-dev/api-syncagent
-    tag: v0.7.0@sha256:22835bea348eaae5820afdcbbf601000967ae84197a4449243d3336866239301
+    # Tag only. The api-syncagent subchart copies this value into the pod label
+    # app.kubernetes.io/version, and a digest suffix makes that label invalid
+    # (over 63 characters, '@' and ':' not allowed), so the Deployment is
+    # rejected by the API server. v0.7.0 is the image digest
+    # sha256:22835bea348eaae5820afdcbbf601000967ae84197a4449243d3336866239301.
+    tag: v0.7.0
   apiExportEndpointSliceName: simpleclusters.showroom.apeirora.eu
   agentName: simple-cluster-agent
   kcpKubeconfig: pm-kubeconfig
