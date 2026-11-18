@@ -350,7 +350,7 @@ func TestAgentImageAndEndpoint(t *testing.T) {
 		containers, _, _ := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
 		for _, value := range containers {
 			container := value.(map[string]any)
-			if container["image"] != "ghcr.io/kcp-dev/api-syncagent:v0.7.0@sha256:22835bea348eaae5820afdcbbf601000967ae84197a4449243d3336866239301" {
+			if container["image"] != "ghcr.io/kcp-dev/api-syncagent:v0.8.1@sha256:a4775ea5156db85c410b2bfc27e15ef81327be0ae4f204e982ec3333aaa0f161" {
 				continue
 			}
 			found = true
