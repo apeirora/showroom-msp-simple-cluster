@@ -24,7 +24,7 @@ spec:
           clusterName: {{ .Target.name }}
           workers: {{ .SC.workers.nodes }}
           {{- if .Inputs.nodeImage }}
-          nodeImage: {{ .Inputs.nodeImage }}
+          nodeImage: {{ .Inputs.nodeImage | quote }}
           {{- end }}
   kubeconfigSource:
     resourceName: cluster

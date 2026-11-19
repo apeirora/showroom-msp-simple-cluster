@@ -56,21 +56,21 @@ spec:
         kind: UbuntuCluster
         spec:
           ssh:
-            user: {{ (index .Resources.cp 0).status.machine.ssh.user }}
+            user: {{ (index .Resources.cp 0).status.machine.ssh.user | quote }}
             privateKeySecretRef:
-              name: {{ (index .Resources.cp 0).status.machine.ssh.privateKeySecretRef.name }}
+              name: {{ (index .Resources.cp 0).status.machine.ssh.privateKeySecretRef.name | quote }}
           controlPlane:
             hosts:
               {{- range $i, $cl := .Resources.cp }}
               - name: cp-{{ $i }}
-                address: {{ $cl.status.machine.address }}
-                externalAddress: {{ $cl.status.machine.externalAddress }}
+                address: {{ $cl.status.machine.address | quote }}
+                externalAddress: {{ $cl.status.machine.externalAddress | quote }}
               {{- end }}
           workers:
             hosts:
               {{- range $i, $cl := .Resources.worker }}
               - name: worker-{{ $i }}
-                address: {{ $cl.status.machine.address }}
+                address: {{ $cl.status.machine.address | quote }}
               {{- end }}
 
   kubeconfigSource:
