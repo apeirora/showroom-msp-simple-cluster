@@ -44,6 +44,15 @@ controllerManager:
 # [RBAC]: To enable RBAC (Permissions) configurations
 rbac:
   enable: true
+  # Provider self-grant: any ClusterRole matching matchLabels below is merged,
+  # content-unbounded, into the operator identity shared by all tenants
+  # (self-grant hazard, see templates/rbac/provider_resources_role.yaml).
+  # Pin the selector with an extra discriminator label so only ClusterRoles
+  # you control match, or set enable=false to rely on the manager role alone.
+  aggregation:
+    enable: true
+    matchLabels:
+      showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
 
 # [CRDs]: To enable the CRDs
 crd:

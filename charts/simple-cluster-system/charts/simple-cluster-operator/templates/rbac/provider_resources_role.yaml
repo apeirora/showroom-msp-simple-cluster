@@ -1,4 +1,4 @@
-{{- if .Values.rbac.enable }}
+{{- if and .Values.rbac.enable .Values.rbac.aggregation.enable }}
 # The manager ClusterRole enumerates the API groups of the resource types the
 # in-repo providers create. A provider that ships nothing but a
 # SimpleClusterProviderConfig, and whose resource R lives in some other group,
@@ -10,6 +10,17 @@
 #   showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
 #
 # See docs/provider-contract.md.
+#
+# Self-grant hazard: aggregation is additive and content-unbounded. ANY
+# ClusterRole in the cluster whose labels match the selector below is merged
+# into this role, hence into the operator's identity — and that identity is
+# the shared reconcile deputy for *every* tenant's SimpleCluster. No webhook
+# or policy gates what a matching ClusterRole may contain, so the security
+# ceiling is really "who may create or edit a ClusterRole carrying these
+# labels". Pin the selector via .Values.rbac.aggregation.matchLabels (add a
+# discriminator label so only ClusterRoles you ship match) and control that
+# grant; set .Values.rbac.aggregation.enable=false to drop the mechanism and
+# rely on the enumerated manager role alone.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -19,7 +30,7 @@ metadata:
 aggregationRule:
   clusterRoleSelectors:
   - matchLabels:
-      showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
+      {{- toYaml .Values.rbac.aggregation.matchLabels | nindent 6 }}
 rules: []
 ---
 apiVersion: rbac.authorization.k8s.io/v1
