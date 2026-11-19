@@ -12,20 +12,22 @@ You may obtain a copy of the License at
 // Ubuntu host into a working k3s server or agent. Everything goes
 // through one of:
 //
-//   InstallServerBootstrap  — first CP, `k3s server --cluster-init`
-//   InstallServerJoin       — additional CP, joins via the bootstrap CP
-//   InstallAgent            — workers
-//   FetchToken              — read /var/lib/rancher/k3s/server/node-token
-//   FetchKubeconfig         — read /etc/rancher/k3s/k3s.yaml + rewrite the API URL
-//   UninstallServer / UninstallAgent — k3s-uninstall.sh / k3s-agent-uninstall.sh
-//   IsServerRunning         — `systemctl is-active k3s` (server unit up)
-//   IsAgentRunning          — `systemctl is-active k3s-agent` (agent unit up)
-//   ReportedVersion         — `k3s --version` parsed
+//	InstallServerBootstrap  — first CP, `k3s server --cluster-init`
+//	InstallServerJoin       — additional CP, joins via the bootstrap CP
+//	InstallAgent            — workers
+//	FetchToken              — read /var/lib/rancher/k3s/server/node-token
+//	FetchKubeconfig         — read /etc/rancher/k3s/k3s.yaml + rewrite the API URL
+//	UninstallServer / UninstallAgent — k3s-uninstall.sh / k3s-agent-uninstall.sh
+//	IsServerRunning         — `systemctl is-active k3s` (server unit up)
+//	IsAgentRunning          — `systemctl is-active k3s-agent` (agent unit up)
+//	ReportedVersion         — `k3s --version` parsed
 package k3s
 
 import (
 	"context"
 	"fmt"
+	"io"
+	"sort"
 	"strings"
 
 	"github.com/apeirora/showroom-msp-simple-cluster/simple-cluster-operator-ubuntu/internal/ssh"
@@ -72,7 +74,7 @@ func InstallServerBootstrap(ctx context.Context, c *ssh.Client, opts InstallOpti
 		return nil
 	}
 	args := append([]string{"server", "--cluster-init"}, serverArgs(opts)...)
-	return runInstallScript(ctx, c, opts, args, nil)
+	return runInstallScript(ctx, c, opts, args, nil, nil)
 }
 
 // InstallServerJoin runs `k3s server --server <bootstrap>` on subsequent
@@ -88,10 +90,10 @@ func InstallServerJoin(ctx context.Context, c *ssh.Client, opts InstallOptions, 
 		"server",
 		"--server=" + bootstrapURL,
 	}, serverArgs(opts)...)
-	env := map[string]string{
+	secretEnv := map[string]string{
 		"K3S_TOKEN": token,
 	}
-	return runInstallScript(ctx, c, opts, args, env)
+	return runInstallScript(ctx, c, opts, args, nil, secretEnv)
 }
 
 // InstallAgent runs the k3s agent installer on a worker host. Skipped only
@@ -102,11 +104,14 @@ func InstallAgent(ctx context.Context, c *ssh.Client, opts InstallOptions, serve
 	} else if running {
 		return nil
 	}
+	args := agentArgs(opts)
 	env := map[string]string{
-		"K3S_URL":   serverURL,
+		"K3S_URL": serverURL,
+	}
+	secretEnv := map[string]string{
 		"K3S_TOKEN": token,
 	}
-	return runInstallScript(ctx, c, opts, agentArgs(opts), env)
+	return runInstallScript(ctx, c, opts, args, env, secretEnv)
 }
 
 // FetchToken reads /var/lib/rancher/k3s/server/node-token from the
@@ -210,24 +215,66 @@ func ReportedVersion(ctx context.Context, c *ssh.Client) (string, error) {
 // runInstallScript pipes get.k3s.io through bash with the supplied env
 // (`INSTALL_K3S_VERSION` plus any caller env) and trailing positional
 // args (forwarded to the chosen k3s subcommand).
-func runInstallScript(ctx context.Context, c *ssh.Client, opts InstallOptions, args []string, env map[string]string) error {
-	var b strings.Builder
-	b.WriteString("set -euo pipefail; ")
-	for k, v := range env {
-		fmt.Fprintf(&b, "export %s=%q; ", k, v)
+//
+// Every interpolated value is single-quoted for the remote bash layer:
+// inside double quotes bash keeps $, $(), ${} and backticks active, so
+// any command substitution in a CR field (version, k3s args, addresses)
+// ran as root under `sudo -n bash -c` (F-UB-1). Single quotes make the
+// value literal; strconvQuote still protects the whole script through
+// the outer sh -c + sudo layer.
+//
+// secretEnv values never enter the command line at all: each is read
+// from the session stdin, one line per key in sorted key order (the
+// KMS secret-ID pattern). That keeps the k3s node-token out of
+// ps-visible argv and out of the error text that lands in
+// status.hostStatuses on failed installs (F-UB-3), and stdin is not
+// shell-parsed, which also closes the remote-token re-injection
+// (F-UB-4).
+func runInstallScript(ctx context.Context, c *ssh.Client, opts InstallOptions, args []string, env, secretEnv map[string]string) error {
+	cmd, stdin := buildInstallScript(opts, args, env, secretEnv)
+	var stdinReader io.Reader
+	if stdin != "" {
+		stdinReader = strings.NewReader(stdin)
 	}
-	if opts.Version != "" {
-		fmt.Fprintf(&b, "export INSTALL_K3S_VERSION=%q; ", opts.Version)
-	}
-	b.WriteString("curl -sfL https://get.k3s.io | sh -s -")
-	for _, a := range args {
-		fmt.Fprintf(&b, " %q", a)
-	}
-	_, err := c.MustSucceedSudo(ctx, "bash -c "+strconvQuote(b.String()))
-	if err != nil {
+	if _, err := c.MustSucceedSudoStdin(ctx, "bash -c "+strconvQuote(cmd), stdinReader); err != nil {
 		return fmt.Errorf("k3s install: %w", err)
 	}
 	return nil
+}
+
+// buildInstallScript renders the remote bash script and its session
+// stdin: the stdin holds one line per secretEnv value, in the order the
+// `IFS= read -r KEY` statements consume them (sorted keys).
+func buildInstallScript(opts InstallOptions, args []string, env, secretEnv map[string]string) (script, stdin string) {
+	var b strings.Builder
+	b.WriteString("set -euo pipefail; ")
+	secretKeys := make([]string, 0, len(secretEnv))
+	for k := range secretEnv {
+		secretKeys = append(secretKeys, k)
+	}
+	sort.Strings(secretKeys)
+	var in strings.Builder
+	for _, k := range secretKeys {
+		fmt.Fprintf(&b, "IFS= read -r %s; export %s; ", k, k)
+		in.WriteString(secretEnv[k])
+		in.WriteString("\n")
+	}
+	envKeys := make([]string, 0, len(env))
+	for k := range env {
+		envKeys = append(envKeys, k)
+	}
+	sort.Strings(envKeys)
+	for _, k := range envKeys {
+		fmt.Fprintf(&b, "export %s=%s; ", k, strconvQuote(env[k]))
+	}
+	if opts.Version != "" {
+		fmt.Fprintf(&b, "export INSTALL_K3S_VERSION=%s; ", strconvQuote(opts.Version))
+	}
+	b.WriteString("curl -sfL https://get.k3s.io | sh -s -")
+	for _, a := range args {
+		fmt.Fprintf(&b, " %s", strconvQuote(a))
+	}
+	return b.String(), in.String()
 }
 
 // serverArgs builds the k3s server flag tail: user's ExtraArgs +

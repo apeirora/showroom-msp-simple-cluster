@@ -63,9 +63,10 @@ func (c Credential) authMethods() ([]cryptossh.AuthMethod, error) {
 // Dial opens an SSH connection. The caller MUST call Close.
 // Host accepts both "1.2.3.4" and "host.example.com". When port == 0
 // DefaultPort is used. The user is whatever sudo-capable login the
-// caller already chose. acceptAnyHostKey is intentional — at this
-// point in the lifecycle we have no way to pin host keys; production
-// callers should layer a HostKeyCallback that consults a Secret.
+// caller already chose. Host keys are pinned trust-on-first-use for the
+// lifetime of this process (see hostkeys.go); the addresses dialed are
+// CR-supplied and the sessions carry credentials, so a changed key is
+// refused instead of silently re-trusted.
 func Dial(ctx context.Context, host string, port int, user string, cred Credential) (*Client, error) {
 	if port == 0 {
 		port = DefaultPort
@@ -74,13 +75,13 @@ func Dial(ctx context.Context, host string, port int, user string, cred Credenti
 	if err != nil {
 		return nil, err
 	}
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	cfg := &cryptossh.ClientConfig{
 		User:            user,
 		Auth:            auth,
-		HostKeyCallback: cryptossh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeys.callbackFor(addr),
 		Timeout:         dialTimeout,
 	}
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	// Honour ctx for the initial dial by racing it against a goroutine.
 	type dialResult struct {
@@ -118,13 +119,13 @@ func DialVia(ctx context.Context, bastion *Client, host string, port int, user s
 	if err != nil {
 		return nil, err
 	}
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	cfg := &cryptossh.ClientConfig{
 		User:            user,
 		Auth:            auth,
-		HostKeyCallback: cryptossh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeys.callbackFor(addr),
 		Timeout:         dialTimeout,
 	}
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	type dialResult struct {
 		c   *cryptossh.Client
@@ -210,7 +211,7 @@ func (c *Client) RunWithStdin(ctx context.Context, command string, stdin io.Read
 				res.ExitCode = ex.ExitStatus()
 				return res, nil
 			}
-			return res, fmt.Errorf("ssh run %q: %w", command, err)
+			return res, fmt.Errorf("ssh run %s: %w", briefCommand(command), err)
 		}
 		return res, nil
 	}
@@ -230,7 +231,7 @@ func (c *Client) MustSucceed(ctx context.Context, command string) (string, error
 		return "", err
 	}
 	if res.ExitCode != 0 {
-		return res.Stdout, fmt.Errorf("remote %q exited %d: %s", command, res.ExitCode, trimStderr(res.Stderr, res.Stdout))
+		return res.Stdout, fmt.Errorf("remote %s exited %d: %s", briefCommand(command), res.ExitCode, trimStderr(res.Stderr, res.Stdout))
 	}
 	return res.Stdout, nil
 }
@@ -242,9 +243,36 @@ func (c *Client) MustSucceedSudo(ctx context.Context, command string) (string, e
 		return "", err
 	}
 	if res.ExitCode != 0 {
-		return res.Stdout, fmt.Errorf("remote %q (sudo) exited %d: %s", command, res.ExitCode, trimStderr(res.Stderr, res.Stdout))
+		return res.Stdout, fmt.Errorf("remote %s (sudo) exited %d: %s", briefCommand(command), res.ExitCode, trimStderr(res.Stderr, res.Stdout))
 	}
 	return res.Stdout, nil
+}
+
+// MustSucceedSudoStdin is MustSucceedSudo with the session stdin fed from
+// stdin (nil means no stdin). Used to hand the remote shell a secret
+// without putting it into the argv (see k3s.runInstallScript, F-UB-3).
+func (c *Client) MustSucceedSudoStdin(ctx context.Context, command string, stdin io.Reader) (string, error) {
+	res, err := c.RunWithStdin(ctx, "sudo -n "+command, stdin)
+	if err != nil {
+		return "", err
+	}
+	if res.ExitCode != 0 {
+		return res.Stdout, fmt.Errorf("remote %s (sudo) exited %d: %s", briefCommand(command), res.ExitCode, trimStderr(res.Stderr, res.Stdout))
+	}
+	return res.Stdout, nil
+}
+
+// briefCommand abbreviates a remote command for error messages. Install
+// scripts are long and their full text used to land in
+// status.hostStatuses[].message (and operator logs) on every failed
+// install attempt, retried every 30 s; secrets no longer ride in the
+// argv, and a bounded prefix keeps the message readable (F-UB-3).
+func briefCommand(command string) string {
+	const maxLen = 120
+	if len(command) <= maxLen {
+		return strconv.Quote(command)
+	}
+	return strconv.Quote(command[:maxLen]) + "...(truncated)"
 }
 
 func trimStderr(stderr, stdout string) string {
