@@ -50,7 +50,7 @@ func TestTargetReferenceRejectsBeforeReadAndNetwork(t *testing.T) {
 				policy.Allowlist = []secretpolicy.Entry{{Namespace: "foreign", Name: "key", Purpose: purpose}}
 			}
 			_, err := New(context.Background(), spy, &rest.Config{Host: server.URL}, nil,
-				&corev1.SecretReference{Namespace: "foreign", Name: "key"}, "account", policy)
+				&corev1.SecretReference{Namespace: "foreign", Name: "key"}, "account", policy, DialOptions{})
 			if !errors.Is(err, secretpolicy.ErrDenied) {
 				t.Fatalf("expected policy denial, got %v", err)
 			}
@@ -78,7 +78,7 @@ func TestTargetReferenceNormalizesAndAcceptsExactUse(t *testing.T) {
 			spy := &secretReadSpy{Client: fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()}
 			policy := secretpolicy.Policy{Allowlist: []secretpolicy.Entry{{Namespace: "shared", Name: "key", Purpose: secretpolicy.Use}}}
 			_, err := New(context.Background(), spy, nil, nil,
-				&corev1.SecretReference{Namespace: namespace, Name: "key"}, "account", policy)
+				&corev1.SecretReference{Namespace: namespace, Name: "key"}, "account", policy, DialOptions{})
 			if errors.Is(err, secretpolicy.ErrDenied) || spy.reads != 1 {
 				t.Fatalf("allowed reference did not read its Secret: reads=%d, error=%v", spy.reads, err)
 			}

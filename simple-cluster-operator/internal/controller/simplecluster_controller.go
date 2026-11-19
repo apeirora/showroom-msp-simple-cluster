@@ -70,6 +70,10 @@ type SimpleClusterReconciler struct {
 	// shared SCPCs keep working while providers migrate to creating
 	// per-workspace SCPCs. Empty disables the fallback.
 	FallbackSCPCNamespace string
+	// TargetDial constrains dialing the tenant-writable kubeconfig Secret
+	// (currently the server allowlist). Zero values select the permissive
+	// defaults.
+	TargetDial target.DialOptions
 }
 
 // +kubebuilder:rbac:groups=showroom.apeirora.eu,resources=simpleclusters,verbs=get;list;watch;create;update;patch;delete
@@ -525,7 +529,7 @@ func (r *SimpleClusterReconciler) applyClusterResources(ctx context.Context, sc 
 	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), &corev1.SecretReference{
 		Name:      sc.Status.KubeconfigSecretRef.Name,
 		Namespace: sc.Namespace,
-	}, sc.Namespace, r.SecretPolicy)
+	}, sc.Namespace, r.SecretPolicy, r.TargetDial)
 	if err != nil {
 		// Cluster not reachable yet — surface on every resource, retry next loop.
 		for i := range sc.Spec.Resources {
@@ -595,7 +599,7 @@ func (r *SimpleClusterReconciler) collectNodes(ctx context.Context, sc *showroom
 	tc, err := target.New(ctx, r.Client, r.RESTConfig, r.RESTMapper(), &corev1.SecretReference{
 		Name:      sc.Status.KubeconfigSecretRef.Name,
 		Namespace: sc.Namespace,
-	}, sc.Namespace, r.SecretPolicy)
+	}, sc.Namespace, r.SecretPolicy, r.TargetDial)
 	if err != nil {
 		log.Info("collect nodes: cannot reach provisioned cluster", "error", err.Error())
 		return
