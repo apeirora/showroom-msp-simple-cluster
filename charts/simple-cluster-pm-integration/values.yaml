@@ -1,6 +1,29 @@
 rbac:
   enabled: false
 
+# [APIExport ceiling] KCP's spec.maximalPermissionPolicy for the
+# simpleclusters export. Default off keeps today's behavior (claim verbs are
+# the only bound, no server-side ceiling). Enabling renders the local policy
+# (templates/maximal-permission-policy.yaml), narrows the legacy v1alpha1
+# claim annotation from `all: true` to explicit verbs, and is the recommended
+# setting for multi-provider landscapes where one shared account namespace
+# holds every provider agent's mirrors and every tenant's Secrets.
+# Requires a KCP version serving apis.kcp.io/v1alpha2 APIExports (the
+# api-syncagent pinned in simple-cluster-sync-agent, v0.8.x, uses v1alpha2).
+apiExport:
+  maximalPermissionPolicy:
+    enabled: false
+    # Identities the policy binds, WITHOUT the apis.kcp.io:binding: prefix
+    # that KCP adds when checking. cluster-admin is the shared sync-agent /
+    # MSP admin identity (same name as the user in syncagent-rbac.yaml);
+    # system:authenticated covers tenant consumers of the exported APIs.
+    # A landscape issuing per-provider identities must list them here before
+    # enabling, or the agents lose access to the claimed resources.
+    users:
+      - cluster-admin
+    groups:
+      - system:authenticated
+
 # Public host/scheme of the simple-cluster-ui that serves pm-content.json.
 # The portal fetches ContentConfiguration.remoteConfiguration.url from here.
 PUBLIC_HOST: "localhost"
