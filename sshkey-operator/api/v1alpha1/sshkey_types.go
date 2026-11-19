@@ -29,6 +29,9 @@ const (
 	// ConditionExportSynced reports whether the key in the exported secret matches the SSHKey.
 	// Only present when exportToSecret is set.
 	ConditionExportSynced = "ExportSynced"
+	// ConditionKeySizeClamped is True when spec.keySize was outside the
+	// supported range and clamped by the controller. Only present when clamped.
+	ConditionKeySizeClamped = "KeySizeClamped"
 )
 
 // PassphraseSecretKey is the data key read from the passphrase secret.
@@ -49,8 +52,16 @@ type SSHKeySpec struct {
 	// +optional
 	KeyFormat KeyFormat `json:"keyFormat,omitempty"`
 
-	// KeySize in bits for RSA type, default 4096
+	// KeySize in bits for RSA type, default 4096.
+	// Bounded below at 1024 (shorter RSA keys are factorable or rejected
+	// outright by the generator) and above at 16384: the sshkey-operator
+	// serves every tenant from one worker, and a multi-megabit key would
+	// burn CPU for minutes per generation and grow the PEM past the
+	// etcd/apiserver request limit, which makes every error requeue
+	// regenerate it again. Older objects are clamped in the controller.
 	// +kubebuilder:default=4096
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Maximum=16384
 	// +optional
 	KeySize int `json:"keySize,omitempty"`
 
@@ -127,10 +138,14 @@ type SSHKey struct {
 	Status SSHKeyStatus `json:"status,omitempty"`
 
 	// PrivateKey is the generated private key (OpenSSH format, passphrase-encrypted when passPhaseSecret is set).
+	// The maxLength bounds the object size for the hand-written (tenant-writable)
+	// case; the controller regenerates values that do not parse (F-SK-1).
+	// +kubebuilder:validation:MaxLength=16384
 	// +optional
 	PrivateKey string `json:"privateKey,omitempty"`
 
 	// PublicKey is the generated public key.
+	// +kubebuilder:validation:MaxLength=8192
 	// +optional
 	PublicKey string `json:"publicKey,omitempty"`
 }

@@ -92,9 +92,11 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// (Re)generate the key pair when missing, when the key-defining spec changed, or when due for rotation.
+	// An unparseable stored public key counts as missing: the field is
+	// tenant-writable and consumers inject it verbatim (F-SK-1).
 	hash := specHash(&key)
 	expires := nextExpires(&key)
-	if key.PrivateKey == "" || key.PublicKey == "" || key.Status.KeyHash != hash || rotationDue(&key) {
+	if key.PrivateKey == "" || key.PublicKey == "" || !publicKeyValid(&key) || key.Status.KeyHash != hash || rotationDue(&key) {
 		if err := generateKeyPair(&key, passphrase); err != nil {
 			return r.markNotReady(ctx, &key, "key generation failed: "+err.Error())
 		}
@@ -103,6 +105,17 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, err
 		}
 		log.Info("generated ssh key", "type", effectiveKeyType(&key))
+	}
+
+	// Surface a clamped spec.keySize on the status so the tenant learns why
+	// the generated key is smaller or larger than requested (F-SK-3).
+	if effective, clamped := effectiveKeySize(&key); key.Spec.KeySize != 0 && clamped {
+		meta.SetStatusCondition(&key.Status.Conditions, condition(
+			sshkeysv1alpha1.ConditionKeySizeClamped, metav1.ConditionTrue, "Clamped",
+			fmt.Sprintf("spec.keySize %d clamped to %d bits (supported range %d..%d)",
+				key.Spec.KeySize, effective, minKeySize, maxKeySize), key.Generation))
+	} else {
+		meta.RemoveStatusCondition(&key.Status.Conditions, sshkeysv1alpha1.ConditionKeySizeClamped)
 	}
 
 	// Export to a secret when requested and report whether it is in sync.
@@ -186,10 +199,7 @@ func generateKeyPair(key *sshkeysv1alpha1.SSHKey, passphrase []byte) error {
 	var pub crypto.PublicKey
 	switch effectiveKeyType(key) {
 	case sshkeysv1alpha1.KeyTypeRSA:
-		size := key.Spec.KeySize
-		if size == 0 {
-			size = 4096
-		}
+		size, _ := effectiveKeySize(key)
 		rsaKey, err := rsa.GenerateKey(rand.Reader, size)
 		if err != nil {
 			return err
@@ -279,6 +289,71 @@ func effectiveKeyType(key *sshkeysv1alpha1.SSHKey) sshkeysv1alpha1.KeyType {
 		return sshkeysv1alpha1.KeyTypeED25519
 	}
 	return key.Spec.KeyType
+}
+
+// Supported RSA key-size range. The CRD enforces the same bounds; the clamp
+// below keeps objects that predate the schema (or bypass it) from stalling
+// the shared operator's single reconcile worker for minutes (F-SK-3).
+const (
+	defaultKeySize = 4096
+	minKeySize     = 1024
+	maxKeySize     = 16384
+)
+
+// effectiveKeySize returns the RSA key size to generate (applying the
+// default) and whether the requested size had to be clamped.
+func effectiveKeySize(key *sshkeysv1alpha1.SSHKey) (size int, clamped bool) {
+	size = key.Spec.KeySize
+	if size == 0 {
+		return defaultKeySize, false
+	}
+	if size < minKeySize {
+		return minKeySize, true
+	}
+	if size > maxKeySize {
+		return maxKeySize, true
+	}
+	return size, false
+}
+
+// publicKeyValid round-trips the stored top-level public key. The field is
+// writable by whoever holds the sshkey editor role, and consumers (the
+// ubuntu-machines claim controller) inject it verbatim into root's
+// authorized_keys on a pool machine, so an unparseable value is treated as
+// missing and regenerated instead of being exported or injected (F-SK-1).
+func publicKeyValid(key *sshkeysv1alpha1.SSHKey) bool {
+	if key.PublicKey == "" {
+		return false
+	}
+	if key.Spec.KeyFormat == sshkeysv1alpha1.KeyFormatRFC4716 {
+		return rfc4716PublicKeyValid(key.PublicKey)
+	}
+	_, _, _, rest, err := ssh.ParseAuthorizedKey([]byte(key.PublicKey))
+	return err == nil && strings.TrimSpace(string(rest)) == ""
+}
+
+// rfc4716PublicKeyValid checks the BEGIN/END SSH2 block that formatPublicKey
+// emits: the concatenated base64 body must decode to a valid SSH public key.
+func rfc4716PublicKeyValid(s string) bool {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) < 2 ||
+		!strings.HasPrefix(lines[0], "---- BEGIN SSH2 PUBLIC KEY ----") ||
+		!strings.HasPrefix(lines[len(lines)-1], "---- END SSH2 PUBLIC KEY ----") {
+		return false
+	}
+	var b64 strings.Builder
+	for _, l := range lines[1 : len(lines)-1] {
+		if strings.Contains(l, ":") { // SSH2 headers ("Comment: ..."); a base64 body never has colons
+			continue
+		}
+		b64.WriteString(strings.TrimSpace(l))
+	}
+	raw, err := base64.StdEncoding.DecodeString(b64.String())
+	if err != nil {
+		return false
+	}
+	_, err = ssh.ParsePublicKey(raw)
+	return err == nil
 }
 
 // nextExpires returns the expiration time derived from spec.expire, or zero when no expiration.

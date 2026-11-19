@@ -53,11 +53,15 @@ spec:
           metadata:
             type: object
           privateKey:
-            description: PrivateKey is the generated private key (OpenSSH format,
-              passphrase-encrypted when passPhaseSecret is set).
+            description: |-
+              PrivateKey is the generated private key (OpenSSH format, passphrase-encrypted when passPhaseSecret is set).
+              The maxLength bounds the object size for the hand-written (tenant-writable)
+              case; the controller regenerates values that do not parse (F-SK-1).
+            maxLength: 16384
             type: string
           publicKey:
             description: PublicKey is the generated public key.
+            maxLength: 8192
             type: string
           spec:
             description: spec defines the desired state of SSHKey
@@ -95,7 +99,16 @@ spec:
                 type: string
               keySize:
                 default: 4096
-                description: KeySize in bits for RSA type, default 4096
+                description: |-
+                  KeySize in bits for RSA type, default 4096.
+                  Bounded below at 1024 (shorter RSA keys are factorable or rejected
+                  outright by the generator) and above at 16384: the sshkey-operator
+                  serves every tenant from one worker, and a multi-megabit key would
+                  burn CPU for minutes per generation and grow the PEM past the
+                  etcd/apiserver request limit, which makes every error requeue
+                  regenerate it again. Older objects are clamped in the controller.
+                maximum: 16384
+                minimum: 1024
                 type: integer
               keyType:
                 default: ed25519
@@ -196,6 +209,11 @@ spec:
                 type: string
               message:
                 description: Message holds a human-readable status detail.
+                type: string
+              publicKey:
+                description: |-
+                  PublicKey is the generated public key. Sync Agent returns it to the account.
+                  The private key remains in the related Secret.
                 type: string
               ready:
                 description: Ready is true once the key is generated and (if requested)

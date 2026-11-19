@@ -44,9 +44,9 @@ import (
 )
 
 const (
-	injectTestKeyA = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPAAAA tenant-a"
-	injectTestKeyB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIQAAAA tenant-b"
-	injectTestKeyC = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAA tenant-c"
+	injectTestKeyA = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
+	injectTestKeyB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/"
+	injectTestKeyC = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEBBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5f"
 )
 
 // injectTestHost is one fake pool machine: TCP SSH server plus the
@@ -500,7 +500,56 @@ func TestReleaseOneScrubsOrphanExtras(t *testing.T) {
 	}
 }
 
-// TestReleaseAllScrubsUnownedStatusMachine: when an admin edit already
+// TestValidateAuthorizedKeyLine (F-SK-1): the tenant-writable SSHKey
+// publicKey is refused unless it is one clean authorized_keys line.
+func TestValidateAuthorizedKeyLine(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		line    string
+		wantErr bool
+	}{
+		{"valid", injectTestKeyA, false},
+		{"valid with options", `command="true",restrict ` + injectTestKeyA + " comment", false},
+		{"interior newline smuggles extra root lines", injectTestKeyA + "\nssh-rsa AAAA second", true},
+		{"carriage return inside", injectTestKeyA + "\rrest", true},
+		{"unparsable blob", "not-a-key at all", true},
+		{"trailing text is the ssh comment", injectTestKeyA + " junk\x00more", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAuthorizedKeyLine(tc.line)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validateAuthorizedKeyLine(%q) = %v, wantErr=%v", tc.line, err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestInvalidKeyLineBlocksInjection: a multi-line publicKey keeps the claim
+// out of the machine instead of injecting several root lines.
+func TestInvalidKeyLineBlocksInjection(t *testing.T) {
+	ctx := context.Background()
+	m1 := injectTestMachine("m1", umv1alpha1.MachineAvailable, nil)
+	f := newInjectTestFixture(t,
+		[]*umv1alpha1.UbuntuMachine{m1},
+		claimWithFinalizer("tenant-a", "claim-a"),
+		injectTestSSHKey("tenant-a", "claim-a-sshkey", injectTestKeyA+"\nssh-rsa AAAA second line"),
+	)
+	res, err := f.reconciler.Reconcile(ctx, claimRequest("tenant-a", "claim-a"))
+	if err != nil {
+		t.Fatalf("reconcile should requeue without error, got %v", err)
+	}
+	if res.RequeueAfter == 0 {
+		t.Fatal("expected a delayed requeue for the invalid key line")
+	}
+	if _, w := f.hosts["m1"].counts(); w != 0 {
+		t.Fatalf("nothing should have been written for an invalid key, writes=%d", w)
+	}
+	claim := getClaim(t, f.client, "tenant-a", "claim-a")
+	if claim.Status.Phase == umv1alpha1.ClaimReady {
+		t.Fatal("claim must not report Ready with an uninjectable key")
+	}
+}
+
 // dropped boundClaimRef, claim deletion still scrubs the machine recorded
 // in status so the released host does not strand the tenant key.
 func TestReleaseAllScrubsUnownedStatusMachine(t *testing.T) {

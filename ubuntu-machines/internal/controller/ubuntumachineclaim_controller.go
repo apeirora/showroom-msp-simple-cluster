@@ -191,6 +191,11 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 	// re-bind onto another machine and an SSHKey rotation during the lease
 	// all converge; steady state writes nothing.
 	if claim.Status.SSHKeyFingerprint != fingerprint || previousMachine != m.Name {
+		if err := validateAuthorizedKeyLine(claimPubKey); err != nil {
+			r.event(claim, corev1.EventTypeWarning, "InvalidSSHKey",
+				fmt.Sprintf("SSHKey %s-sshkey: %v", claim.Name, err))
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
 		adminSecret, err := r.getAdminSecret(ctx, &m)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -447,6 +452,26 @@ func sshKeyPublicKey(obj *unstructured.Unstructured) string {
 func sshKeyFingerprint(pubKey string) string {
 	sum := sha256.Sum256([]byte(pubKey))
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// validateAuthorizedKeyLine refuses anything that would not survive as one
+// clean line in /root/.ssh/authorized_keys. The SSHKey top-level publicKey is
+// writable by the sshkey editor role, and this controller writes it verbatim
+// into root's file on a pool machine: an interior newline or an unparsable
+// blob must be refused loudly instead of silently becoming extra root lines
+// or honored sshd options (F-SK-1).
+func validateAuthorizedKeyLine(line string) error {
+	if strings.ContainsAny(line, "\n\r") {
+		return fmt.Errorf("publicKey must be a single authorized_keys line")
+	}
+	_, _, _, rest, err := gossh.ParseAuthorizedKey([]byte(line))
+	if err != nil {
+		return fmt.Errorf("publicKey is not a valid SSH authorized_keys entry: %w", err)
+	}
+	if strings.TrimSpace(string(rest)) != "" {
+		return fmt.Errorf("publicKey has trailing garbage after the key: %q", strings.TrimSpace(string(rest)))
+	}
+	return nil
 }
 
 // ownedBy reports whether machine m is currently bound to claim.
