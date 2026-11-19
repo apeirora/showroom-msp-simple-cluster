@@ -4,7 +4,12 @@ controllerManager:
   container:
     image:
       repository: controller
-      tag: latest
+      # Empty pins the image to the chart appVersion, which the release
+      # pipeline stamps to the published image version ("chart X.Y.Z pulls
+      # image X.Y.Z", see .github/workflows/publish.yml). A literal default
+      # here would win that coalesce and silently degrade installs to an
+      # unpinned :latest.
+      tag: ""
     imagePullPolicy: IfNotPresent
     args:
       - "--leader-elect"
