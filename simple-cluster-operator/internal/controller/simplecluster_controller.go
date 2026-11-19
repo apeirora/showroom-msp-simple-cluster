@@ -71,8 +71,8 @@ type SimpleClusterReconciler struct {
 	// per-workspace SCPCs. Empty disables the fallback.
 	FallbackSCPCNamespace string
 	// TargetDial constrains dialing the tenant-writable kubeconfig Secret
-	// (currently the server allowlist). Zero values select the permissive
-	// defaults.
+	// (server allowlist and dial timeout). Zero values select the
+	// permissive/default behaviour.
 	TargetDial target.DialOptions
 }
 

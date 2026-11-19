@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -45,7 +46,21 @@ type DialOptions struct {
 	// exact hostnames (ports in the URL are ignored), matched
 	// case-insensitively.
 	ServerAllowlist []string
+
+	// Timeout bounds client construction (the discovery round trips) and,
+	// through rest.Config.Timeout, every request served with the resulting
+	// config. A non-positive value selects DefaultDialTimeout. Without a
+	// bound, one tenant's edited kubeconfig pointing at a black-hole
+	// endpoint freezes a reconcile worker forever (F-KC-04).
+	Timeout time.Duration
 }
+
+// DefaultDialTimeout is the DialOptions.Timeout fallback. The SimpleCluster
+// controller runs a single reconcile worker by default, so an unbounded
+// dial against a tenant-chosen endpoint stalls every other SimpleCluster
+// behind it; 30s matches client-go's own connect-timeout precedent and is
+// far below a healthy provider's discovery latency.
+const DefaultDialTimeout = 30 * time.Second
 
 // Client bundles a dynamic client with the matching RESTMapper and the
 // underlying *rest.Config (needed for raw subresource POSTs that
@@ -113,6 +128,19 @@ func New(
 	if err := validateServerURL(cfg.Host, opts.ServerAllowlist); err != nil {
 		return nil, err
 	}
+	// Bound the dial (F-KC-04): rest.Config.Timeout covers every request
+	// made with this config (discovery here, SSA and node listing in the
+	// controller), and the derived context additionally caps construction
+	// itself. It used to be zero unless overridden at the clientcmd call
+	// site; the kubeconfig's own timeout: field is never applied on this
+	// parse path, so the operator owns the bound.
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = DefaultDialTimeout
+	}
+	cfg.Timeout = timeout
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	d, err := dynamic.NewForConfig(cfg)
 	if err != nil {
@@ -122,7 +150,10 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("discovery client: %w", err)
 	}
-	groups, err := restmapper.GetAPIGroupResources(dc)
+	// Contextual discovery: GetAPIGroupResources would dial with
+	// context.Background(), ignoring both the reconcile cancellation and
+	// the construction deadline set above.
+	groups, err := restmapper.GetAPIGroupResourcesWithContext(ctx, dc)
 	if err != nil {
 		return nil, fmt.Errorf("discover API groups: %w", err)
 	}

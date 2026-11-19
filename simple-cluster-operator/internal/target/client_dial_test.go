@@ -256,3 +256,41 @@ func TestNewHonoursTenantTLSOptions(t *testing.T) {
 		t.Fatalf("expected trust failure without skip-verify, got %v", err)
 	}
 }
+
+// TestNewDiscoveryHonoursDialTimeout (F-KC-04): the SimpleCluster controller
+// runs a single reconcile worker by default, so an endpoint that accepts the
+// connection and never answers must not hold it open forever. Both the
+// construction context and rest.Config.Timeout are bounded.
+func TestNewDiscoveryHonoursDialTimeout(t *testing.T) {
+	srv, _ := discoveryServer(t, 2*time.Second)
+	base := dialKubeconfig(srv.URL, skipVerifyExtra, tokenUser)
+
+	_, err := dialTenantSecret(t, base, DialOptions{Timeout: 150 * time.Millisecond})
+	if err == nil {
+		t.Fatal("slow endpoint did not time out")
+	}
+	if !strings.Contains(err.Error(), "deadline exceeded") && !strings.Contains(err.Error(), "timeout") {
+		t.Fatalf("expected a timeout failure, got %v", err)
+	}
+
+	// The default must be set, not zero: rest.Config.Timeout 0 means the
+	// tenant kubeconfig alone decides, and tenants may omit timeout.
+	fast, _ := discoveryServer(t, 0)
+	fastCfg := dialKubeconfig(fast.URL, skipVerifyExtra, tokenUser)
+	c, err := dialTenantSecret(t, fastCfg, DialOptions{})
+	if err != nil {
+		t.Fatalf("default-timeout construction failed: %v", err)
+	}
+	if c.RESTConfig.Timeout != DefaultDialTimeout {
+		t.Errorf("rest.Config.Timeout = %v, want default %v", c.RESTConfig.Timeout, DefaultDialTimeout)
+	}
+
+	// An explicit option overrides the default.
+	c, err = dialTenantSecret(t, fastCfg, DialOptions{Timeout: 7 * time.Second})
+	if err != nil {
+		t.Fatalf("explicit-timeout construction failed: %v", err)
+	}
+	if c.RESTConfig.Timeout != 7*time.Second {
+		t.Errorf("rest.Config.Timeout = %v, want 7s", c.RESTConfig.Timeout)
+	}
+}
