@@ -50,8 +50,17 @@ type KindClusterSpec struct {
 	Workers int32 `json:"workers,omitempty"`
 
 	// NodeImage pins the Kubernetes version (a kindest/node tag).
-	// Empty = kind's compiled-in default for the running kind version.
+	// Empty = kind's compiled-in default for the running kind version
+	// (omit the field; the pattern rejects an explicit empty string).
+	// Must be a registry/repo path such as kindest/node:v1.33.1 or
+	// registry.example.com:5000/kindest/node@sha256:<digest>, because the
+	// value is pulled and run privileged on the host docker daemon (DooD)
+	// verbatim, straight from tenant-supplied SimpleCluster inputs: the
+	// pattern keeps that input to an image-reference shape instead of any
+	// string the daemon might misparse.
 	// +optional
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9][a-zA-Z0-9.-]*(:[0-9]+)?(/[a-zA-Z0-9][a-zA-Z0-9._-]*)+(:[a-zA-Z0-9][a-zA-Z0-9._-]*)?(@sha256:[a-f0-9]{64})?$`
 	NodeImage string `json:"nodeImage,omitempty"`
 }
 

@@ -31,6 +31,9 @@ spec:
             {{- range .Values.controllerManager.container.args }}
             - {{ . }}
             {{- end }}
+            {{- if .Values.clusterNamePrefixNamespaces }}
+            - --cluster-name-prefix-namespaces
+            {{- end }}
           command:
             - /manager
           image: {{ .Values.controllerManager.container.image.repository }}:{{ coalesce .Values.global.imageTag .Values.controllerManager.container.image.tag .Chart.AppVersion }}

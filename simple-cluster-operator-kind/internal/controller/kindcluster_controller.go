@@ -48,6 +48,14 @@ type KindClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Provider *kindcluster.Provider
+
+	// PrefixClusterNameWithNamespace namespaces the docker cluster name by
+	// prepending the KindCluster namespace (see effectiveClusterName). It is
+	// off by default so single-tenant installs keep their current cluster
+	// names; multi-tenant landscapes sharing one docker daemon should enable
+	// it, otherwise two KindClusters of the same name in different namespaces
+	// silently share (and fight over) one docker cluster.
+	PrefixClusterNameWithNamespace bool
 }
 
 // +kubebuilder:rbac:groups=kind.apeirora.eu,resources=kindclusters,verbs=get;list;watch;create;update;patch;delete
@@ -76,7 +84,7 @@ func (r *KindClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	clusterName := effectiveClusterName(&kc)
+	clusterName := r.effectiveClusterName(&kc)
 	existing, err := r.Provider.List()
 	if err != nil {
 		return r.fail(ctx, &kc, "DockerError", fmt.Sprintf("list kind clusters: %v", err))
@@ -139,7 +147,7 @@ func (r *KindClusterReconciler) reconcileDelete(ctx context.Context, kc *kindv1a
 		return ctrl.Result{}, nil
 	}
 
-	clusterName := effectiveClusterName(kc)
+	clusterName := r.effectiveClusterName(kc)
 	existing, err := r.Provider.List()
 	if err != nil {
 		log.Error(err, "list kind clusters during delete")
@@ -254,11 +262,24 @@ func setRoleCounts(kc *kindv1alpha1.KindCluster) {
 	kc.Status.WKR = fmt.Sprintf("%d/%d", wkrReady, wkrDeclared)
 }
 
-func effectiveClusterName(kc *kindv1alpha1.KindCluster) string {
+// effectiveClusterName is the name the docker daemon sees. kind keys
+// existence, kubeconfig and delete on this single name and the daemon is
+// shared by every tenant namespace, so without the prefix two KindClusters
+// named alike in different namespaces adopt the same docker cluster (and the
+// first one deleted destroys it). The prefix keeps the result a valid kind
+// cluster name because namespace and base name are both DNS labels; kind only
+// warns (create.go "cluster name ... probably too long") for names that push
+// the <name>-control-plane container name past typical length limits, so
+// very long namespace + name combinations may draw that warning.
+func (r *KindClusterReconciler) effectiveClusterName(kc *kindv1alpha1.KindCluster) string {
+	base := kc.Name
 	if kc.Spec.ClusterName != "" {
-		return kc.Spec.ClusterName
+		base = kc.Spec.ClusterName
 	}
-	return kc.Name
+	if r.PrefixClusterNameWithNamespace {
+		return kc.Namespace + "-" + base
+	}
+	return base
 }
 
 func contains(haystack []string, needle string) bool {

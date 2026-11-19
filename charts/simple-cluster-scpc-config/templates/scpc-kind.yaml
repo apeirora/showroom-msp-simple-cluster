@@ -12,7 +12,7 @@ spec:
     namespace: "{{ .SC.namespace }}"
 
   inputs:
-    - { name: nodeImage, type: string, default: "", allowEmpty: true, description: "Optional kindest/node tag to pin Kubernetes version. Empty = kind compiled-in default." }
+    - { name: nodeImage, type: string, default: "", allowEmpty: true, description: "Optional kindest/node tag to pin Kubernetes version, as a registry/repo path (e.g. kindest/node:v1.33.1; the KindCluster CRD pattern rejects other shapes). Empty = kind compiled-in default." }
 
   resources:
     - name: cluster
