@@ -147,7 +147,8 @@ func main() {
 		}
 	}
 	if len(targetDial.ServerAllowlist) == 0 {
-		setupLog.Info("warning: --target-server-allowlist is unset; the operator dials any https host a tenant writes into their kubeconfig Secret")
+		setupLog.Info("warning: --target-server-allowlist is unset; " +
+			"the operator dials any https host a tenant writes into their kubeconfig Secret")
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))

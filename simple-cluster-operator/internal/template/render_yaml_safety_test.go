@@ -276,5 +276,5 @@ func TestShippedSCPCsQuoteTenantDerivedInterpolations(t *testing.T) {
 	if checked < 6 {
 		t.Fatalf("only %d SCPC files checked; the walk lost the chart or samples directory", checked)
 	}
-	t.Log(fmt.Sprintf("checked %d shipped SCPC files for raw tenant-derived interpolations", checked))
+	t.Logf("checked %d shipped SCPC files for raw tenant-derived interpolations", checked)
 }
