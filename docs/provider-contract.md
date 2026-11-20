@@ -55,6 +55,10 @@ tenants, and no admission gate checks its content. Landscapes should pin the
 selector (`rbac.aggregation.matchLabels` in the `simple-cluster-operator`
 chart, plus a discriminator label) and control who may create or edit matching
 ClusterRoles; `rbac.aggregation.enable=false` drops the mechanism entirely.
+Migration order matters: aggregation requires *every* listed label, so first
+add the discriminator label to every existing provider ClusterRole currently
+matched by the old selector, then pin the selector; otherwise those roles fall
+out of the aggregation and the operator loses their rules.
 
 ### 2. Readiness that the operator can read
 

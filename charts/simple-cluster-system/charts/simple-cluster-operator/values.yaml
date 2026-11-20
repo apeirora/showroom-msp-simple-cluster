@@ -60,6 +60,9 @@ rbac:
   # (self-grant hazard, see templates/rbac/provider_resources_role.yaml).
   # Pin the selector with an extra discriminator label so only ClusterRoles
   # you control match, or set enable=false to rely on the manager role alone.
+  # matchLabels must stay a non-empty map (an empty selector would match every
+  # ClusterRole in the cluster); the render fails on it, enable=false is the
+  # supported disable path.
   aggregation:
     enable: true
     matchLabels:
