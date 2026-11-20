@@ -296,7 +296,7 @@ func effectiveKeyType(key *sshkeysv1alpha1.SSHKey) sshkeysv1alpha1.KeyType {
 // the shared operator's single reconcile worker for minutes (F-SK-3).
 const (
 	defaultKeySize = 4096
-	minKeySize     = 1024
+	minKeySize     = 2048
 	maxKeySize     = 16384
 )
 

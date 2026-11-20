@@ -53,14 +53,15 @@ type SSHKeySpec struct {
 	KeyFormat KeyFormat `json:"keyFormat,omitempty"`
 
 	// KeySize in bits for RSA type, default 4096.
-	// Bounded below at 1024 (shorter RSA keys are factorable or rejected
+	// Bounded below at 2048 (the minimum RSA size considered strong today;
+	// shorter RSA keys are factorable or rejected
 	// outright by the generator) and above at 16384: the sshkey-operator
 	// serves every tenant from one worker, and a multi-megabit key would
 	// burn CPU for minutes per generation and grow the PEM past the
 	// etcd/apiserver request limit, which makes every error requeue
 	// regenerate it again. Older objects are clamped in the controller.
 	// +kubebuilder:default=4096
-	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Minimum=2048
 	// +kubebuilder:validation:Maximum=16384
 	// +optional
 	KeySize int `json:"keySize,omitempty"`

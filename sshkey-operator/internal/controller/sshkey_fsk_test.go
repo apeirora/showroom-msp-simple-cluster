@@ -112,7 +112,7 @@ func TestPublicKeyValid(t *testing.T) {
 // TestClampedKeySizeSurfacesOnStatus: an SSHKey whose stored key looks done
 // but whose spec.keySize is out of range gets a clamped-size key plus a
 // KeySizeClamped condition (below-minimum size keeps the test fast: the
-// clamp target 1024 bits generates quickly; the pure function covers the
+// clamp target 2048 bits generates quickly; the pure function covers the
 // above-maximum side).
 func TestClampedKeySizeSurfacesOnStatus(t *testing.T) {
 	ctx := context.Background()
@@ -152,7 +152,7 @@ func TestClampedKeySizeSurfacesOnStatus(t *testing.T) {
 	if cond == nil || cond.Status != metav1.ConditionTrue {
 		t.Fatalf("KeySizeClamped condition missing: %+v", got.Status.Conditions)
 	}
-	if !strings.Contains(cond.Message, "512") || !strings.Contains(cond.Message, "1024") {
+	if !strings.Contains(cond.Message, "512") || !strings.Contains(cond.Message, "2048") {
 		t.Fatalf("condition message does not name the clamp: %q", cond.Message)
 	}
 }
