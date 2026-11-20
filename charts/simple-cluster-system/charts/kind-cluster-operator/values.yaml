@@ -51,9 +51,13 @@ controllerManager:
 # daemon, so with two tenant namespaces running same-named KindClusters
 # (typical: both name their SimpleCluster "demo") the second silently adopts
 # the first's cluster, gets its admin kubeconfig, and either one's delete
-# destroys both. Enable on multi-tenant deployments; leave off for
-# single-tenant installs, where it would rename existing clusters. Set at
-# install time: flipping it later re-targets existing docker clusters.
+# destroys both. The scoped name doubles the dashes inside namespace and base
+# and joins them with one dash (namespace tenant-a + name demo =
+# tenant--a-demo), so encoded pairs cannot collide, and the operator rejects
+# names whose derived <name>-control-plane hostname would pass 64 characters.
+# Enable on multi-tenant deployments; leave off for single-tenant installs,
+# where it would rename existing clusters. Set at install time: flipping it
+# later re-targets existing docker clusters.
 clusterNamePrefixNamespaces: false
 
 # [RBAC]: To enable RBAC (Permissions) configurations

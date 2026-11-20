@@ -40,6 +40,8 @@ func testKindCluster(namespace, name, clusterName string) *kindv1alpha1.KindClus
 // bare name by default (single-tenant compatibility) and namespace-scoped
 // when PrefixClusterNameWithNamespace is on, so same-named KindClusters in
 // different namespaces can no longer adopt or delete each other's clusters.
+// The scoped form doubles literal "-" inside each part and joins with a
+// single "-", keeping the encoding unambiguous.
 func TestEffectiveClusterName(t *testing.T) {
 	cases := []struct {
 		prefix bool
@@ -48,8 +50,9 @@ func TestEffectiveClusterName(t *testing.T) {
 	}{
 		{false, testKindCluster("tenant-a", "demo", ""), "demo"},
 		{false, testKindCluster("tenant-a", "demo", "demo-cluster"), "demo-cluster"},
-		{true, testKindCluster("tenant-a", "demo", ""), "tenant-a-demo"},
-		{true, testKindCluster("tenant-a", "demo", "demo-cluster"), "tenant-a-demo-cluster"},
+		{true, testKindCluster("tenant-a", "demo", ""), "tenant--a-demo"},
+		{true, testKindCluster("tenant-a", "demo", "demo-cluster"), "tenant--a-demo--cluster"},
+		{true, testKindCluster("tenant", "a-demo", ""), "tenant-a--demo"},
 	}
 	for _, tc := range cases {
 		r := &KindClusterReconciler{PrefixClusterNameWithNamespace: tc.prefix}
@@ -61,10 +64,13 @@ func TestEffectiveClusterName(t *testing.T) {
 }
 
 // TestEffectiveClusterNameCollisionIsNamespaceScoped is the two-tenant repro
-// from the audit: both tenants name their SimpleCluster "demo".
+// from the audit (both name their SimpleCluster "demo") plus the reviewer's
+// separator-ambiguity pair (tenant-a/demo vs tenant/a-demo), which a plain
+// "<ns>-<base>" prefix would collide on.
 func TestEffectiveClusterNameCollisionIsNamespaceScoped(t *testing.T) {
 	a := testKindCluster("tenant-a", "demo", "demo-cluster")
 	b := testKindCluster("tenant-b", "demo", "demo-cluster")
+	ambiguous := testKindCluster("tenant", "a-demo", "")
 
 	plain := &KindClusterReconciler{}
 	if plain.effectiveClusterName(a) != plain.effectiveClusterName(b) {
@@ -72,18 +78,60 @@ func TestEffectiveClusterNameCollisionIsNamespaceScoped(t *testing.T) {
 	}
 
 	scoped := &KindClusterReconciler{PrefixClusterNameWithNamespace: true}
-	na, nb := scoped.effectiveClusterName(a), scoped.effectiveClusterName(b)
-	if na == nb {
-		t.Fatalf("prefixed names must differ, both are %q", na)
+	na := scoped.effectiveClusterName(a)
+	names := map[string]string{na: "tenant-a/demo"}
+	for _, kc := range []*kindv1alpha1.KindCluster{b, ambiguous} {
+		n := scoped.effectiveClusterName(kc)
+		if other, seen := names[n]; seen {
+			t.Fatalf("scoped names collide: %s and %s/%s both give %q", other, kc.Namespace, kc.Name, n)
+		}
+		names[n] = kc.Namespace + "/" + kc.Name
 	}
-	for _, n := range []string{na, nb} {
+	if n := scoped.effectiveClusterName(ambiguous); n == "tenant-a-demo" {
+		t.Errorf("encoding must not read as a plain prefix concatenation, got %q", n)
+	}
+	for n := range names {
 		// kind accepts the name and the derived container name stays valid.
 		if !kindNamePattern.MatchString(n) {
 			t.Errorf("%q is not a valid kind cluster name", n)
 		}
-		if len(n)+len("-control-plane") > 63 {
-			t.Errorf("%q risks kind's \"probably too long\" warning", n)
-		}
+	}
+}
+
+// TestNodeHostnameBound covers the pre-create length gate: the 64-character
+// container hostname limit must be provable from the derived name alone,
+// without going through Provider.Create.
+func TestNodeHostnameBound(t *testing.T) {
+	longBase := strings.Repeat("x", 50) // CRD MaxLength for spec.clusterName
+	scoped := &KindClusterReconciler{PrefixClusterNameWithNamespace: true}
+
+	// Reviewer's overlong case: 8-char namespace + 50-char base gives a
+	// 73-character control-plane hostname.
+	kc := testKindCluster("tenant-a", "demo", longBase)
+	name := scoped.effectiveClusterName(kc)
+	if want := "tenant--a-" + longBase; name != want {
+		t.Fatalf("scoped name = %q, want %q", name, want)
+	}
+	if len(name+controlPlaneSuffix) <= maxNodeHostnameCharacters {
+		t.Fatalf("test assumption broken: %q should exceed the hostname limit", name)
+	}
+
+	// Boundary: exactly at the limit is allowed, one over is not (this is the
+	// condition Reconcile applies before Provider.Create).
+	atLimit := strings.Repeat("y", maxNodeHostnameCharacters-len(controlPlaneSuffix))
+	if len(atLimit+controlPlaneSuffix) > maxNodeHostnameCharacters {
+		t.Errorf("%d-character hostname should be within the limit", len(atLimit+controlPlaneSuffix))
+	}
+	overLimit := atLimit + "y"
+	if len(overLimit+controlPlaneSuffix) <= maxNodeHostnameCharacters {
+		t.Errorf("one character over must exceed the limit")
+	}
+
+	// Bare names keep working: short defaults are far from the bound.
+	bare := &KindClusterReconciler{}
+	short := bare.effectiveClusterName(testKindCluster("tenant-a", "demo", ""))
+	if len(short+controlPlaneSuffix) > maxNodeHostnameCharacters {
+		t.Errorf("bare name %q unexpectedly exceeds the hostname limit", short)
 	}
 }
 

@@ -39,6 +39,13 @@ const (
 	secretSuffix     = "-kubeconfig"
 	secretDataKey    = "kubeconfig"
 	clusterNameLabel = "kindcluster.apeirora.eu/sc-name"
+
+	// kind names the control-plane container "<clusterName>-control-plane"
+	// and uses it as the node hostname; the kernel hostname limit is 64
+	// characters. kind itself only warns about long names, so the operator
+	// bounds the derived name itself (see Reconcile).
+	controlPlaneSuffix        = "-control-plane"
+	maxNodeHostnameCharacters = 64
 )
 
 // KindClusterReconciler stands real kind clusters up on the host docker
@@ -50,11 +57,12 @@ type KindClusterReconciler struct {
 	Provider *kindcluster.Provider
 
 	// PrefixClusterNameWithNamespace namespaces the docker cluster name by
-	// prepending the KindCluster namespace (see effectiveClusterName). It is
-	// off by default so single-tenant installs keep their current cluster
-	// names; multi-tenant landscapes sharing one docker daemon should enable
-	// it, otherwise two KindClusters of the same name in different namespaces
-	// silently share (and fight over) one docker cluster.
+	// encoding the KindCluster namespace into it (see effectiveClusterName
+	// and namespaceScopedName). It is off by default so single-tenant installs
+	// keep their current cluster names; multi-tenant landscapes sharing one
+	// docker daemon should enable it, otherwise two KindClusters of the same
+	// name in different namespaces silently share (and fight over) one docker
+	// cluster.
 	PrefixClusterNameWithNamespace bool
 }
 
@@ -91,6 +99,17 @@ func (r *KindClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	if !contains(existing, clusterName) {
+		// Reject overlong names before touching the daemon instead of
+		// truncating: truncation would collapse distinct namespaces and names
+		// onto one prefix again (the very cross-tenant adoption F-KD-2 is
+		// about) and would not round-trip through a later rename or delete as
+		// obviously as the deterministic encoding above does. kind would only
+		// warn and then likely fail container creation on the hostname limit.
+		if hostname := clusterName + controlPlaneSuffix; len(hostname) > maxNodeHostnameCharacters {
+			return r.fail(ctx, &kc, "ClusterNameTooLong", fmt.Sprintf(
+				"control-plane node hostname %q is %d characters, above the %d-character container hostname limit; shorten spec.clusterName or the KindCluster name",
+				hostname, len(hostname), maxNodeHostnameCharacters))
+		}
 		log.Info("creating kind cluster on host docker", "name", clusterName, "workers", kc.Spec.Workers)
 		if err := r.setPhase(ctx, &kc, kindv1alpha1.PhaseProvisioning, "Creating", fmt.Sprintf("kind create cluster --name %s", clusterName)); err != nil {
 			return ctrl.Result{}, err
@@ -266,20 +285,30 @@ func setRoleCounts(kc *kindv1alpha1.KindCluster) {
 // existence, kubeconfig and delete on this single name and the daemon is
 // shared by every tenant namespace, so without the prefix two KindClusters
 // named alike in different namespaces adopt the same docker cluster (and the
-// first one deleted destroys it). The prefix keeps the result a valid kind
-// cluster name because namespace and base name are both DNS labels; kind only
-// warns (create.go "cluster name ... probably too long") for names that push
-// the <name>-control-plane container name past typical length limits, so
-// very long namespace + name combinations may draw that warning.
+// first one deleted destroys it). With the prefix off the name stays bare so
+// single-tenant installs keep their existing containers.
 func (r *KindClusterReconciler) effectiveClusterName(kc *kindv1alpha1.KindCluster) string {
 	base := kc.Name
 	if kc.Spec.ClusterName != "" {
 		base = kc.Spec.ClusterName
 	}
 	if r.PrefixClusterNameWithNamespace {
-		return kc.Namespace + "-" + base
+		return namespaceScopedName(kc.Namespace, base)
 	}
 	return base
+}
+
+// namespaceScopedName encodes namespace and base without an ambiguous
+// boundary: a literal "-" inside either part is doubled and the parts are
+// joined with a single "-". So (tenant-a, demo) becomes tenant--a-demo while
+// (tenant, a-demo) becomes tenant-a--demo, and no pair can impersonate
+// another the way a plain "<ns>-<base>" prefix would. The result is
+// deterministic, still readable, and valid for kind because both parts are
+// DNS labels. Reconcile bounds the result against the node hostname limit
+// before creation.
+func namespaceScopedName(namespace, base string) string {
+	escape := func(s string) string { return strings.ReplaceAll(s, "-", "--") }
+	return escape(namespace) + "-" + escape(base)
 }
 
 func contains(haystack []string, needle string) bool {
