@@ -4,10 +4,12 @@ rbac:
 # [APIExport ceiling] KCP's spec.maximalPermissionPolicy for the
 # simpleclusters export. Default off keeps today's behavior (claim verbs are
 # the only bound, no server-side ceiling). Enabling renders the local policy
-# (templates/maximal-permission-policy.yaml), narrows the legacy v1alpha1
-# claim annotation from `all: true` to explicit verbs, and is the recommended
-# setting for multi-provider landscapes where one shared account namespace
-# holds every provider agent's mirrors and every tenant's Secrets.
+# (templates/maximal-permission-policy.yaml), narrows both the legacy
+# v1alpha1 claim annotation and the v1alpha2 built-in claim verbs from
+# all:true / "*" to the explicit verbs the agent uses (no deletecollection),
+# and is the recommended setting for multi-provider landscapes where one
+# shared account namespace holds every provider agent's mirrors and every
+# tenant's Secrets.
 # Requires a KCP version serving apis.kcp.io/v1alpha2 APIExports (the
 # api-syncagent pinned in simple-cluster-sync-agent, v0.8.x, uses v1alpha2).
 apiExport:

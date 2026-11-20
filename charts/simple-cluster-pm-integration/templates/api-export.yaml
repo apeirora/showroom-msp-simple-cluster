@@ -35,16 +35,29 @@ spec:
   # Secrets in that namespace, not just the mirrors it manages (see
   # templates/maximal-permission-policy.yaml for the opt-in policy; the
   # isolation today is sync-agent convention, not server-side).
+  #
+  # With the toggle on, the built-in claims also drop the "*" wildcard to the
+  # explicit verbs the agent uses (notably no deletecollection). That is the
+  # belt-and-braces ceiling for these resources: at least through KCP v0.30
+  # the maximal-permission authorizer only evaluates the policy for the
+  # export's BOUND (exported) resources and delegates native claimed requests
+  # such as secrets before reading it (v0.30.0
+  # pkg/authorization/maximal_permission_policy_authorizer.go, "no relevant
+  # binding found"), so for secrets/namespaces/events the accepted claim verbs
+  # are the effective server-side bound regardless of the deployed server
+  # version. The deployed KCP server version is not pinned by this repository
+  # (only the sync-agent image digest and kcp-dev/sdk v0.33.6); confirm it per
+  # landscape when relying on the policy for anything beyond this note.
   permissionClaims:
     - group: ""
       resource: namespaces
-      verbs: ["*"]
+      verbs: {{ if .Values.apiExport.maximalPermissionPolicy.enabled }}[get, list, watch, create, update, patch, delete]{{ else }}["*"]{{ end }}
     - group: ""
       resource: events
-      verbs: ["*"]
+      verbs: {{ if .Values.apiExport.maximalPermissionPolicy.enabled }}[get, list, watch, create, update, patch, delete]{{ else }}["*"]{{ end }}
     - group: ""
       resource: secrets
-      verbs: ["*"]
+      verbs: {{ if .Values.apiExport.maximalPermissionPolicy.enabled }}[get, list, watch, create, update, patch, delete]{{ else }}["*"]{{ end }}
     - group: apis.kcp.io
       resource: apibindings
       verbs: [get, list, watch]

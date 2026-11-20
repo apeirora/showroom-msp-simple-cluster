@@ -4,9 +4,17 @@
 # export workspace). Without a policy there is no upper bound: the claim
 # verbs are the ceiling, so every provider's sync agent that binds in holds
 # CRUD on ALL Secrets in the shared account namespace, including other
-# providers' kubeconfig mirrors and the tenant's own credentials. The policy
-# below pins that ceiling to explicit verbs and gives the one place to
-# narrow further (resourceNames, separate identities per provider).
+# providers' kubeconfig mirrors and the tenant's own credentials.
+#
+# Scope note (KCP v0.30.0, pkg/authorization/
+# maximal_permission_policy_authorizer.go): the policy is consulted for the
+# export's BOUND resources; native claimed requests such as secrets delegate
+# before it is read ("no relevant binding found"). For secrets, namespaces
+# and events the effective narrowing is therefore the narrowed claim verbs
+# in api-export.yaml (same toggle); this policy is the ceiling for the
+# exported APIs and the place to narrow further (per-provider identities,
+# resourceNames). The deployed KCP server version is not pinned in-repo, so
+# confirm it per landscape.
 #
 # KCP checks the policy with "apis.kcp.io:binding:" prefixed user and group
 # names, for tenant consumers in bound workspaces and for this export's own
