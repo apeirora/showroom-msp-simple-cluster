@@ -63,16 +63,16 @@ in the Go module cache and is recorded in `OVERRIDES` in
 |---|---|---|
 | `@luigi-project/client` | `2.33.0` | ui |
 | `@sap-theming/theming-base-content` | `11.36.4` | ui |
-| `@ui5/webcomponents` | `2.28.1` | ui |
-| `@ui5/webcomponents-base` | `2.28.1` | ui |
-| `@ui5/webcomponents-fiori` | `2.28.1` | ui |
-| `@ui5/webcomponents-icons` | `2.28.1` | ui |
-| `@ui5/webcomponents-icons-business-suite` | `2.28.1` | ui |
-| `@ui5/webcomponents-icons-tnt` | `2.28.1` | ui |
-| `@ui5/webcomponents-localization` | `2.28.1` | ui |
-| `@ui5/webcomponents-react` | `2.28.2` | ui |
-| `@ui5/webcomponents-react-base` | `2.28.2` | ui |
-| `@ui5/webcomponents-theming` | `2.28.1` | ui |
+| `@ui5/webcomponents` | `2.29.0` | ui |
+| `@ui5/webcomponents-base` | `2.29.0` | ui |
+| `@ui5/webcomponents-fiori` | `2.29.0` | ui |
+| `@ui5/webcomponents-icons` | `2.29.0` | ui |
+| `@ui5/webcomponents-icons-business-suite` | `2.29.0` | ui |
+| `@ui5/webcomponents-icons-tnt` | `2.29.0` | ui |
+| `@ui5/webcomponents-localization` | `2.29.0` | ui |
+| `@ui5/webcomponents-react` | `2.29.0` | ui |
+| `@ui5/webcomponents-react-base` | `2.29.0` | ui |
+| `@ui5/webcomponents-theming` | `2.29.0` | ui |
 | `cel.dev/expr` | `v0.25.3` | simple-cluster-operator, sshkey-operator |
 | `github.com/Masterminds/goutils` | `v1.1.1` | simple-cluster-operator |
 | `github.com/go-logr/logr` | `v1.4.4` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -129,8 +129,8 @@ in the Go module cache and is recorded in `OVERRIDES` in
 
 | Dependency | Version | Used by |
 |---|---|---|
-| `@tanstack/react-virtual` | `3.14.22` | ui |
-| `@tanstack/virtual-core` | `3.19.7` | ui |
+| `@tanstack/react-virtual` | `3.14.26` | ui |
+| `@tanstack/virtual-core` | `3.19.11` | ui |
 | `@types/jquery` | `3.5.34` | ui |
 | `@types/openui5` | `1.153.0` | ui |
 | `@types/qunit` | `2.19.14` | ui |
@@ -167,7 +167,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.uber.org/multierr` | `v1.11.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.uber.org/zap` | `v1.28.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `graphql` | `16.14.2` | ui |
-| `graphql-sse` | `2.6.3` | ui |
+| `graphql-sse` | `2.6.4` | ui |
 | `react` | `19.3.1` | ui |
 | `react-dom` | `19.3.1` | ui |
 | `scheduler` | `0.28.0` | ui |
