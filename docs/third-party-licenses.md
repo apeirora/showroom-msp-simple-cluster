@@ -167,7 +167,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.uber.org/multierr` | `v1.11.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.uber.org/zap` | `v1.28.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `graphql` | `16.14.2` | ui |
-| `graphql-sse` | `2.6.3` | ui |
+| `graphql-sse` | `2.6.4` | ui |
 | `react` | `19.3.1` | ui |
 | `react-dom` | `19.3.1` | ui |
 | `scheduler` | `0.28.0` | ui |
