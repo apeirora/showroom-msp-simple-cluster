@@ -82,6 +82,15 @@ type UbuntuMachineClaimStatus struct {
 	// +optional
 	SSHSecretRef *corev1.LocalObjectReference `json:"sshSecretRef,omitempty"`
 
+	// SSHKeyFingerprint identifies the claim public key last injected into
+	// the bound machine, as "sha256:<hex>" over the authorized_keys line.
+	// The controller re-injects whenever this differs from the fingerprint
+	// of the current key or the claim binds a different machine, so key
+	// rotation revokes the superseded key on the machine and a re-bind
+	// still lands the claim's own key. Empty until injection succeeds.
+	// +optional
+	SSHKeyFingerprint string `json:"sshKeyFingerprint,omitempty"`
+
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 

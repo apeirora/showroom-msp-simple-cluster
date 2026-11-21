@@ -50,7 +50,10 @@ spec:
             description: UbuntuClusterSpec is the user request.
             properties:
               version:
-                description: 'k3s release tag (e.g. "v1.31.4+k3s1"). Empty = installer default.'
+                description: 'k3s release tag (e.g. "v1.31.4+k3s1"). Empty = installer
+                  default. Pattern keeps shell metacharacters out of the remote install
+                  script (F-UB-1).'
+                pattern: ^[A-Za-z0-9._+-]*$
                 type: string
               controlPlaneEndpoint:
                 description: |-
@@ -164,16 +167,24 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               k3sServerArgs:
-                description: Extra args appended to `k3s server`.
+                description: |-
+                  Extra args appended to `k3s server`. The item pattern allows k3s flag
+                  shapes (--flag, --flag=value with paths, CIDRs, host:port, comma lists)
+                  but not shell metacharacters (F-UB-1).
                 items:
                   maxLength: 512
+                  pattern: ^[A-Za-z0-9=:,./_+@% -]*$
                   type: string
                 maxItems: 64
                 type: array
               k3sAgentArgs:
-                description: Extra args appended to `k3s agent`.
+                description: |-
+                  Extra args appended to `k3s agent`. The item pattern allows k3s flag
+                  shapes (--flag, --flag=value with paths, CIDRs, host:port, comma lists)
+                  but not shell metacharacters (F-UB-1).
                 items:
                   maxLength: 512
+                  pattern: ^[A-Za-z0-9=:,./_+@% -]*$
                   type: string
                 maxItems: 64
                 type: array

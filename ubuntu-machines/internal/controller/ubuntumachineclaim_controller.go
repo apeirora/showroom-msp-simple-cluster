@@ -12,7 +12,8 @@ package controller
 
 import (
 	"context"
-	"errors"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -176,10 +177,24 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
 
-	if claim.Status.SSHSecretRef == nil {
-		claimPubKey := sshKeyPublicKey(sshKey)
-		if claimPubKey == "" {
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	claimPubKey := sshKeyPublicKey(sshKey)
+	if claimPubKey == "" {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+	fingerprint := sshKeyFingerprint(claimPubKey)
+	previousMachine := ""
+	if claim.Status.Machine != nil {
+		previousMachine = claim.Status.Machine.Name
+	}
+	// Idempotent re-injection: the file is rewritten whenever the key or
+	// the machine differs from what was last injected. A fresh bind, a
+	// re-bind onto another machine and an SSHKey rotation during the lease
+	// all converge; steady state writes nothing.
+	if claim.Status.SSHKeyFingerprint != fingerprint || previousMachine != m.Name {
+		if err := validateAuthorizedKeyLine(claimPubKey); err != nil {
+			r.event(claim, corev1.EventTypeWarning, "InvalidSSHKey",
+				fmt.Sprintf("SSHKey %s-sshkey: %v", claim.Name, err))
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 		adminSecret, err := r.getAdminSecret(ctx, &m)
 		if err != nil {
@@ -197,6 +212,7 @@ func (r *UbuntuMachineClaimReconciler) markBound(
 		if err := setAuthorizedKeys(sshClient, adminPubKey, claimPubKey); err != nil {
 			return ctrl.Result{}, fmt.Errorf("set authorized_keys on %s: %w", m.Name, err)
 		}
+		claim.Status.SSHKeyFingerprint = fingerprint
 	}
 
 	claim.Status.Phase = umv1alpha1.ClaimReady
@@ -280,16 +296,25 @@ func (r *UbuntuMachineClaimReconciler) removeClaimSSHKey(
 		}
 		return err
 	}
+	return r.scrubMachine(ctx, &machine)
+}
 
-	adminSecret, err := r.getAdminSecret(ctx, &machine)
+// scrubMachine resets /root/.ssh/authorized_keys on a machine to contain only
+// the operator's admin public key (or nothing for password auth). Idempotent:
+// rewriting the file with the same content is safe.
+func (r *UbuntuMachineClaimReconciler) scrubMachine(
+	ctx context.Context,
+	machine *umv1alpha1.UbuntuMachine,
+) error {
+	adminSecret, err := r.getAdminSecret(ctx, machine)
 	if err != nil {
 		return err
 	}
-	adminPubKey, err := adminPublicKeyLine(adminSecret, &machine)
+	adminPubKey, err := adminPublicKeyLine(adminSecret, machine)
 	if err != nil {
 		return err
 	}
-	sshClient, err := r.dialMachine(&machine, adminSecret)
+	sshClient, err := r.dialMachine(machine, adminSecret)
 	if err != nil {
 		return fmt.Errorf("dial machine %s: %w", machine.Name, err)
 	}
@@ -420,6 +445,35 @@ func sshKeyPublicKey(obj *unstructured.Unstructured) string {
 	return strings.TrimSpace(key)
 }
 
+// sshKeyFingerprint derives a stable identifier for an authorized_keys line.
+// The claim controller re-injects whenever the fingerprint stored in status
+// differs from the current one, which is how rotation revokes the old key
+// and how steady-state reconciles avoid rewriting the file.
+func sshKeyFingerprint(pubKey string) string {
+	sum := sha256.Sum256([]byte(pubKey))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+// validateAuthorizedKeyLine refuses anything that would not survive as one
+// clean line in /root/.ssh/authorized_keys. The SSHKey top-level publicKey is
+// writable by the sshkey editor role, and this controller writes it verbatim
+// into root's file on a pool machine: an interior newline or an unparsable
+// blob must be refused loudly instead of silently becoming extra root lines
+// or honored sshd options (F-SK-1).
+func validateAuthorizedKeyLine(line string) error {
+	if strings.ContainsAny(line, "\n\r") {
+		return fmt.Errorf("publicKey must be a single authorized_keys line")
+	}
+	_, _, _, rest, err := gossh.ParseAuthorizedKey([]byte(line))
+	if err != nil {
+		return fmt.Errorf("publicKey is not a valid SSH authorized_keys entry: %w", err)
+	}
+	if strings.TrimSpace(string(rest)) != "" {
+		return fmt.Errorf("publicKey has trailing garbage after the key: %q", strings.TrimSpace(string(rest)))
+	}
+	return nil
+}
+
 // ownedBy reports whether machine m is currently bound to claim.
 func ownedBy(m *umv1alpha1.UbuntuMachine, claim *umv1alpha1.UbuntuMachineClaim) bool {
 	ref := m.Status.BoundClaimRef
@@ -445,7 +499,9 @@ func (r *UbuntuMachineClaimReconciler) ownedMachines(
 	return out, nil
 }
 
-// releaseOne flips one machine back to Available.
+// releaseOne scrubs one machine's authorized_keys and flips it back to
+// Available. The scrub runs on every release path (claim deletion, orphan
+// extras, bind rollback) so the claim's key never outlives the lease.
 func (r *UbuntuMachineClaimReconciler) releaseOne(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
@@ -461,6 +517,9 @@ func (r *UbuntuMachineClaimReconciler) releaseOne(
 	}
 	if !ownedBy(&fresh, claim) {
 		return nil
+	}
+	if err := r.scrubMachine(ctx, &fresh); err != nil {
+		return err
 	}
 	fresh.Status.Phase = umv1alpha1.MachineAvailable
 	fresh.Status.BoundClaimRef = nil
@@ -543,20 +602,42 @@ func (r *UbuntuMachineClaimReconciler) bind(
 	return m, nil
 }
 
-// releaseAll is the cascade for claim deletion: removes the per-claim SSH key
-// from the machine, deletes the SSHKey CR, then returns all bound machines to Available.
+// releaseAll is the cascade for claim deletion: scrubs the per-claim SSH key
+// off every machine the claim owns (or the one still named in status),
+// deletes the SSHKey CR, then returns those machines to Available.
+//
+// A failed scrub is retryable, not swallowed: the finalizer keeps the claim
+// around and the next reconcile retries the whole cascade, so a previous
+// tenant's root key cannot survive the release into the next tenant's lease.
+// An admin can unblock a permanently dead host by deleting its
+// UbuntuMachine object (a missing machine scrubs as a no-op).
 func (r *UbuntuMachineClaimReconciler) releaseAll(
 	ctx context.Context,
 	claim *umv1alpha1.UbuntuMachineClaim,
 ) error {
-	logger := log.FromContext(ctx)
-
-	if claim.Status.SSHSecretRef != nil {
+	var all umv1alpha1.UbuntuMachineList
+	if err := r.List(ctx, &all); err != nil {
+		return err
+	}
+	scrubbedStatusMachine := false
+	for i := range all.Items {
+		m := all.Items[i]
+		if !ownedBy(&m, claim) {
+			continue
+		}
+		if err := r.releaseOne(ctx, claim, m); err != nil {
+			return err
+		}
+		if claim.Status.Machine != nil && m.Name == claim.Status.Machine.Name {
+			scrubbedStatusMachine = true
+		}
+	}
+	if !scrubbedStatusMachine {
+		// The bound machine no longer carries boundClaimRef (e.g. an admin
+		// recovery edit released it); its file may still hold this claim's
+		// key, so scrub the machine from status once as well.
 		if err := r.removeClaimSSHKey(ctx, claim); err != nil {
-			if errors.Is(err, secretpolicy.ErrDenied) {
-				return err
-			}
-			logger.Error(err, "failed to remove claim SSH key; proceeding with release")
+			return fmt.Errorf("scrub claim SSH key: %w", err)
 		}
 	}
 
@@ -566,33 +647,6 @@ func (r *UbuntuMachineClaimReconciler) releaseAll(
 	sshKey.SetNamespace(claim.Namespace)
 	if err := r.Delete(ctx, sshKey); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete SSHKey: %w", err)
-	}
-
-	var all umv1alpha1.UbuntuMachineList
-	if err := r.List(ctx, &all); err != nil {
-		return err
-	}
-	for i := range all.Items {
-		m := all.Items[i]
-		if !ownedBy(&m, claim) {
-			continue
-		}
-		var fresh umv1alpha1.UbuntuMachine
-		key := types.NamespacedName{Namespace: m.Namespace, Name: m.Name}
-		if err := r.Get(ctx, key, &fresh); err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			return err
-		}
-		if !ownedBy(&fresh, claim) {
-			continue
-		}
-		fresh.Status.Phase = umv1alpha1.MachineAvailable
-		fresh.Status.BoundClaimRef = nil
-		if err := r.Status().Update(ctx, &fresh); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -652,12 +706,42 @@ func (r *UbuntuMachineClaimReconciler) machineToPendingClaims(
 	return out
 }
 
+// sshKeyToClaims wakes the claims in an SSHKey's namespace whenever the key
+// changes. A rotation (or any rekey) of a bound claim's SSHKey therefore
+// triggers a reconcile whose fingerprint check re-injects the new key and
+// revokes the superseded one on the machine (F-SK-4).
+func (r *UbuntuMachineClaimReconciler) sshKeyToClaims(
+	ctx context.Context,
+	obj client.Object,
+) []reconcile.Request {
+	var claims umv1alpha1.UbuntuMachineClaimList
+	if err := r.List(ctx, &claims, client.InNamespace(obj.GetNamespace())); err != nil {
+		return nil
+	}
+	out := make([]reconcile.Request, 0, len(claims.Items))
+	for _, c := range claims.Items {
+		out = append(out, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: c.Namespace,
+				Name:      c.Name,
+			},
+		})
+	}
+	return out
+}
+
 func (r *UbuntuMachineClaimReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	sshKey := &unstructured.Unstructured{}
+	sshKey.SetGroupVersionKind(sshKeyGVK)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&umv1alpha1.UbuntuMachineClaim{}).
 		Watches(
 			&umv1alpha1.UbuntuMachine{},
 			handler.EnqueueRequestsFromMapFunc(r.machineToPendingClaims),
+		).
+		Watches(
+			sshKey,
+			handler.EnqueueRequestsFromMapFunc(r.sshKeyToClaims),
 		).
 		Named("ubuntumachineclaim").
 		Complete(r)
