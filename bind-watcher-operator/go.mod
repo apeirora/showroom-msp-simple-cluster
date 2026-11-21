@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/go-logr/logr v1.4.4
-	github.com/kcp-dev/multicluster-provider v0.8.0
+	github.com/kcp-dev/multicluster-provider v0.9.1
 	github.com/kcp-dev/sdk v0.33.6
 	github.com/pkg/errors v0.9.1
 	k8s.io/api v0.37.0
