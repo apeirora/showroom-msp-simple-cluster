@@ -45,12 +45,12 @@ spec:
         kind: Shoot
         spec:
           cloudProfile:
-            name: {{ .Inputs.cloudProfile }}
+            name: {{ .Inputs.cloudProfile | quote }}
             kind: CloudProfile
           credentialsBindingName: wdf4-ora-dev
-          region: {{ .Inputs.region }}
+          region: {{ .Inputs.region | quote }}
           kubernetes:
-            version: "{{ .Inputs.k8sVersion }}"
+            version: {{ .Inputs.k8sVersion | quote }}
           addons:
             nginxIngress:
               enabled: false
@@ -61,14 +61,14 @@ spec:
                 minimum: {{ .SC.workers.min }}
                 maximum: {{ .SC.workers.max }}
                 machine:
-                  type: {{ .Inputs.machineType }}
+                  type: {{ .Inputs.machineType | quote }}
                   image:
-                    name: {{ .Inputs.machineImage }}
+                    name: {{ .Inputs.machineImage | quote }}
                 volume:
                   type: general-purpose
                   size: 10Gi
                 zones:
-                  - {{ .Inputs.zone }}
+                  - {{ .Inputs.zone | quote }}
           networking:
             type: calico
             providerConfig:

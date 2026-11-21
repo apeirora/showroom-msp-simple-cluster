@@ -24,8 +24,15 @@ spec:
         spec:
           clusterName: {{ .Target.name }}
           workers: {{ .SC.workers.nodes }}
+          # Quote tenant-derived values: a type-string .Inputs value is free
+          # text and enters this document as raw runes. Unquoted, a value
+          # containing a newline can add keys or even dedent a duplicate
+          # top-level "spec:", and the map decode keeps the LAST duplicate
+          # key, silently replacing the whole rendered spec with the
+          # tenant's. sprig's quote emits a JSON-escaped double-quoted
+          # scalar, which YAML accepts verbatim.
           {{- if .Inputs.nodeImage }}
-          nodeImage: {{ .Inputs.nodeImage }}
+          nodeImage: {{ .Inputs.nodeImage | quote }}
           {{- end }}
   kubeconfigSource:
     resourceName: cluster
