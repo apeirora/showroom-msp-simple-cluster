@@ -4,7 +4,12 @@ controllerManager:
   container:
     image:
       repository: controller
-      tag: latest
+      # Empty pins the image to the chart appVersion, which the release
+      # pipeline stamps to the published image version ("chart X.Y.Z pulls
+      # image X.Y.Z", see .github/workflows/publish.yml). A literal default
+      # here would win that coalesce and silently degrade installs to an
+      # unpinned :latest.
+      tag: ""
     imagePullPolicy: IfNotPresent
     args:
       - "--leader-elect"
@@ -34,6 +39,12 @@ controllerManager:
       capabilities:
         drop:
           - "ALL"
+      # The manager never writes to its root filesystem: the KCP kubeconfig
+      # and the metrics certs arrive on read-only mounts and the
+      # Secret-reference allowlist is a flag value (no temp-file use in the
+      # operator code). A landscape that mounts more writable state into the
+      # container can override this value.
+      readOnlyRootFilesystem: true
   securityContext:
     runAsNonRoot: true
     seccompProfile:
@@ -44,6 +55,18 @@ controllerManager:
 # [RBAC]: To enable RBAC (Permissions) configurations
 rbac:
   enable: true
+  # Provider self-grant: any ClusterRole matching matchLabels below is merged,
+  # content-unbounded, into the operator identity shared by all tenants
+  # (self-grant hazard, see templates/rbac/provider_resources_role.yaml).
+  # Pin the selector with an extra discriminator label so only ClusterRoles
+  # you control match, or set enable=false to rely on the manager role alone.
+  # matchLabels must stay a non-empty map (an empty selector would match every
+  # ClusterRole in the cluster); the render fails on it, enable=false is the
+  # supported disable path.
+  aggregation:
+    enable: true
+    matchLabels:
+      showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"
 
 # [CRDs]: To enable the CRDs
 crd:

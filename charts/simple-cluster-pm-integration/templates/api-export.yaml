@@ -4,26 +4,70 @@ metadata:
   name: simpleclusters.showroom.apeirora.eu
   annotations:
     # Preserve legacy claim selectors when Sync Agent uses v1alpha1.
+    # With apiExport.maximalPermissionPolicy.enabled the broad legacy shape
+    # (`all: true`, i.e. every verb including delete, and every future verb)
+    # is replaced by the explicit verb lists that mirror the v1alpha2 claims
+    # below; otherwise a v1alpha1-path agent keeps mutating account bindings
+    # and Secrets beyond the intended ceiling.
     apis.v1alpha2.kcp.io/v1alpha1-permission-claims: >-
+      {{- if .Values.apiExport.maximalPermissionPolicy.enabled }}
+      [{"group":"","resource":"namespaces","verbs":["get","list","watch","create","update","patch","delete"]},
+       {"group":"","resource":"events","verbs":["get","list","watch","create","update","patch","delete"]},
+       {"group":"","resource":"secrets","verbs":["get","list","watch","create","update","patch","delete"]},
+       {"group":"apis.kcp.io","resource":"apibindings","verbs":["get","list","watch"]}]
+      {{- else }}
       [{"group":"","resource":"namespaces","all":true},
        {"group":"","resource":"events","all":true},
        {"group":"","resource":"secrets","all":true},
        {"group":"apis.kcp.io","resource":"apibindings","all":true}]
+      {{- end }}
   labels:
     ui.platform-mesh.io/content-for: simpleclusters.showroom.apeirora.eu
 spec:
   # Sync Agent manages the resource schemas from all three PublishedResources:
   # SimpleCluster, SSHKey, and UbuntuCluster. Do not pin generated schema names.
+  #
+  # Security note on the secrets claim: one sync agent per provider serves all
+  # tenants of that provider with a single KCP identity, and all providers'
+  # kubeconfig mirrors plus every tenant credential live in the SAME account
+  # namespace. Without spec.maximalPermissionPolicy the claim verbs are the
+  # only bound, so every provider agent that binds in holds CRUD on ALL
+  # Secrets in that namespace, not just the mirrors it manages (see
+  # templates/maximal-permission-policy.yaml for the opt-in policy; the
+  # isolation today is sync-agent convention, not server-side).
+  #
+  # With the toggle on, the built-in claims also drop the "*" wildcard to the
+  # explicit verbs the agent uses (notably no deletecollection). That is the
+  # belt-and-braces ceiling for these resources: at least through KCP v0.30
+  # the maximal-permission authorizer only evaluates the policy for the
+  # export's BOUND (exported) resources and delegates native claimed requests
+  # such as secrets before reading it (v0.30.0
+  # pkg/authorization/maximal_permission_policy_authorizer.go, "no relevant
+  # binding found"), so for secrets/namespaces/events the accepted claim verbs
+  # are the effective server-side bound regardless of the deployed server
+  # version. The deployed KCP server version is not pinned by this repository
+  # (only the sync-agent image digest and kcp-dev/sdk v0.33.6); confirm it per
+  # landscape when relying on the policy for anything beyond this note.
   permissionClaims:
     - group: ""
       resource: namespaces
-      verbs: ["*"]
+      verbs: {{ if .Values.apiExport.maximalPermissionPolicy.enabled }}[get, list, watch, create, update, patch, delete]{{ else }}["*"]{{ end }}
     - group: ""
       resource: events
-      verbs: ["*"]
+      verbs: {{ if .Values.apiExport.maximalPermissionPolicy.enabled }}[get, list, watch, create, update, patch, delete]{{ else }}["*"]{{ end }}
     - group: ""
       resource: secrets
-      verbs: ["*"]
+      verbs: {{ if .Values.apiExport.maximalPermissionPolicy.enabled }}[get, list, watch, create, update, patch, delete]{{ else }}["*"]{{ end }}
     - group: apis.kcp.io
       resource: apibindings
       verbs: [get, list, watch]
+  {{- if .Values.apiExport.maximalPermissionPolicy.enabled }}
+  # KCP apis.kcp.io/v1alpha2 supports only the `local` policy type ("local is
+  # the only supported option at the moment", docs.kcp.io exporting-apis);
+  # `local: {}` points the ceiling at the ClusterRole shipped next to this
+  # file. Left unset by default: a maximal policy also caps tenant consumers
+  # of the exported APIs, so enabling it on a landscape with custom identities
+  # must be paired with the users/groups values below.
+  maximalPermissionPolicy:
+    local: {}
+  {{- end }}

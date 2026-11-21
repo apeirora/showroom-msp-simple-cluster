@@ -42,9 +42,15 @@ func init() {
 func main() {
 	var metricsAddr, probeAddr string
 	var enableLeaderElection bool
+	var prefixClusterNameWithNamespace bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "metrics endpoint")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe endpoint")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "enable leader election")
+	flag.BoolVar(&prefixClusterNameWithNamespace, "cluster-name-prefix-namespaces", false,
+		"Namespace-scope the docker cluster name by encoding the KindCluster namespace into it (each part keeps its dashes doubled, joined by one dash, e.g. namespace tenant-a and name demo give tenant--a-demo). "+
+			"Recommended on a shared host docker daemon with multiple tenant namespaces, "+
+			"where same-named KindClusters otherwise adopt and delete each other's clusters. "+
+			"Set at install time: flipping it later re-targets existing clusters.")
 	opts := zap.Options{Development: true}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -68,9 +74,10 @@ func main() {
 	provider := kindcluster.NewProvider()
 
 	if err := (&controller.KindClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Provider: provider,
+		Client:                         mgr.GetClient(),
+		Scheme:                         mgr.GetScheme(),
+		Provider:                       provider,
+		PrefixClusterNameWithNamespace: prefixClusterNameWithNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "KindCluster")
 		os.Exit(1)
