@@ -7,9 +7,9 @@ toolchain go1.27.4
 require (
 	github.com/gophercloud/gophercloud/v2 v2.16.0
 	golang.org/x/crypto v0.59.0
-	k8s.io/api v0.37.2
-	k8s.io/apimachinery v0.37.2
-	k8s.io/client-go v0.37.2
+	k8s.io/api v0.37.3
+	k8s.io/apimachinery v0.37.3
+	k8s.io/client-go v0.37.3
 	sigs.k8s.io/controller-runtime v0.25.3
 )
 
