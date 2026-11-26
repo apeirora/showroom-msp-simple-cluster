@@ -9,9 +9,9 @@ require (
 	github.com/kcp-dev/multicluster-provider v0.9.1
 	github.com/kcp-dev/sdk v0.33.6
 	github.com/pkg/errors v0.9.1
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
-	k8s.io/client-go v0.37.0
+	k8s.io/api v0.37.3
+	k8s.io/apimachinery v0.37.3
+	k8s.io/client-go v0.37.3
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/multicluster-runtime v0.25.2
 )

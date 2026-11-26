@@ -17,8 +17,8 @@ build-time tooling and are not part of any shipped artefact.
 
 ## Summary
 
-- **166** distinct third-party dependencies across **8** published components.
-- Licences in use: `Apache-2.0` (63), `MIT` (43), `BSD-3-Clause` (33), `Apache-2.0 AND BSD-3-Clause` (16), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (4), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
+- **163** distinct third-party dependencies across **8** published components.
+- Licences in use: `Apache-2.0` (62), `MIT` (43), `BSD-3-Clause` (33), `Apache-2.0 AND BSD-3-Clause` (15), `Apache-2.0 AND MIT` (4), `Apache-2.0 AND BSD-3-Clause AND MIT` (3), `ISC` (1), `BSD-2-Clause` (1), `Unlicense OR Apache-2.0` (1).
 - **No copyleft dependencies.** Every licence above is permissive (Apache-2.0, BSD, MIT, ISC), so redistribution under Apache-2.0 carries no source-disclosure obligation.
 
 ## Obligations
@@ -57,7 +57,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 
 ## Full inventory
 
-### Apache-2.0 (63)
+### Apache-2.0 (62)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -111,13 +111,12 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `google.golang.org/genproto/googleapis/api` | `v0.0.0-20260911204522-f61a6ca850bd` | simple-cluster-operator, sshkey-operator |
 | `google.golang.org/genproto/googleapis/rpc` | `v0.0.0-20260911204522-f61a6ca850bd` | simple-cluster-operator, sshkey-operator |
 | `google.golang.org/grpc` | `v1.83.2` | simple-cluster-operator, sshkey-operator |
-| `k8s.io/api` | `v0.37.0` | bind-watcher-operator |
-| `k8s.io/api` | `v0.37.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/api` | `v0.37.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/apiextensions-apiserver` | `v0.37.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/apiserver` | `v0.37.0` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/component-base` | `v0.37.0` | simple-cluster-operator, sshkey-operator |
 | `k8s.io/klog/v2` | `v2.140.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `k8s.io/streaming` | `v0.37.2` | simple-cluster-operator, sshkey-operator |
+| `k8s.io/streaming` | `v0.37.3` | simple-cluster-operator, sshkey-operator |
 | `sigs.k8s.io/apiserver-network-proxy/konnectivity-client` | `v0.36.0` | simple-cluster-operator, sshkey-operator |
 | `sigs.k8s.io/controller-runtime` | `v0.24.1` | bind-watcher-operator |
 | `sigs.k8s.io/controller-runtime` | `v0.25.3` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
@@ -211,7 +210,7 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `gopkg.in/inf.v0` | `v0.9.1` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `lit-html` | `2.8.0` | ui |
 
-### Apache-2.0 AND BSD-3-Clause (16)
+### Apache-2.0 AND BSD-3-Clause (15)
 
 | Dependency | Version | Used by |
 |---|---|---|
@@ -226,20 +225,10 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.opentelemetry.io/otel/metric` | `v1.47.0` | simple-cluster-operator, sshkey-operator |
 | `go.opentelemetry.io/otel/sdk` | `v1.47.0` | simple-cluster-operator, sshkey-operator |
 | `go.opentelemetry.io/otel/trace` | `v1.47.0` | simple-cluster-operator, sshkey-operator |
-| `k8s.io/apimachinery` | `v0.37.0` | bind-watcher-operator |
-| `k8s.io/apimachinery` | `v0.37.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/apimachinery` | `v0.37.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/utils` | `v0.0.0-20260707023825-cf1189d6abe3` | bind-watcher-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `k8s.io/utils` | `v0.0.0-20261023123148-ca04ba58ecab` | simple-cluster-operator |
 | `sigs.k8s.io/json` | `v0.0.0-20260909141634-11ed52e25bc5` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-
-### Apache-2.0 AND BSD-3-Clause AND MIT (4)
-
-| Dependency | Version | Used by |
-|---|---|---|
-| `k8s.io/client-go` | `v0.37.0` | bind-watcher-operator |
-| `k8s.io/client-go` | `v0.37.2` | simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `k8s.io/kube-openapi` | `v0.0.0-20260721132016-d427ff9ee9ad` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
-| `sigs.k8s.io/yaml` | `v1.6.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 
 ### Apache-2.0 AND MIT (4)
 
@@ -249,6 +238,14 @@ in the Go module cache and is recorded in `OVERRIDES` in
 | `go.yaml.in/yaml/v2` | `v2.4.4` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `go.yaml.in/yaml/v3` | `v3.0.5` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 | `sigs.k8s.io/kind` | `v0.33.0` | simple-cluster-operator-kind |
+
+### Apache-2.0 AND BSD-3-Clause AND MIT (3)
+
+| Dependency | Version | Used by |
+|---|---|---|
+| `k8s.io/client-go` | `v0.37.3` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `k8s.io/kube-openapi` | `v0.0.0-20260721132016-d427ff9ee9ad` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
+| `sigs.k8s.io/yaml` | `v1.6.0` | bind-watcher-operator, simple-cluster-operator, simple-cluster-operator-kind, simple-cluster-operator-openstack, simple-cluster-operator-ubuntu, sshkey-operator, ubuntu-machines |
 
 ### BSD-2-Clause (1)
 
