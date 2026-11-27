@@ -192,6 +192,15 @@ spec:
                 - Pending
                 - Ready
                 type: string
+              sshKeyFingerprint:
+                description: |-
+                  SSHKeyFingerprint identifies the claim public key last injected into
+                  the bound machine, as "sha256:<hex>" over the authorized_keys line.
+                  The controller re-injects whenever this differs from the fingerprint
+                  of the current key or the claim binds a different machine, so key
+                  rotation revokes the superseded key on the machine and a re-bind
+                  still lands the claim's own key. Empty until injection succeeds.
+                type: string
               sshSecretRef:
                 description: |-
                   SSHSecretRef points at the Secret (in the claim's namespace) that

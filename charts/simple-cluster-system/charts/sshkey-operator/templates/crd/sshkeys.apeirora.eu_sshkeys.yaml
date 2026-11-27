@@ -53,11 +53,15 @@ spec:
           metadata:
             type: object
           privateKey:
-            description: PrivateKey is the generated private key (OpenSSH format,
-              passphrase-encrypted when passPhaseSecret is set).
+            description: |-
+              PrivateKey is the generated private key (OpenSSH format, passphrase-encrypted when passPhaseSecret is set).
+              The maxLength bounds the object size for the hand-written (tenant-writable)
+              case; the controller regenerates values that do not parse (F-SK-1).
+            maxLength: 16384
             type: string
           publicKey:
             description: PublicKey is the generated public key.
+            maxLength: 8192
             type: string
           spec:
             description: spec defines the desired state of SSHKey
@@ -95,7 +99,17 @@ spec:
                 type: string
               keySize:
                 default: 4096
-                description: KeySize in bits for RSA type, default 4096
+                description: |-
+                  KeySize in bits for RSA type, default 4096.
+                  Bounded below at 2048 (the minimum RSA size considered strong today;
+                  shorter RSA keys are factorable or rejected
+                  outright by the generator) and above at 16384: the sshkey-operator
+                  serves every tenant from one worker, and a multi-megabit key would
+                  burn CPU for minutes per generation and grow the PEM past the
+                  etcd/apiserver request limit, which makes every error requeue
+                  regenerate it again. Older objects are clamped in the controller.
+                maximum: 16384
+                minimum: 2048
                 type: integer
               keyType:
                 default: ed25519

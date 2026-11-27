@@ -65,7 +65,10 @@ const (
 type UbuntuClusterSpec struct {
 	// Version is the k3s release tag (e.g. "v1.31.4+k3s1"). Empty falls
 	// back to the get.k3s.io installer's default (latest stable).
+	// The pattern keeps the field free of shell metacharacters: the value
+	// is interpolated into the remote install script (F-UB-1).
 	// +optional
+	// +kubebuilder:validation:Pattern="^[A-Za-z0-9._+-]*$"
 	Version string `json:"version,omitempty"`
 
 	// ControlPlaneEndpoint is the public address (host or host:port)
@@ -92,15 +95,21 @@ type UbuntuClusterSpec struct {
 	// K3sServerArgs are passed verbatim to `k3s server` (e.g.
 	// `--disable=traefik`, `--cluster-cidr=10.42.0.0/16`). Bounded so the
 	// CEL rules on the spec stay within the apiserver's cost budget.
+	// The item pattern allows k3s flag shapes (`--flag`, `--flag=value`
+	// with paths, CIDRs, host:port, comma lists) but not shell
+	// metacharacters, since the args are interpolated into the remote
+	// install script (F-UB-1).
 	// +optional
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:items:MaxLength=512
+	// +kubebuilder:validation:items:Pattern="^[A-Za-z0-9=:,./_+@% -]*$"
 	K3sServerArgs []string `json:"k3sServerArgs,omitempty"`
 
 	// K3sAgentArgs are passed verbatim to `k3s agent` on every worker.
 	// +optional
 	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:items:MaxLength=512
+	// +kubebuilder:validation:items:Pattern="^[A-Za-z0-9=:,./_+@% -]*$"
 	K3sAgentArgs []string `json:"k3sAgentArgs,omitempty"`
 
 	// Encryption opts the cluster into encryption at rest of its Kubernetes
