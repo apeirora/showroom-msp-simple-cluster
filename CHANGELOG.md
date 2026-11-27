@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.5](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.4...v1.2.5) (2026-11-27)
+
+
+### Bug Fixes
+
+* **ci:** repair sync-agent image assertion and regenerate stale SBOM ([#296](https://github.com/apeirora/showroom-msp-simple-cluster/issues/296)) ([19ca7ed](https://github.com/apeirora/showroom-msp-simple-cluster/commit/19ca7ed21e1ba011e9c4eb8345e4ad551cd9ceeb))
+* **deps:** update kubernetes monorepo to v0.37.3 ([#308](https://github.com/apeirora/showroom-msp-simple-cluster/issues/308)) ([53bc666](https://github.com/apeirora/showroom-msp-simple-cluster/commit/53bc66673c47c9600fd32ab75c52d3ff000d8a96))
+* **deps:** update module github.com/gophercloud/gophercloud/v2 to v2.16.0 ([#292](https://github.com/apeirora/showroom-msp-simple-cluster/issues/292)) ([963ba9b](https://github.com/apeirora/showroom-msp-simple-cluster/commit/963ba9ba335e2c85af6c2614b34f093f512ec86f))
+* **deps:** update module github.com/kcp-dev/multicluster-provider to v0.9.1 ([#304](https://github.com/apeirora/showroom-msp-simple-cluster/issues/304)) ([966658c](https://github.com/apeirora/showroom-msp-simple-cluster/commit/966658c9592341849a0c7a55e8d55c6e0f4df60a))
+* **deps:** update module github.com/kcp-dev/sdk to v0.33.6 ([#274](https://github.com/apeirora/showroom-msp-simple-cluster/issues/274)) ([df717c6](https://github.com/apeirora/showroom-msp-simple-cluster/commit/df717c6fb4e3245cb2c3dc131a9993d572b86780))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.34.0 ([#271](https://github.com/apeirora/showroom-msp-simple-cluster/issues/271)) ([afac256](https://github.com/apeirora/showroom-msp-simple-cluster/commit/afac25679ba54a3ff0bb5062fd80f956005fba9c))
+* **deps:** update module golang.org/x/crypto to v0.59.0 ([#293](https://github.com/apeirora/showroom-msp-simple-cluster/issues/293)) ([11319b9](https://github.com/apeirora/showroom-msp-simple-cluster/commit/11319b92c43654bd51252643dff28372bd1a8b08))
+* **deps:** update module sigs.k8s.io/controller-runtime to v0.25.3 ([#295](https://github.com/apeirora/showroom-msp-simple-cluster/issues/295)) ([10203f4](https://github.com/apeirora/showroom-msp-simple-cluster/commit/10203f4262c5f541c48e3362480dd0ae82c009d1))
+* **deps:** update ui5-webcomponents monorepo to v2.29.0 ([#299](https://github.com/apeirora/showroom-msp-simple-cluster/issues/299)) ([71dc221](https://github.com/apeirora/showroom-msp-simple-cluster/commit/71dc221b79463a005db1646e274d954af016d1f0))
+
 ## [1.2.4](https://github.com/apeirora/showroom-msp-simple-cluster/compare/v1.2.3...v1.2.4) (2026-11-12)
 
 
