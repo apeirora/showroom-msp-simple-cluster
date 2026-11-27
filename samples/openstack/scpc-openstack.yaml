@@ -41,16 +41,16 @@ spec:
         spec:
           credentialsRef:
             name: openstack-creds
-          network: {{ .Inputs.network }}
-          floatingIPPool: {{ .Inputs.floatingIPPool }}
+          network: {{ .Inputs.network | quote }}
+          floatingIPPool: {{ .Inputs.floatingIPPool | quote }}
           floatingIP: true
           securityGroups:
             - default
           resources:
             cpu: "{{ .SC.controlPlane.requested.cpu }}"
             memory: "{{ .SC.controlPlane.requested.memory }}"
-            flavorPattern: '{{ .Inputs.flavorPattern }}'
-          image: "{{ .Inputs.image }}"
+            flavorPattern: {{ .Inputs.flavorPattern | quote }}
+          image: {{ .Inputs.image | quote }}
           userData: |
             #cloud-config
             ssh_authorized_keys:
@@ -68,15 +68,15 @@ spec:
         spec:
           credentialsRef:
             name: openstack-creds
-          network: {{ .Inputs.network }}
+          network: {{ .Inputs.network | quote }}
           floatingIP: false
           securityGroups:
             - default
           resources:
             cpu: "{{ .SC.workers.requested.cpu }}"
             memory: "{{ .SC.workers.requested.memory }}"
-            flavorPattern: '{{ .Inputs.flavorPattern }}'
-          image: "{{ .Inputs.image }}"
+            flavorPattern: {{ .Inputs.flavorPattern | quote }}
+          image: {{ .Inputs.image | quote }}
           userData: |
             #cloud-config
             ssh_authorized_keys:
@@ -101,14 +101,14 @@ spec:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
               - name: cp-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
-                externalAddress: {{ $vm.status.externalAddress }}
+                address: {{ $vm.status.internalAddress | quote }}
+                externalAddress: {{ $vm.status.externalAddress | quote }}
               {{- end }}
           workers:
             hosts:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
+                address: {{ $vm.status.internalAddress | quote }}
               {{- end }}
 
   kubeconfigSource:

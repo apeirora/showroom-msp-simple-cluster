@@ -39,12 +39,12 @@ spec:
         kind: Shoot
         spec:
           cloudProfile:
-            name: {{ .Inputs.cloudProfile }}
+            name: {{ .Inputs.cloudProfile | quote }}
             kind: CloudProfile
           credentialsBindingName: my-openstack-secret
-          region: {{ .Inputs.region }}
+          region: {{ .Inputs.region | quote }}
           kubernetes:
-            version: "{{ .Inputs.k8sVersion }}"
+            version: {{ .Inputs.k8sVersion | quote }}
           addons:
             nginxIngress:
               enabled: true
@@ -67,11 +67,11 @@ spec:
                 minimum: {{ .SC.workers.min }}
                 maximum: {{ .SC.workers.max }}
                 machine:
-                  type: {{ .Inputs.machineType }}
+                  type: {{ .Inputs.machineType | quote }}
                   image:
-                    name: {{ .Inputs.machineImage }}
+                    name: {{ .Inputs.machineImage | quote }}
                 zones:
-                  - {{ .Inputs.zone }}
+                  - {{ .Inputs.zone | quote }}
           networking:
             type: calico
             nodes: 10.250.0.0/16

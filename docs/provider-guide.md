@@ -146,6 +146,11 @@ Practical notes:
 - `missingkey=error` is on. A typo in an input name fails the render instead of
   producing an empty value.
 - `env` and `expandenv` are removed from the sprig function map.
+- Quote tenant-derived values (`{{ .Inputs.x | quote }}`, and the same for
+  `.Resources.<name>` status fields). They are substituted as raw runes
+  before the result is parsed as YAML, and a `type: string` input is free
+  text: unquoted, a value with a newline can inject keys or even a duplicate
+  top-level `spec:` whose last occurrence replaces the whole rendered spec.
 
 To create N objects from one entry, use `repeat`:
 

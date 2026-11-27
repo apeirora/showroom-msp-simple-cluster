@@ -42,19 +42,19 @@ spec:
         spec:
           ironcoreKubeconfig:
             name: ironcore-kubeconfig
-          network: {{ .Inputs.network }}
-          ipPool: {{ .Inputs.ipPool }}
-          image: "{{ .Inputs.image }}"
+          network: {{ .Inputs.network | quote }}
+          ipPool: {{ .Inputs.ipPool | quote }}
+          image: {{ .Inputs.image | quote }}
           publicIP: true
           sshKeyRef:
             apiGroup: sshkeys.apeirora.eu
             kind: SSHKey
-            name: {{ .Resources.sshkey.metadata.name }}
-          sshUser: {{ .Inputs.sshUser }}
+            name: {{ .Resources.sshkey.metadata.name | quote }}
+          sshUser: {{ .Inputs.sshUser | quote }}
           resources:
             cpu: "{{ .SC.controlPlane.requested.cpu }}"
             memory: "{{ .SC.controlPlane.requested.memory }}"
-            machineClassPattern: '{{ .Inputs.machineClassPattern }}'
+            machineClassPattern: {{ .Inputs.machineClassPattern | quote }}
 
     - name: vmworker
       apiVersion: sap.eu/v1alpha1
@@ -68,19 +68,19 @@ spec:
         spec:
           ironcoreKubeconfig:
             name: ironcore-kubeconfig
-          network: {{ .Inputs.network }}
-          ipPool: {{ .Inputs.ipPool }}
-          image: "{{ .Inputs.image }}"
+          network: {{ .Inputs.network | quote }}
+          ipPool: {{ .Inputs.ipPool | quote }}
+          image: {{ .Inputs.image | quote }}
           publicIP: false
           sshKeyRef:
             apiGroup: sshkeys.apeirora.eu
             kind: SSHKey
-            name: {{ .Resources.sshkey.metadata.name }}
-          sshUser: {{ .Inputs.sshUser }}
+            name: {{ .Resources.sshkey.metadata.name | quote }}
+          sshUser: {{ .Inputs.sshUser | quote }}
           resources:
             cpu: "{{ .SC.workers.requested.cpu }}"
             memory: "{{ .SC.workers.requested.memory }}"
-            machineClassPattern: '{{ .Inputs.machineClassPattern }}'
+            machineClassPattern: {{ .Inputs.machineClassPattern | quote }}
 
     - name: cluster
       apiVersion: ubuntu.apeirora.eu/v1alpha1
@@ -101,14 +101,14 @@ spec:
             hosts:
               {{- range $i, $vm := .Resources.vmcp }}
               - name: cp-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
-                externalAddress: {{ $vm.status.externalAddress }}
+                address: {{ $vm.status.internalAddress | quote }}
+                externalAddress: {{ $vm.status.externalAddress | quote }}
               {{- end }}
           workers:
             hosts:
               {{- range $i, $vm := .Resources.vmworker }}
               - name: worker-{{ $i }}
-                address: {{ $vm.status.internalAddress }}
+                address: {{ $vm.status.internalAddress | quote }}
               {{- end }}
 
   kubeconfigSource:
