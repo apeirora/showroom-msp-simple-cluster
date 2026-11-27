@@ -1,0 +1,64 @@
+{{- if .Values.apiExport.maximalPermissionPolicy.enabled }}
+# Maximal permission policy for the simpleclusters export (KCP apis.kcp.io/
+# v1alpha2: spec.maximalPermissionPolicy.local, i.e. the policy lives in this
+# export workspace). Without a policy there is no upper bound: the claim
+# verbs are the ceiling, so every provider's sync agent that binds in holds
+# CRUD on ALL Secrets in the shared account namespace, including other
+# providers' kubeconfig mirrors and the tenant's own credentials.
+#
+# Scope note (KCP v0.30.0, pkg/authorization/
+# maximal_permission_policy_authorizer.go): the policy is consulted for the
+# export's BOUND resources; native claimed requests such as secrets delegate
+# before it is read ("no relevant binding found"). For secrets, namespaces
+# and events the effective narrowing is therefore the narrowed claim verbs
+# in api-export.yaml (same toggle); this policy is the ceiling for the
+# exported APIs and the place to narrow further (per-provider identities,
+# resourceNames). The deployed KCP server version is not pinned in-repo, so
+# confirm it per landscape.
+#
+# KCP checks the policy with "apis.kcp.io:binding:" prefixed user and group
+# names, for tenant consumers in bound workspaces and for this export's own
+# identity on claimed resources alike; hence the prefixed subjects.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: simpleclusters-export-maximal-permission-policy
+rules:
+  # The exported APIs themselves (consumers in bound workspaces).
+  - apiGroups: [showroom.apeirora.eu]
+    resources: [simpleclusters, simpleclusters/status]
+    verbs: ["*"]
+  - apiGroups: [sshkeys.apeirora.eu]
+    resources: [sshkeys, sshkeys/status]
+    verbs: ["*"]
+  - apiGroups: [ubuntu.apeirora.eu]
+    resources: [ubuntuclusters, ubuntuclusters/status]
+    verbs: ["*"]
+  # The permission claims, with the verbs the sync agent actually uses.
+  - apiGroups: [""]
+    resources: [namespaces, events, secrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apis.kcp.io]
+    resources: [apibindings]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: simpleclusters-export-maximal-permission-policy
+subjects:
+  {{- range .Values.apiExport.maximalPermissionPolicy.users }}
+  - kind: User
+    name: {{ printf "apis.kcp.io:binding:%s" . | quote }}
+    apiGroup: rbac.authorization.k8s.io
+  {{- end }}
+  {{- range .Values.apiExport.maximalPermissionPolicy.groups }}
+  - kind: Group
+    name: {{ printf "apis.kcp.io:binding:%s" . | quote }}
+    apiGroup: rbac.authorization.k8s.io
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: simpleclusters-export-maximal-permission-policy
+{{- end }}

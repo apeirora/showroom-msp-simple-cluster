@@ -46,6 +46,20 @@ The controller pins the API identity and checks authorization before each write.
 The API server also checks each operation.
 See [Account child destination](account-destination.md) for namespace, status and cleanup requirements.
 
+On the MSP side, providers whose resource group is not enumerated in the core
+operator's ClusterRole grant themselves access by shipping a ClusterRole
+labelled `showroom.apeirora.eu/aggregate-to-simple-cluster-operator: "true"`.
+That aggregation is a self-grant and is content-unbounded: *any* matching
+ClusterRole in the cluster is merged into the operator identity shared by all
+tenants, and no admission gate checks its content. Landscapes should pin the
+selector (`rbac.aggregation.matchLabels` in the `simple-cluster-operator`
+chart, plus a discriminator label) and control who may create or edit matching
+ClusterRoles; `rbac.aggregation.enable=false` drops the mechanism entirely.
+Migration order matters: aggregation requires *every* listed label, so first
+add the discriminator label to every existing provider ClusterRole currently
+matched by the old selector, then pin the selector; otherwise those roles fall
+out of the aggregation and the operator loses their rules.
+
 ### 2. Readiness that the operator can read
 
 For each resource, either:
